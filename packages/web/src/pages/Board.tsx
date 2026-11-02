@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { applyFilters, buyersOf, counts, parseFilters, preview, shortDate, STATUSES, withFilter, type BoardRow } from '../board/boardLogic'
 import { useLang } from '../i18n'
@@ -81,6 +81,7 @@ export default function Board() {
                 {today ? ` · Today ${shortDate(today)}` : ''}
               </span>
               <button className="btn btn--small" onClick={() => void load()}>{t('board.refresh')}</button>
+              <Link className="btn btn--primary btn--small" to="/orders/new">New order</Link>
             </div>
 
             {rows.length === 0 ? (
@@ -99,7 +100,7 @@ export default function Board() {
                       <td data-label="Status"><StatusBadge status={r.status} /></td>
                       <td data-label="PO">
                         <div className="po">
-                        <b className="mono">{r.po}</b>
+                        <Link className="po-link mono" to={`/orders/${r.orderId}`}>{r.po}</Link>
                         <span className="sub">{r.style} · {r.colour}</span>
                         {/* The maths behind the colour, always shown: a colour nobody can explain is not trusted. */}
                         <span className="sub why">{r.maths ?? r.reasons.join('; ')}</span>

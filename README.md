@@ -5,7 +5,7 @@
 
 Order tracking for a knitwear exporter. Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order, whether it will ship on time and shows the reasoning. Merchandisers see the orders that need attention first; buyers get a read-only view of only their own orders.
 
-> **Status: early build.** The calculation engine, database, API, the merchandiser's order board and the supervisor's offline daily update work and are tested. Order setup screens, the review gate and the buyer view are not built yet. See [Status](#status) and [Roadmap](#roadmap).
+> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate and the buyer view are not built yet. See [Status](#status) and [Roadmap](#roadmap).
 
 ## Contents
 [Why](#why) · [Status](#status) · [How the colours are decided](#how-the-colours-are-decided) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security model](#security-model) · [Testing](#testing) · [Development workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
@@ -26,8 +26,8 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | HTTP API: sign-in with lockout, board, daily updates (single and batch), order creation, ex-factory change with logged reason, status check | Built, tested |
 | Web app: sign-in, order board, public status page | Built (`build-1000`) |
 | Supervisor app: "My orders today", the daily update, an offline queue that survives restarts, "3 waiting" status, and the app opening with no signal | Built (`build-1001`), 14 browser checks |
+| Order setup (with a schedule preview before creating) and order detail (planned versus projected dates, the working behind each colour, date-change history, change ex-factory with a reason) | Built (`build-1002`) |
 | Photos and notes on an update | **Not built** |
-| Order setup and order detail screens | **Not built** (the server side exists) |
 | Review queue, warning confirmation, buyer link | **Not built** |
 | Voice and text notes | **Not built** |
 
@@ -128,6 +128,9 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET /api/health`, `GET /api/status` | public | Liveness; plain Up/Down status of the API and database |
 | `POST /api/auth/login` | public | Email and password, or phone and 4-digit PIN |
 | `GET /api/board` | merchandiser | Every order with colour and working, worst first |
+| `GET /api/orders/options` | merchandiser | Buyers and TNA templates for the order form |
+| `POST /api/orders/preview` | merchandiser | The dates an order would get, without creating it |
+| `GET /api/orders/:id` | merchandiser | One order in full: each stage planned versus projected, the working, and the date-change history |
 | `POST /api/orders` | merchandiser | Create an order from a TNA template; stages are back-scheduled from ex-factory |
 | `POST /api/orders/:id/ex-factory` | merchandiser | Move ex-factory and re-schedule; every change is logged with a required reason |
 | `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
@@ -200,7 +203,7 @@ git push origin main --tags
 
 ## Roadmap
 1. **Supervisor app, remaining:** photo and a typed or voice note on an update, photo resize, and trying it on real low-end phones. (The daily update and offline queue are built.)
-2. **Order screens:** order setup with TNA templates, and order detail with planned versus projected dates and the date-change history.
+2. **Order screens, remaining:** a TNA template editor (templates are seeded for now), and setting an order's stages by hand.
 3. **Review gate:** a queue where a merchandiser confirms warnings and photos before any buyer sees them.
 4. **Buyer view:** a signed, expiring, read-only link with automated cross-buyer leak tests.
 5. **Notes:** typed and voice notes in Tamil, translated and categorised, always with the original kept and low-confidence items sent to review.

@@ -5,7 +5,8 @@ import { getBoard } from './boardService.js'
 import type { Ctx, Db } from './db.js'
 import { AppError, badRequest } from './errors.js'
 import { submitEvent, type EventInput } from './eventService.js'
-import { changeExFactory, createOrder, type NewOrder } from './orderService.js'
+import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type NewOrder } from './orderService.js'
+import { getOrderDetail } from './orderDetailService.js'
 import { getMyStages } from './myService.js'
 import { istDate } from './today.js'
 
@@ -140,6 +141,26 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const stages = await opts.db.tx(ctx, (tx) => getMyStages(tx, ctx, today))
     reply.header('Cache-Control', 'no-store')
     return { today, stages }
+  })
+
+  // Static paths first: "options" and "preview" must not be read as an order id.
+  app.get('/api/orders/options', async (req, reply) => {
+    const ctx = ctxOf(req)
+    reply.header('Cache-Control', 'no-store')
+    return opts.db.tx(ctx, (tx) => getOrderOptions(tx, ctx))
+  })
+
+  app.post('/api/orders/preview', async (req, reply) => {
+    const ctx = ctxOf(req)
+    const { templateId, exFactory } = (req.body ?? {}) as { templateId?: string; exFactory?: string }
+    reply.header('Cache-Control', 'no-store')
+    return opts.db.tx(ctx, (tx) => previewSchedule(tx, ctx, { templateId: templateId as string, exFactory: exFactory as string }, istDate(clock())))
+  })
+
+  app.get<{ Params: { id: string } }>('/api/orders/:id', async (req, reply) => {
+    const ctx = ctxOf(req)
+    reply.header('Cache-Control', 'no-store')
+    return opts.db.tx(ctx, (tx) => getOrderDetail(tx, ctx, req.params.id, istDate(clock())))
   })
 
   app.post('/api/orders', async (req, reply) => {

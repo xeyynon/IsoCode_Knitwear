@@ -8,6 +8,8 @@ import { Loading } from './ui/Loading'
 // One chunk per screen, so a supervisor's phone never downloads the board.
 const Login = lazy(() => import('./pages/Login'))
 const Board = lazy(() => import('./pages/Board'))
+const OrderSetup = lazy(() => import('./pages/OrderSetup'))
+const OrderDetail = lazy(() => import('./pages/OrderDetail'))
 const Today = lazy(() => import('./pages/Today'))
 const Update = lazy(() => import('./pages/Update'))
 const Status = lazy(() => import('./pages/Status'))
@@ -36,6 +38,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/status" element={<Status />} />
           <Route path="/board" element={<RequireRole role="merchandiser"><Board /></RequireRole>} />
+          <Route path="/orders/new" element={<RequireRole role="merchandiser"><OrderSetup /></RequireRole>} />
+          <Route path="/orders/:id" element={<RequireRole role="merchandiser"><OrderDetail /></RequireRole>} />
           <Route path="/today" element={<RequireRole role="supervisor"><Today /></RequireRole>} />
           <Route path="/today/:orderId/:stage" element={<RequireRole role="supervisor"><Update /></RequireRole>} />
           <Route path="*" element={<Home />} />

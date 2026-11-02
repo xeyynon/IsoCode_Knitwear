@@ -8,7 +8,7 @@ npm run dev -w @isocode/web      # terminal 2
 npm run snapshots                # terminal 3: rewrites this folder
 ```
 
-Last taken: 2026-11-02. 16 pictures.
+Last taken: 2026-11-02. 23 pictures.
 
 ## Desktop
 
@@ -52,6 +52,31 @@ Public page with no sign-in: plain Up or Down for the API and the database, noth
 
 ![System status](08-status-page.png)
 
+### New order
+Buyer, PO, style, colour, quantity by size (S, M, L and XL are already named; a size left blank is simply not ordered), ex-factory date and a TNA template.
+
+![New order](17-order-form-empty.png)
+
+### New order: everything that is missing
+Pressing Create with gaps lists every problem in plain words at the top and marks each field. Nothing is sent.
+
+![New order: everything that is missing](18-order-form-errors.png)
+
+### New order: the dates it would get
+As soon as there is a template and a date, the form shows when each stage must finish, worked backwards from ex-factory (Sundays and closures skipped), before anything is created.
+
+![New order: the dates it would get](19-order-form-preview.png)
+
+### New order: already late
+If a stage would already be due, the form says so. The order can still be created and will show as late on the board; it is not refused.
+
+![New order: already late](20-order-form-late.png)
+
+### Order detail
+Each stage with the planned finish date beside the projected one, how far apart they are, the progress, and the working behind the colour. Ex-factory can be changed here; a reason is required and is kept in the history.
+
+![Order detail](21-order-detail.png)
+
 ## Phone
 
 ### Order board on a phone
@@ -93,4 +118,14 @@ The number is saved on the phone first. The chip says Offline and how many are w
 Today so far already includes the waiting 120 pieces, so the supervisor sees the effect straight away.
 
 ![My orders today with an update waiting](16-today-offline-waiting-phone.png)
+
+### Order detail on a phone
+The same page on a narrow screen: stacked, no sideways scrolling.
+
+![Order detail on a phone](22-order-detail-phone.png)
+
+### New order on a phone
+The order form on a narrow screen.
+
+![New order on a phone](23-order-form-phone.png)
 

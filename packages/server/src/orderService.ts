@@ -39,6 +39,63 @@ async function calendarsFor(tx: Tx, unitIds: string[]): Promise<Record<string, U
   return out
 }
 
+/** The stages of a TNA template, as the engine wants them. */
+export async function loadTemplateSteps(tx: Tx, templateId: string): Promise<TemplateStep[]> {
+  const tpl = (await tx.query<{ offsets: unknown }>('select offsets from tna_template where id = $1', [templateId]))[0]
+  if (!tpl) throw notFound('No such TNA template')
+  const raw = Array.isArray(tpl.offsets) ? tpl.offsets as { stage: string; sequence: number; working_days_before: number; unit_id: string }[] : []
+  return raw.map((o) => ({ stage: o.stage, sequence: o.sequence, workingDaysBefore: o.working_days_before, unitId: o.unit_id }))
+}
+
+export interface SchedulePreview {
+  milestones: { stage: string; sequence: number; unitId: string; unitName: string; plannedEnd: string }[]
+  /** Faults in the template: the order cannot be created until these are fixed. */
+  problems: string[]
+  /** Stages already due today or earlier: the order can still be created, and will show late. */
+  alreadyDue: string[]
+}
+
+/**
+ * What an order would look like if created now, without creating it. Lets the screen show the
+ * dates (and say plainly that an order is already late, or that a template is broken) BEFORE
+ * the merchandiser commits to it.
+ */
+export async function previewSchedule(tx: Tx, ctx: Ctx, input: { templateId: string; exFactory: string }, today: string): Promise<SchedulePreview> {
+  if (!isStaff(ctx)) throw forbidden('Only merchandisers set up orders')
+  if (!UUID.test(String(input.templateId))) throw badRequest('Choose a TNA template')
+  if (!isIsoDate(input.exFactory)) throw badRequest('Ex-factory date must be a real date (YYYY-MM-DD)')
+  const steps = await loadTemplateSteps(tx, input.templateId)
+  const calendars = await calendarsFor(tx, [...new Set(steps.map((s) => s.unitId))])
+  const schedule = backSchedule(input.exFactory, steps, calendars, today)
+  const units = await tx.query<{ id: string; name: string }>('select id::text as id, name from unit')
+  const name = new Map(units.map((u) => [u.id, u.name]))
+  return {
+    milestones: schedule.milestones.map((m) => ({ ...m, unitName: name.get(m.unitId) ?? '' })),
+    problems: schedule.problems,
+    alreadyDue: schedule.alreadyDue,
+  }
+}
+
+export interface OrderOptions {
+  buyers: { id: string; name: string; country: string | null }[]
+  templates: { id: string; name: string; stages: { stage: string; workingDaysBefore: number }[] }[]
+}
+
+/** What the order form offers in its drop-downs. */
+export async function getOrderOptions(tx: Tx, ctx: Ctx): Promise<OrderOptions> {
+  if (!isStaff(ctx)) throw forbidden('Only merchandisers set up orders')
+  const buyers = await tx.query<{ id: string; name: string; country: string | null }>('select id::text as id, name, country from buyer order by name')
+  const tpls = await tx.query<{ id: string; name: string; offsets: unknown }>('select id::text as id, name, offsets from tna_template order by name')
+  return {
+    buyers,
+    templates: tpls.map((t) => ({
+      id: t.id, name: t.name,
+      stages: (Array.isArray(t.offsets) ? t.offsets as { stage: string; sequence: number; working_days_before: number }[] : [])
+        .sort((a, b) => a.sequence - b.sequence).map((o) => ({ stage: o.stage, workingDaysBefore: o.working_days_before })),
+    })),
+  }
+}
+
 /** Create an order and back-schedule its milestones from the template. Merchandisers only. */
 export async function createOrder(tx: Tx, ctx: Ctx, input: NewOrder, today: string): Promise<CreatedOrder> {
   if (!isStaff(ctx)) throw forbidden('Only merchandisers set up orders')
@@ -59,10 +116,7 @@ export async function createOrder(tx: Tx, ctx: Ctx, input: NewOrder, today: stri
   if (input.qty !== undefined && input.qty !== total) throw badRequest(`Quantity ${input.qty} does not match the sizes, which add up to ${total}`)
 
   if (!(await tx.query('select 1 from buyer where id = $1', [input.buyerId])).length) throw notFound('No such buyer')
-  const tpl = (await tx.query<{ offsets: unknown }>('select offsets from tna_template where id = $1', [input.templateId]))[0]
-  if (!tpl) throw notFound('No such TNA template')
-  const raw = Array.isArray(tpl.offsets) ? tpl.offsets as { stage: string; sequence: number; working_days_before: number; unit_id: string }[] : []
-  const steps: TemplateStep[] = raw.map((o) => ({ stage: o.stage, sequence: o.sequence, workingDaysBefore: o.working_days_before, unitId: o.unit_id }))
+  const steps = await loadTemplateSteps(tx, input.templateId)
 
   const calendars = await calendarsFor(tx, [...new Set(steps.map((s) => s.unitId))])
   const schedule = backSchedule(input.exFactory, steps, calendars, today)

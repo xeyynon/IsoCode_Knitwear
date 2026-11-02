@@ -37,6 +37,7 @@ const browser = await chromium.launch({ channel: process.env.E2E_BROWSER ?? 'mse
 
 async function snap(page: Page, n: number, slug: string, device: Shot['device'], title: string, note: string, fullPage = false) {
   const file = `${String(n).padStart(2, '0')}-${slug}.png`
+  await page.evaluate(() => window.scrollTo(0, 0))   // a sticky header would otherwise sit offset in a full-page picture
   await page.waitForTimeout(350)   // let transitions and fonts settle
   await page.screenshot({ path: path.join(OUT, file), fullPage })
   shots.push({ file, title, note, device })
@@ -137,6 +138,62 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.waitForSelector('.stage')
   await snap(page, 16, 'today-offline-waiting-phone', 'phone', 'My orders today with an update waiting', 'Today so far already includes the waiting 120 pieces, so the supervisor sees the effect straight away.', true)
   await ctx.close()   // closed while offline on purpose: the waiting update is never sent, so the demo data is unchanged
+}
+
+// ---------------------------------------------------------------- orders (nothing here changes any data)
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.fill('input[type=email]', MERCH.email)
+  await page.fill('input[type=password]', MERCH.password)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('table.board')
+
+  await page.click('a:has-text("New order")')
+  await page.waitForSelector('form.form')
+  await snap(page, 17, 'order-form-empty', 'desktop', 'New order', 'Buyer, PO, style, colour, quantity by size (S, M, L and XL are already named; a size left blank is simply not ordered), ex-factory date and a TNA template.', true)
+
+  await page.click('button:has-text("Create order")')
+  await page.waitForSelector('.banner[role=alert]')
+  await snap(page, 18, 'order-form-errors', 'desktop', 'New order: everything that is missing', 'Pressing Create with gaps lists every problem in plain words at the top and marks each field. Nothing is sent.', true)
+
+  await page.selectOption('select >> nth=0', { label: 'Buyer B (DE)' })
+  await page.getByLabel('PO number').fill('B-PO-90001')
+  await page.getByLabel('Style').fill('polo')
+  await page.getByLabel('Colour').fill('white')
+  const q = page.locator('input[placeholder=Pieces]')
+  await q.nth(0).fill('500'); await q.nth(1).fill('1200'); await q.nth(2).fill('800')
+  await page.getByLabel('Ex-factory date').fill('2026-11-20')
+  await page.selectOption('select >> nth=1', { label: 'Knit tee' })
+  await page.waitForSelector('table.plan')
+  await snap(page, 19, 'order-form-preview', 'desktop', 'New order: the dates it would get', 'As soon as there is a template and a date, the form shows when each stage must finish, worked backwards from ex-factory (Sundays and closures skipped), before anything is created.', true)
+
+  await page.getByLabel('Ex-factory date').fill('2026-11-10')
+  await page.waitForSelector('.notice-box')
+  await snap(page, 20, 'order-form-late', 'desktop', 'New order: already late', 'If a stage would already be due, the form says so. The order can still be created and will show as late on the board; it is not refused.', true)
+
+  await page.goto(`${WEB}/board`)
+  await page.waitForSelector('table.board')
+  await page.click('a.po-link:has-text("B-PO-88240")')
+  await page.waitForSelector('.stagecard')
+  await snap(page, 21, 'order-detail', 'desktop', 'Order detail', 'Each stage with the planned finish date beside the projected one, how far apart they are, the progress, and the working behind the colour. Ex-factory can be changed here; a reason is required and is kept in the history.', true)
+  await ctx.close()
+
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const p2 = await phone.newPage()
+  await p2.goto(`${WEB}/login`)
+  await p2.fill('input[type=email]', MERCH.email)
+  await p2.fill('input[type=password]', MERCH.password)
+  await p2.click('button:has-text("Sign in") >> nth=-1')
+  await p2.waitForSelector('table.board')
+  await p2.click('a.po-link >> nth=0')
+  await p2.waitForSelector('.stagecard')
+  await snap(p2, 22, 'order-detail-phone', 'phone', 'Order detail on a phone', 'The same page on a narrow screen: stacked, no sideways scrolling.', true)
+  await p2.goto(`${WEB}/orders/new`)
+  await p2.waitForSelector('form.form')
+  await snap(p2, 23, 'order-form-phone', 'phone', 'New order on a phone', 'The order form on a narrow screen.', true)
+  await phone.close()
 }
 
 await browser.close()
