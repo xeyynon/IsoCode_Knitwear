@@ -5,7 +5,7 @@
 
 Order tracking for a knitwear exporter. Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order, whether it will ship on time and shows the reasoning. Merchandisers see the orders that need attention first; buyers get a read-only view of only their own orders.
 
-> **Status: early build.** The calculation engine, database, API and the merchandiser's order board work and are tested. The supervisor's phone screens, order setup screens and buyer view are not built yet. See [Status](#status) and [Roadmap](#roadmap).
+> **Status: early build.** The calculation engine, database, API, the merchandiser's order board and the supervisor's offline daily update work and are tested. Order setup screens, the review gate and the buyer view are not built yet. See [Status](#status) and [Roadmap](#roadmap).
 
 ## Contents
 [Why](#why) · [Status](#status) · [How the colours are decided](#how-the-colours-are-decided) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security model](#security-model) · [Testing](#testing) · [Development workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
@@ -25,12 +25,13 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | Database schema with row-level security | Built, tested |
 | HTTP API: sign-in with lockout, board, daily updates (single and batch), order creation, ex-factory change with logged reason, status check | Built, tested |
 | Web app: sign-in, order board, public status page | Built (`build-1000`) |
-| Supervisor screens and the offline queue | **Not built** (placeholder) |
+| Supervisor app: "My orders today", the daily update, an offline queue that survives restarts, "3 waiting" status, and the app opening with no signal | Built (`build-1001`), 14 browser checks |
+| Photos and notes on an update | **Not built** |
 | Order setup and order detail screens | **Not built** (the server side exists) |
 | Review queue, warning confirmation, buyer link | **Not built** |
 | Voice and text notes | **Not built** |
 
-**Not yet verified:** nothing has run against a production Postgres server or on real phones, and the Tamil wording has not been checked with floor supervisors.
+**Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
 
 ## How the colours are decided
 For each stage, in order, the engine takes the pieces still to make, the working days left (in that stage's own unit calendar), and the recent rate (the average of the last five days with an update).
@@ -128,6 +129,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET /api/board` | merchandiser | Every order with colour and working, worst first |
 | `POST /api/orders` | merchandiser | Create an order from a TNA template; stages are back-scheduled from ex-factory |
 | `POST /api/orders/:id/ex-factory` | merchandiser | Move ex-factory and re-schedule; every change is logged with a required reason |
+| `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
 | `POST /api/events`, `POST /api/events/batch` | supervisor | Send daily counts; the batch form serves the offline queue |
 
 ## Security model
@@ -148,11 +150,13 @@ npm test               # engine, API, database and web logic (Vitest)
 npm run typecheck
 npm run check          # repo checks (secrets, tags), Markdown links, colour contrast
 npm run verify         # all of the above
+npm run e2e            # the offline test in a real browser (see below)
 ```
 - **Engine:** table-driven tests for every rule and edge case (zero history, completed stage, past milestone, over-production, duplicate event, closed days).
 - **Database:** the SQL assertions in `packages/server/db/tests/rls.test.sql` run on PGlite under `npm test`, and are plain Postgres so they also run under `psql`.
 - **Mutation-checked:** the security and engine rules were each deliberately broken once to confirm a test fails. A test that has never failed has not been shown to test anything.
 - **Contrast:** `check_contrast.mjs` measures every colour pair against WCAG AA.
+- **Offline, in a real browser:** `npm run e2e` builds the app, starts the API and the app, and drives Edge (or Chrome with `E2E_BROWSER=chrome`). It loads the app, goes offline, enters 20 updates, restarts the app while still offline, reconnects, and checks that each update arrived exactly once and the totals add up. It also loses a server reply on purpose to prove a retry never double-counts. Set `E2E_SHOTS=<folder>` to save screenshots.
 
 ## Development workflow
 Every change is either a **build** or an **InBul** (internal build):
@@ -194,7 +198,7 @@ git push origin main --tags
 | **Dependabot** | Weekly | Proposes npm and GitHub Actions updates |
 
 ## Roadmap
-1. **Supervisor app** (next, and the riskiest part): Tamil daily update, an offline queue that survives flight mode and app restarts, "3 waiting" status, photo resize, storage warnings. Tested with the network toggled.
+1. **Supervisor app, remaining:** photo and a typed or voice note on an update, photo resize, and trying it on real low-end phones. (The daily update and offline queue are built.)
 2. **Order screens:** order setup with TNA templates, and order detail with planned versus projected dates and the date-change history.
 3. **Review gate:** a queue where a merchandiser confirms warnings and photos before any buyer sees them.
 4. **Buyer view:** a signed, expiring, read-only link with automated cross-buyer leak tests.

@@ -9,6 +9,7 @@ import { Loading } from './ui/Loading'
 const Login = lazy(() => import('./pages/Login'))
 const Board = lazy(() => import('./pages/Board'))
 const Today = lazy(() => import('./pages/Today'))
+const Update = lazy(() => import('./pages/Update'))
 const Status = lazy(() => import('./pages/Status'))
 
 /** The server is the security boundary; this only decides which screen a signed-in person sees. */
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/status" element={<Status />} />
           <Route path="/board" element={<RequireRole role="merchandiser"><Board /></RequireRole>} />
           <Route path="/today" element={<RequireRole role="supervisor"><Today /></RequireRole>} />
+          <Route path="/today/:orderId/:stage" element={<RequireRole role="supervisor"><Update /></RequireRole>} />
           <Route path="*" element={<Home />} />
         </Routes>
       </Suspense>

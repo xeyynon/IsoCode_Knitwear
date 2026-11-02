@@ -12,7 +12,8 @@
     "check": "node scripts/check_repo.mjs && node scripts/check_docs.mjs && node scripts/check_contrast.mjs",
     "verify": "npm run check && npm run typecheck && npm test",
     "dev:api": "tsx packages/server/src/dev.ts",
-    "build": "npm run build -w @isocode/web"
+    "build": "npm run build -w @isocode/web",
+    "e2e": "tsx scripts/e2e_offline.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",

@@ -16,6 +16,12 @@ const en = {
   'board.all': 'All',
   'board.refresh': 'Refresh',
   'board.shortBy': 'pcs short',
+  'sup.title': 'My orders today',
+  'sup.send': 'Send',
+  'sup.pieces': 'Pieces made',
+  'sync.allSent': 'All sent',
+  'sync.waiting': 'waiting',
+  'sync.offline': 'Offline',
 } as const
 export type Key = keyof typeof en
 
@@ -27,6 +33,14 @@ const ta: Partial<Record<Key, string>> = {
   'status.amber': 'கவனம்',
   'status.green': 'சரியான நேரம்',
   'status.grey': 'இன்று பதிவு இல்லை',
+  // UNREVIEWED: written for this build, not yet read by a native speaker. Have supervisors
+  // correct these before the pilot (see the design check "three supervisors read the labels").
+  'sup.title': 'இன்றைய ஆர்டர்கள்',
+  'sup.send': 'அனுப்பு',
+  'sup.pieces': 'தயாரித்த எண்ணிக்கை',
+  'sync.allSent': 'அனைத்தும் அனுப்பப்பட்டது',
+  'sync.waiting': 'காத்திருக்கிறது',
+  'sync.offline': 'இணைப்பு இல்லை',
 }
 
 export function translate(lang: Lang, key: Key): string {

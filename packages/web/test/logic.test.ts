@@ -134,3 +134,50 @@ describe('reloading after a deploy', () => {
     expect(isChunkError(new TypeError('x is not a function'))).toBe(false)
   })
 })
+
+import { istDate, parsePieces, remainingPieces } from '../src/dates'
+import { storageWarning, LOW_SPACE_BYTES } from '../src/queue/storageStatus'
+
+describe('the supervisor number field', () => {
+  it('accepts whole numbers and ignores what a keyboard might add', () => {
+    expect(parsePieces('350')).toBe(350)
+    expect(parsePieces(' 1,200 ')).toBe(1200)
+    expect(parsePieces('٣٥٠')).toBeNull()      // other digit scripts are not guessed at
+    expect(parsePieces('12.5')).toBeNull()      // a fraction of a piece is not a thing
+  })
+  it.each([[''], ['0'], ['000'], ['abc'], ['-5'], ['12345678'], ['1000001']])('refuses %j', (raw) => {
+    expect(parsePieces(raw)).toBeNull()
+  })
+  it('never shows a negative number of pieces left', () => {
+    expect(remainingPieces(1000, 400)).toBe(600)
+    expect(remainingPieces(1000, 1500)).toBe(0)
+  })
+})
+
+describe("the supervisor's day is India's date, whatever the phone's time zone says", () => {
+  it('rolls over at midnight in India, not in UTC', () => {
+    expect(istDate(new Date('2026-11-03T18:00:00Z'))).toBe('2026-11-03')   // 23:30 in India
+    expect(istDate(new Date('2026-11-03T18:31:00Z'))).toBe('2026-11-04')   // 00:01 in India
+  })
+})
+
+describe('storage warnings', () => {
+  const ok = { durable: true, persisted: true, usage: 1e6, quota: 1e9 }
+  it('says nothing when all is well', () => expect(storageWarning(ok)).toBeNull())
+  it('always warns when updates cannot be kept at all, with plain words', () => {
+    expect(storageWarning({ ...ok, durable: false })).toMatch(/Do not close the app/)
+    expect(storageWarning({ ...ok, durable: false }, 0)).not.toBeNull()
+  })
+  it('warns about low space even with nothing waiting', () => {
+    expect(storageWarning({ ...ok, usage: 1e9 - LOW_SPACE_BYTES + 1 })).toMatch(/almost full/)
+    expect(storageWarning({ ...ok, usage: 1e9 - LOW_SPACE_BYTES - 1 })).toBeNull()
+  })
+  it('asks to add the app to the home screen only when something is waiting to be lost', () => {
+    expect(storageWarning({ ...ok, persisted: false }, 0)).toBeNull()
+    expect(storageWarning({ ...ok, persisted: false }, 3)).toMatch(/home screen/)
+    expect(storageWarning({ ...ok, persisted: null }, 3)).toBeNull()   // unknown: do not guess
+  })
+  it('the most serious problem wins', () => {
+    expect(storageWarning({ durable: false, persisted: false, usage: 1e9, quota: 1e9 }, 5)).toMatch(/Do not close/)
+  })
+})

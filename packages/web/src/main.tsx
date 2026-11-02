@@ -16,6 +16,12 @@ window.addEventListener('vite:preloadError', () => {
   } catch { /* leave the error boundary to show its card */ }
 })
 
+// Keep the app itself available with no signal. Production builds only: in development a
+// service worker would serve stale code.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => { void navigator.serviceWorker.register('/sw.js').catch(() => undefined) })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

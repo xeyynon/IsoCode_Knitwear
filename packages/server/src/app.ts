@@ -6,6 +6,7 @@ import type { Ctx, Db } from './db.js'
 import { AppError, badRequest } from './errors.js'
 import { submitEvent, type EventInput } from './eventService.js'
 import { changeExFactory, createOrder, type NewOrder } from './orderService.js'
+import { getMyStages } from './myService.js'
 import { istDate } from './today.js'
 
 export interface AppOptions {
@@ -131,6 +132,14 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const rows = await opts.db.tx(ctx, (tx) => getBoard(tx, ctx, istDate(clock())))
     reply.header('Cache-Control', 'no-store')
     return { today: istDate(clock()), rows }
+  })
+
+  app.get('/api/my/stages', async (req, reply) => {
+    const ctx = ctxOf(req)
+    const today = istDate(clock())
+    const stages = await opts.db.tx(ctx, (tx) => getMyStages(tx, ctx, today))
+    reply.header('Cache-Control', 'no-store')
+    return { today, stages }
   })
 
   app.post('/api/orders', async (req, reply) => {
