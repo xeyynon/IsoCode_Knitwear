@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags and commit titles are checked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Repo checks (secrets, tracked files, titles, tags)
+        run: node scripts/check_repo.mjs
+        env:
+          BANNED_TERMS: ${{ secrets.BANNED_TERMS }}
+      - name: Docs links
+        run: node scripts/check_docs.mjs
+      - run: npm ci
+      - name: Colour contrast of the design tokens
+        run: node scripts/check_contrast.mjs
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests (engine, server services, database schema and row-level security)
+        run: npm test
+      # Add when the app exists: npm run build, Playwright offline-sync tests.

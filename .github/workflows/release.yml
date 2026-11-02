@@ -1,0 +1,22 @@
+name: release
+on:
+  push:
+    tags:
+      - 'build-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish a GitHub Release from the build report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Public notes: only the "What changed" paragraph, never the why or the file list.
+          awk '/^## What changed/{f=1;next} /^## /{f=0} f' "md/builds/${GITHUB_REF_NAME}.md" | sed '/./,$!d' > notes.txt
+          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file notes.txt
+      # Add the container/static build here once the app exists.

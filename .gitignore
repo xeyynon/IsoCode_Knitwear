@@ -1,0 +1,30 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+local_config.*
+*.pem
+*.key
+*.p12
+
+# dependencies and build output
+node_modules/
+dist/
+coverage/
+.vite/
+
+# logs and local data (all pilot data is real worker/buyer data: never commit)
+*.log
+data/
+recordings/
+uploads/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# internal docs and the client build plan stay on this machine (budget, rates, pilot plans)
+/md/
+/company-a-build-plan.md
