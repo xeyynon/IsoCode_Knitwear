@@ -1,0 +1,21 @@
+{
+  "name": "isocode-knitwear",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check": "node scripts/check_repo.mjs && node scripts/check_docs.mjs && node scripts/check_contrast.mjs",
+    "verify": "npm run check && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

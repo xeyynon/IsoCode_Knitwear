@@ -1,0 +1,24 @@
+/* Design tokens. Source: md/design_system.md. One light theme (floor screens are
+   read in bright light). Indigo is the only action colour; red, amber and green
+   are reserved for status. Contrast pairs are checked by scripts/check_contrast.mjs. */
+:root {
+  --ink: #1F2328;
+  --muted: #57606A;
+  --border: #8C959F;
+  --page: #F7F7F5;
+  --surface: #FFFFFF;
+  --accent: #3346A8;
+  --status-red: #C24400;
+  --status-red-tint: #FBEBE3;
+  --status-red-text: #A23F00;
+  --status-amber: #B07800;
+  --status-amber-tint: #FDF3DC;
+  --status-amber-text: #8A5A00;
+  --status-green: #1B7F5F;
+  --status-grey: #6B7280;
+
+  --font-latin: 'Noto Sans', system-ui, sans-serif;
+  --font-tamil: 'Noto Sans Tamil', 'Noto Sans', system-ui, sans-serif;
+  --tap-min: 44px;   /* coarse pointers */
+  --tap-primary: 56px; /* Send and number fields on the supervisor screen */
+}
