@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Bookkeeping for builds and InBuls. See md/version_control.md.
+// Bookkeeping for builds and InBuls. See the versioning notes in the internal docs (md/version_control.md, kept private).
 //
 //   node scripts/changelog.mjs --next-build          print the next build number
 //   node scripts/changelog.mjs --next-internal       print the next InBul id
 //   node scripts/changelog.mjs --status              print the next ids and what is staged
 //   node scripts/changelog.mjs --pending "<title>" "<summary>" --why .. --verified .. --next ..
-//                                                    write md/builds/build-N.md, CHANGELOG.md, build-info.json
+//                                                    write docs/builds/build-N.md, CHANGELOG.md, build-info.json
 //   node scripts/changelog.mjs --tag                 pin the tag on HEAD (changes no files)
 //
 // The tag is the source of truth for a number. Numbers come from the tags, so
@@ -17,10 +17,12 @@ import { parseArgs } from 'node:util'
 
 const FIRST_BUILD = 1000
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
-const REPORTS = path.join(ROOT, 'md', 'builds')
+// Build reports are public-safe by design (what changed, not budget or client detail), so they live
+// in docs/builds, which is tracked. The internal md/ folder stays private (DEC-013).
+const REPORTS = path.join(ROOT, 'docs', 'builds')
 const CHANGELOG = path.join(ROOT, 'CHANGELOG.md')
 const BUILD_INFO = path.join(ROOT, 'build-info.json')
-const BOOKKEEPING = [/^md\/builds\//, /^CHANGELOG\.md$/, /^build-info\.json$/]
+const BOOKKEEPING = [/^docs\/builds\//, /^CHANGELOG\.md$/, /^build-info\.json$/]
 // Builds whose text matches are left out of the public build-info.json.
 const NOT_PUBLIC = /secret|token|password|credential|api[- ]?key|\.env|rotate|leak|private key/i
 const MANUAL_START = '<!-- manual:start -->'
@@ -145,7 +147,7 @@ function tagHead() {
     return console.log(`tagged ${inbul[1]}`)
   }
   const n = nextBuild()
-  if (!fs.existsSync(reportPath(n))) fail(`no report md/builds/build-${n}.md. Run --pending first, or title an InBul "InBulNN: ...".`)
+  if (!fs.existsSync(reportPath(n))) fail(`no report docs/builds/build-${n}.md. Run --pending first, or title an InBul "InBulNN: ...".`)
   const report = readReport(reportPath(n))
   if (!report || report.title !== title) fail(`commit title does not match the report title ("${report ? report.title : '?'}").`)
   git('tag', `build-${n}`)
@@ -173,6 +175,6 @@ else if (values.status) {
   const file = writeReport(n, { title, summary, why: values.why, verified: values.verified, next: values.next })
   regenerate()
   console.log(`wrote ${path.relative(ROOT, file)}, CHANGELOG.md and build-info.json for build-${n}`)
-  console.log('next: git add md/builds CHANGELOG.md build-info.json; git commit -m "<same title>"; node scripts/changelog.mjs --tag')
+  console.log('next: git add docs/builds CHANGELOG.md build-info.json; git commit -m "<same title>"; node scripts/changelog.mjs --tag')
 } else if (values.tag) tagHead()
 else fail('see the header of scripts/changelog.mjs for usage')

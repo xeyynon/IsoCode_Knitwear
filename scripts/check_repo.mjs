@@ -58,7 +58,7 @@ for (const t of git('tag', '--list').split('\n').filter(Boolean)) {
   const b = /^build-(\d+)$/.exec(t)
   if (b) {
     if (Number(b[1]) < 1000) problems.push(`tag ${t}: builds start at 1000`)
-    if (!fs.existsSync(path.join(ROOT, 'md', 'builds', `${t}.md`))) problems.push(`tag ${t}: no report md/builds/${t}.md`)
+    if (!fs.existsSync(path.join(ROOT, 'docs', 'builds', `${t}.md`))) problems.push(`tag ${t}: no report docs/builds/${t}.md`)
   } else if (!/^InBul\d{2,}$/.test(t)) problems.push(`tag ${t}: not build-N or InBulNN`)
 }
 

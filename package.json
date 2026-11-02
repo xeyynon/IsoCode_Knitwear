@@ -10,11 +10,15 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check": "node scripts/check_repo.mjs && node scripts/check_docs.mjs && node scripts/check_contrast.mjs",
-    "verify": "npm run check && npm run typecheck && npm test"
+    "verify": "npm run check && npm run typecheck && npm test",
+    "dev:api": "tsx packages/server/src/dev.ts",
+    "build": "npm run build -w @isocode/web"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",
     "@types/node": "^20.14.0",
+    "playwright-core": "^1.64.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

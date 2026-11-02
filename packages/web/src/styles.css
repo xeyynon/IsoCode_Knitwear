@@ -1,0 +1,115 @@
+@import '../../design/tokens.css';
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 16px/1.5 var(--font-latin);
+}
+/* Tamil is a tall script: more line height and size, as the design doc requires. */
+html[lang='ta'] body { font-family: var(--font-tamil); font-size: 18px; line-height: 1.6; }
+h1, h2 { line-height: 1.25; margin: 0 0 .5rem; }
+h1 { font-size: 24px; } h2 { font-size: 20px; }
+.mono { font-variant-numeric: tabular-nums; }   /* quantities line up in columns */
+.sub { display: block; color: var(--muted); font-size: 14px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---- controls. Indigo is the only action colour; it is never used for status. */
+.btn {
+  min-height: 40px; padding: 0 16px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit; cursor: pointer;
+}
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn--block { width: 100%; min-height: var(--tap-primary); }
+.btn--small { min-height: 36px; padding: 0 12px; font-size: 14px; }
+.btn--icon { width: 40px; padding: 0; display: inline-grid; place-items: center; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font: inherit; cursor: pointer; }
+.input {
+  width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+.field { display: block; margin: 0 0 1rem; }
+.field > span { display: block; margin-bottom: .25rem; color: var(--muted); font-size: 14px; }
+.error { color: var(--status-red-text); margin: 0 0 1rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; max-width: 640px; }
+
+/* ---- sign in */
+.login { min-height: 100dvh; display: grid; padding: 16px; }
+.login__card { margin: auto; width: 100%; max-width: 380px; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin: 0 0 1.25rem; }
+.seg__btn { flex: 1; min-height: 44px; border: 0; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.seg__btn[aria-pressed='true'] { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* ---- app bar and menu */
+.appbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+.appbar__brand { font-weight: 600; color: var(--muted); font-size: 14px; }
+.appbar__title { font-size: 18px; margin: 0; flex: 1; }
+.menu { position: relative; }
+.menu__popover { position: absolute; right: 0; top: calc(100% + 6px); min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 6px 20px rgb(0 0 0 / .12); z-index: 20; }
+.menu__item { display: block; width: 100%; min-height: 44px; text-align: left; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.menu__item:hover, .menu__item:focus-visible { background: var(--page); }
+.menu__sep { height: 1px; background: var(--border); opacity: .4; margin: 4px 0; }
+
+/* ---- layout */
+.page { padding: 16px; max-width: 1200px; margin: 0 auto; }
+.page--narrow { max-width: 560px; }
+
+/* ---- the filter strip */
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.chip { min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.chip b { font-variant-numeric: tabular-nums; margin-left: 4px; }
+.chip[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.strip__buyer { min-width: 150px; }
+.strip__meta { margin-left: auto; color: var(--muted); font-size: 14px; }
+
+/* ---- status badge: colour for exceptions only, with a mark and a word every time */
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: 12px; font-size: 14px; font-weight: 600; white-space: normal; }
+.badge--red { color: var(--status-red-text); background: var(--status-red-tint); }
+.badge--red svg { color: var(--status-red); }
+.badge--amber { color: var(--status-amber-text); background: var(--status-amber-tint); border: 1px solid var(--status-amber); }
+.badge--amber svg { color: var(--status-amber); }
+.badge--green { color: var(--status-green); }
+.badge--grey { color: var(--status-grey); }
+
+/* ---- the board: a table on wide screens, cards on narrow ones */
+.board { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.board th { text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.board td { padding: 10px 12px; vertical-align: top; border-bottom: 1px solid rgb(140 149 159 / .35); }
+.row--red td { background: var(--status-red-tint); }       /* only red rows are tinted */
+.why { margin-top: 2px; }
+.po { min-width: 0; }
+.flag { color: var(--status-grey); font-style: italic; }
+.more { color: var(--muted); }
+
+@media (max-width: 720px) {
+  .board thead { display: none; }
+  .board, .board tbody, .board tr, .board td { display: block; width: 100%; }
+  .board tr { border-bottom: 1px solid var(--border); padding: 8px 0; }
+  .board td { border: 0; padding: 4px 12px; display: flex; gap: 8px; justify-content: space-between; }
+  .board td::before { content: attr(data-label); color: var(--muted); font-size: 13px; flex: 0 0 56px; }
+  .board td > * { text-align: right; }
+  .board td .po { text-align: left; flex: 1; }   /* the PO cell is one block: PO, style, then the maths */
+  .board td .po .sub { text-align: left; }
+  .strip__meta { margin-left: 0; width: 100%; }
+}
+
+/* ---- status page */
+.status-headline { font-size: 20px; font-weight: 600; }
+.checks { list-style: none; padding: 0; margin: 0 0 1rem; }
+.checks li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.checks .ok { color: var(--status-green); } .checks .bad { color: var(--status-red-text); }
+
+/* ---- loading: fades in after a short delay so quick loads never flash it */
+.loading { display: flex; align-items: center; gap: 10px; justify-content: center; padding: 48px 16px; color: var(--muted); opacity: 0; animation: fade-in 400ms 180ms forwards; }
+.loading__ring { width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fade-in { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .loading__ring { animation: none; } .loading { animation-duration: 1ms; } }
+
+/* ---- touch: 44px targets on coarse pointers */
+@media (pointer: coarse) {
+  .btn, .chip, .btn--small { min-height: var(--tap-min); }
+  .btn--icon { width: var(--tap-min); }
+}
