@@ -51,3 +51,21 @@ export function previousWorkingDay(cal: UnitCalendar | undefined, d: IsoDate): I
   for (let i = 0; i < 3650 && !isWorking(cal, p); i++) p = addDays(p, -1)
   return p
 }
+
+/** The latest working day on or before `d`. */
+export function workingDayOnOrBefore(cal: UnitCalendar | undefined, d: IsoDate): IsoDate {
+  let p = d
+  for (let i = 0; i < 3650 && !isWorking(cal, p); i++) p = addDays(p, -1)
+  return p
+}
+
+/** `n` working days before `from` (n >= 0), counting back from the latest working day on or before it. */
+export function workingDaysBack(cal: UnitCalendar | undefined, from: IsoDate, n: number): IsoDate {
+  let d = workingDayOnOrBefore(cal, from)
+  let left = n
+  for (let i = 0; i < 3650 && left > 0; i++) {
+    d = addDays(d, -1)
+    if (isWorking(cal, d)) left--
+  }
+  return d
+}

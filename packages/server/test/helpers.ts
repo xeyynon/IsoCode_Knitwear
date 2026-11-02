@@ -66,6 +66,7 @@ export const ID = {
   merch: '00000000-0000-0000-0000-0000000000ee',
   sup1: '00000000-0000-0000-0000-0000000000ef',
 }
+export const TEMPLATE_ID = '00000000-0000-0000-0000-0000000000f1'
 export const CREDS = { email: 'm@example.test', password: 'correct horse battery', phone: '98765 43210', pin: '4321' }
 export const TODAY = '2026-11-04' // a Wednesday; Sundays 1 and 8 Nov closed
 
@@ -88,6 +89,12 @@ export async function seed(pg: PGlite): Promise<void> {
   `)
   await pg.query(`insert into account (id, role, email, password_hash) values ($1, 'merchandiser', $2, $3)`, [ID.merch, CREDS.email, hashSecret(CREDS.password)])
   await pg.query(`insert into account (id, role, phone, pin_hash, unit_id) values ($1, 'supervisor', '9876543210', $2, $3)`, [ID.sup1, hashSecret(CREDS.pin), ID.unit1])
+  await pg.query(`insert into tna_template (id, name, offsets) values ($1, 'Knit tee', $2::jsonb)`, [TEMPLATE_ID, JSON.stringify([
+    { stage: 'cutting', sequence: 1, working_days_before: 12, unit_id: ID.unit1 },
+    { stage: 'sewing', sequence: 2, working_days_before: 6, unit_id: ID.unit1 },
+    { stage: 'finishing', sequence: 3, working_days_before: 2, unit_id: ID.unit1 },
+    { stage: 'packing', sequence: 4, working_days_before: 0, unit_id: ID.unit1 },
+  ])])
   const days = ['2026-10-29', '2026-10-30', '2026-10-31', '2026-11-02', '2026-11-03']
   for (const [order, buyer, unit, qty] of [
     [ID.orderRed, ID.buyerB, ID.unit1, 350],

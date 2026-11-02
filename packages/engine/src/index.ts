@@ -191,3 +191,5 @@ export function formatMaths(r: StageResult, milestone: IsoDate): string {
   const short = r.shortBy && r.shortBy > 0 ? ` · ${r.shortBy} pcs short by ${formatDay(milestone)}` : ' · on pace'
   return `${need} · ${rate}${short}.`
 }
+
+export { backSchedule, type Schedule, type ScheduledMilestone, type TemplateStep } from './tna.js'

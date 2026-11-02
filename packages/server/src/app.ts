@@ -5,6 +5,7 @@ import { getBoard } from './boardService.js'
 import type { Ctx, Db } from './db.js'
 import { AppError, badRequest } from './errors.js'
 import { submitEvent, type EventInput } from './eventService.js'
+import { changeExFactory, createOrder, type NewOrder } from './orderService.js'
 import { istDate } from './today.js'
 
 export interface AppOptions {
@@ -130,6 +131,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const rows = await opts.db.tx(ctx, (tx) => getBoard(tx, ctx, istDate(clock())))
     reply.header('Cache-Control', 'no-store')
     return { today: istDate(clock()), rows }
+  })
+
+  app.post('/api/orders', async (req, reply) => {
+    const ctx = ctxOf(req)
+    const created = await opts.db.tx(ctx, (tx) => createOrder(tx, ctx, req.body as NewOrder, istDate(clock())))
+    return reply.code(201).send(created)
+  })
+
+  app.post<{ Params: { id: string } }>('/api/orders/:id/ex-factory', async (req) => {
+    const ctx = ctxOf(req)
+    const { exFactory, reason } = (req.body ?? {}) as { exFactory?: string; reason?: string }
+    return opts.db.tx(ctx, (tx) => changeExFactory(tx, ctx, req.claims!.sub, req.params.id, exFactory as string, reason as string))
   })
 
   app.post('/api/events', async (req) => {
