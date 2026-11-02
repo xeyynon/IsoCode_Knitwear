@@ -73,6 +73,7 @@ packages/
   design/    Colour tokens
 scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_contrast.mjs
 docs/builds/ One report per numbered build
+uiux/        Screenshots of every screen on demo data (npm run snapshots rewrites them)
 .github/     CI, release and Dependabot configuration
 ```
 

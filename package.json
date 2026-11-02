@@ -13,7 +13,8 @@
     "verify": "npm run check && npm run typecheck && npm test",
     "dev:api": "tsx packages/server/src/dev.ts",
     "build": "npm run build -w @isocode/web",
-    "e2e": "tsx scripts/e2e_offline.ts"
+    "e2e": "tsx scripts/e2e_offline.ts",
+    "snapshots": "tsx scripts/snapshots.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",
