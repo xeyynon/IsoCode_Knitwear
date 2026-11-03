@@ -199,3 +199,22 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 
 .page--form h2 { margin-top: 28px; }
 .page--form .card h2 { margin-top: 0; }
+
+/* ---- review queue and buyer page */
+.textarea { min-height: 64px; padding: 8px 12px; resize: vertical; font: inherit; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.internal { background: var(--page); border-radius: 6px; padding: 6px 10px; margin: 8px 0; }
+.count { background: var(--ink); color: #fff; border-radius: 10px; padding: 0 7px; font-size: 13px; margin-left: 4px; }
+.notice-box .input { margin: 8px 0; }
+.warns { display: grid; gap: 8px; margin: 10px 0; }
+.warns li { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.buyer h1 { margin-bottom: 12px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.links td:last-child { text-align: right; }
+@media (max-width: 720px) {
+  .links thead { display: none; }
+  .links, .links tbody, .links tr, .links td { display: block; width: 100%; }
+  .links tr { border-bottom: 1px solid var(--border); padding: 8px 0; }
+  .links td { border: 0; padding: 3px 4px; display: flex; gap: 8px; justify-content: space-between; }
+  .links td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 13px; flex: 0 0 56px; }
+}

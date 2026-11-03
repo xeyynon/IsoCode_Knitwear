@@ -8,7 +8,7 @@ npm run dev -w @isocode/web      # terminal 2
 npm run snapshots                # terminal 3: rewrites this folder
 ```
 
-Last taken: 2026-11-02. 23 pictures.
+Last taken: 2026-11-03. 26 pictures.
 
 ## Desktop
 
@@ -77,6 +77,11 @@ Each stage with the planned finish date beside the projected one, how far apart 
 
 ![Order detail](21-order-detail.png)
 
+### Review queue
+Nothing reaches a buyer until a merchandiser confirms it. Each warning shows the wording the buyer would read (editable) and, in grey, the figures behind it that only the factory sees. "Do not show" hides it from buyers.
+
+![Review queue](24-review-queue.png)
+
 ## Phone
 
 ### Order board on a phone
@@ -128,4 +133,14 @@ The same page on a narrow screen: stacked, no sideways scrolling.
 The order form on a narrow screen.
 
 ![New order on a phone](23-order-form-phone.png)
+
+### What a buyer sees
+A read-only page opened from a private link, with no sign-in. Only this buyer's orders and planned dates, and only warnings a merchandiser has confirmed. No colours, rates, shortfalls or other buyers. The link's secret is removed from the address bar as soon as the page loads.
+
+![What a buyer sees](25-buyer-view-phone.png)
+
+### A link that does not work
+A missing, unknown, cancelled or expired link all show this same message, so nothing tells an outsider which case it was.
+
+![A link that does not work](26-buyer-link-not-valid.png)
 

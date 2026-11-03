@@ -16,7 +16,7 @@ export default defineConfig(({ mode, command }) => {
         name: 'precache-list',
         apply: 'build',
         generateBundle(_options, bundle) {
-          const files = Object.keys(bundle).filter((f) => /.(js|css)$/.test(f))
+          const files = Object.keys(bundle).filter((f) => /\.(js|css)$/.test(f))
           this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify(files) })
         },
       },

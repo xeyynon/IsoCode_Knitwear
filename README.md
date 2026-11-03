@@ -5,7 +5,7 @@
 
 Order tracking for a knitwear exporter. Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order, whether it will ship on time and shows the reasoning. Merchandisers see the orders that need attention first; buyers get a read-only view of only their own orders.
 
-> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate and the buyer view are not built yet. See [Status](#status) and [Roadmap](#roadmap).
+> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate and the buyer's read-only view work and are tested; photos and notes are not built yet. See [Status](#status) and [Roadmap](#roadmap).
 
 ## Contents
 [Why](#why) · [Status](#status) · [How the colours are decided](#how-the-colours-are-decided) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security model](#security-model) · [Testing](#testing) · [Development workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
@@ -28,7 +28,7 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | Supervisor app: "My orders today", the daily update, an offline queue that survives restarts, "3 waiting" status, and the app opening with no signal | Built (`build-1001`), 14 browser checks |
 | Order setup (with a schedule preview before creating) and order detail (planned versus projected dates, the working behind each colour, date-change history, change ex-factory with a reason) | Built (`build-1002`) |
 | Photos and notes on an update | **Not built** |
-| Review queue, warning confirmation, buyer link | **Not built** |
+| Review queue (confirm, reword or hide a warning before a buyer can see it), buyer links (create, cancel, expire) and the buyer's read-only page, with automated cross-buyer leak tests | Built (`build-1003`) |
 | Voice and text notes | **Not built** |
 
 **Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
@@ -95,7 +95,7 @@ npm run dev -w @isocode/web     # terminal 2: app on http://localhost:5173
 | Demo account | Sign in with |
 | --- | --- |
 | Merchandiser | `m@example.test` / `correct horse battery` |
-| Supervisor | phone `98765 43210` / PIN `4321` (screens not built yet) |
+| Supervisor | phone `98765 43210` / PIN `4321` (My orders today and the daily update) |
 
 These are throwaway demo credentials for the in-memory database. Never reuse them anywhere real.
 
@@ -133,6 +133,10 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET /api/orders/:id` | merchandiser | One order in full: each stage planned versus projected, the working, and the date-change history |
 | `POST /api/orders` | merchandiser | Create an order from a TNA template; stages are back-scheduled from ex-factory |
 | `POST /api/orders/:id/ex-factory` | merchandiser | Move ex-factory and re-schedule; every change is logged with a required reason |
+| `GET /api/review` | merchandiser | Warnings waiting for review and those visible to buyers (also brings warnings up to date) |
+| `POST /api/warnings/:id/confirm`, `.../dismiss` | merchandiser | Confirm a warning for buyers (optionally rewording it), or hide it |
+| `GET/POST /api/buyer-links`, `POST /api/buyer-links/:id/revoke` | merchandiser | Make, list and cancel a buyer's private link |
+| `GET /api/buyer/orders` | buyer link | The buyer's own orders, planned dates and confirmed warnings. A link opens only this |
 | `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
 | `POST /api/events`, `POST /api/events/batch` | supervisor | Send daily counts; the batch form serves the offline queue |
 
@@ -204,8 +208,8 @@ git push origin main --tags
 ## Roadmap
 1. **Supervisor app, remaining:** photo and a typed or voice note on an update, photo resize, and trying it on real low-end phones. (The daily update and offline queue are built.)
 2. **Order screens, remaining:** a TNA template editor (templates are seeded for now), and setting an order's stages by hand.
-3. **Review gate:** a queue where a merchandiser confirms warnings and photos before any buyer sees them.
-4. **Buyer view:** a signed, expiring, read-only link with automated cross-buyer leak tests.
+3. **Review gate, remaining:** photos in the queue (warnings are done; photo upload is not built).
+4. **Buyer view, remaining:** approved photos on the buyer page, and a real-Postgres run of the isolation tests.
 5. **Notes:** typed and voice notes in Tamil, translated and categorised, always with the original kept and low-confidence items sent to review.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 

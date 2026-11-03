@@ -18,6 +18,7 @@ export default function Board() {
   const [error, setError] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [showAll, setShowAll] = useState(false)
+  const [reviewCount, setReviewCount] = useState<number | null>(null)
   const inFlight = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
@@ -27,6 +28,8 @@ export default function Board() {
     try {
       const r = await apiFetch<{ today: string; rows: BoardRow[] }>('/api/board', { signal: ctl.signal })
       setRows(r.rows); setToday(r.today); setError(null); setUpdatedAt(new Date())
+      // How many warnings wait for a decision. Failing to fetch this must never disturb the board.
+      apiFetch<{ needsReview: unknown[] }>('/api/review', { signal: ctl.signal }).then((q) => setReviewCount(q.needsReview.length)).catch(() => undefined)
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
       // A failed refresh must be visible, and must not throw away what is already on screen.
@@ -81,6 +84,7 @@ export default function Board() {
                 {today ? ` · Today ${shortDate(today)}` : ''}
               </span>
               <button className="btn btn--small" onClick={() => void load()}>{t('board.refresh')}</button>
+              <Link className="btn btn--small" to="/review">Review{reviewCount ? <b className="count"> {reviewCount}</b> : null}</Link>
               <Link className="btn btn--primary btn--small" to="/orders/new">New order</Link>
             </div>
 

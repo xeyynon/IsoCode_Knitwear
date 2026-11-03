@@ -196,6 +196,54 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await phone.close()
 }
 
+// ---------------------------------------------------------------- review queue and the buyer's page
+// Opening the review queue makes the system raise the warnings the engine wants; that is derived data and
+// changes nothing visible. Making a buyer link adds a row, so the script CANCELS it straight after, and the
+// picture of the queue is cropped above the links list so it never shows earlier runs' links.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } })
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.fill('input[type=email]', MERCH.email)
+  await page.fill('input[type=password]', MERCH.password)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('table.board')
+  await page.click('a:has-text("Review")')
+  await page.waitForSelector('textarea')
+  const top = await page.locator('h2:has-text("Buyer links")').boundingBox()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(350)
+  const file = '24-review-queue.png'
+  await page.screenshot({ path: path.join(OUT, file), clip: { x: 0, y: 0, width: 1280, height: Math.max(300, Math.round((top?.y ?? 900) - 12)) } })
+  shots.push({ file, title: 'Review queue', note: 'Nothing reaches a buyer until a merchandiser confirms it. Each warning shows the wording the buyer would read (editable) and, in grey, the figures behind it that only the factory sees. "Do not show" hides it from buyers.', device: 'desktop' })
+  console.log(`saved ${file}`)
+
+  // a buyer opens a real link in a browser with no sign-in
+  const token = await page.evaluate(async (creds) => {
+    const login = await (await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(creds) })).json()
+    const h = { 'content-type': 'application/json', authorization: `Bearer ${login.token}` }
+    const opts = await (await fetch('/api/orders/options', { headers: h })).json()
+    const buyer = opts.buyers.find((b: { name: string }) => b.name === 'Buyer B')
+    const made = await (await fetch('/api/buyer-links', { method: 'POST', headers: h, body: JSON.stringify({ buyerId: buyer.id, days: 1, label: 'snapshot' }) })).json()
+    return { token: made.token as string, id: made.id as string, auth: login.token as string }
+  }, MERCH)
+  const bctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const bp = await bctx.newPage()
+  await bp.goto(`${WEB}/buyer#${token.token}`)
+  await bp.waitForSelector('.stagecard')
+  await snap(bp, 25, 'buyer-view-phone', 'phone', "What a buyer sees", "A read-only page opened from a private link, with no sign-in. Only this buyer's orders and planned dates, and only warnings a merchandiser has confirmed. No colours, rates, shortfalls or other buyers. The link's secret is removed from the address bar as soon as the page loads.", true)
+  await bctx.close()
+  await page.evaluate(async (t) => { await fetch(`/api/buyer-links/${t.id}/revoke`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${t.auth}` }, body: '{}' }) }, token)   // tidy up: the snapshot link is cancelled
+  await ctx.close()
+
+  const bad = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const p3 = await bad.newPage()
+  await p3.goto(`${WEB}/buyer`)
+  await p3.waitForSelector('[role=alert]')
+  await snap(p3, 26, 'buyer-link-not-valid', 'phone', 'A link that does not work', 'A missing, unknown, cancelled or expired link all show this same message, so nothing tells an outsider which case it was.')
+  await bad.close()
+}
+
 await browser.close()
 
 // ---------------------------------------------------------------- the index

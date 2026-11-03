@@ -8,6 +8,8 @@ import { submitEvent, type EventInput } from './eventService.js'
 import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type NewOrder } from './orderService.js'
 import { getOrderDetail } from './orderDetailService.js'
 import { getMyStages } from './myService.js'
+import { confirmWarning, dismissWarning, listReview, refreshWarnings } from './warningService.js'
+import { createBuyerLink, getBuyerView, listBuyerLinks, resolveBuyerToken, revokeBuyerLink } from './buyerService.js'
 import { istDate } from './today.js'
 
 export interface AppOptions {
@@ -23,7 +25,7 @@ export interface AppOptions {
 }
 
 declare module 'fastify' {
-  interface FastifyRequest { claims?: TokenClaims; ctx?: Ctx }
+  interface FastifyRequest { claims?: TokenClaims; ctx?: Ctx; buyerId?: string }
 }
 
 const PUBLIC = new Set(['GET /api/health', 'GET /api/status', 'POST /api/auth/login'])
@@ -64,6 +66,13 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (PUBLIC.has(`${req.method} ${path}`)) return
     const header = req.headers.authorization
     const token = header?.startsWith('Bearer ') ? header.slice(7) : null
+    if (path?.startsWith('/api/buyer/')) {
+      // A buyer's link token opens ONLY the /api/buyer routes; a staff token does not, and a link token opens nothing else.
+      const buyerId = token ? await opts.db.tx({ role: 'auth' }, (tx) => resolveBuyerToken(tx, token, clock())) : null
+      if (!buyerId) throw new AppError(401, 'invalid_link', 'This link is not valid. Ask your contact for a new one.')
+      req.buyerId = buyerId
+      return
+    }
     const claims = token ? verifyToken(token, opts.tokenSecret, clock()) : null
     if (!claims) throw new AppError(401, 'unauthenticated', 'Please sign in')
     req.claims = claims
@@ -135,6 +144,50 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     return { today: istDate(clock()), rows }
   })
 
+  // ---- the buyer's read-only view (link token, not a sign-in)
+  app.get('/api/buyer/orders', async (req, reply) => {
+    const ctx: Ctx = { role: 'buyer', buyerId: req.buyerId! }
+    reply.header('Cache-Control', 'no-store')
+    reply.header('Referrer-Policy', 'no-referrer')
+    return opts.db.tx(ctx, (tx) => getBuyerView(tx, ctx))
+  })
+
+  // ---- the review gate and buyer links (merchandisers)
+  app.get('/api/review', async (req, reply) => {
+    const ctx = ctxOf(req)
+    // Bring the warnings up to date first, as the system, so the queue is never stale.
+    await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, istDate(clock())))
+    reply.header('Cache-Control', 'no-store')
+    return opts.db.tx(ctx, (tx) => listReview(tx, ctx))
+  })
+  app.post<{ Params: { id: string } }>('/api/warnings/:id/confirm', async (req) => {
+    const ctx = ctxOf(req)
+    const { text } = (req.body ?? {}) as { text?: string }
+    await opts.db.tx(ctx, (tx) => confirmWarning(tx, ctx, req.claims!.sub, req.params.id, text))
+    return { ok: true }
+  })
+  app.post<{ Params: { id: string } }>('/api/warnings/:id/dismiss', async (req) => {
+    const ctx = ctxOf(req)
+    await opts.db.tx(ctx, (tx) => dismissWarning(tx, ctx, req.params.id))
+    return { ok: true }
+  })
+  app.get('/api/buyer-links', async (req, reply) => {
+    const ctx = ctxOf(req)
+    reply.header('Cache-Control', 'no-store')
+    return { links: await opts.db.tx(ctx, (tx) => listBuyerLinks(tx, ctx, clock())) }
+  })
+  app.post('/api/buyer-links', async (req, reply) => {
+    const ctx = ctxOf(req)
+    reply.header('Cache-Control', 'no-store')
+    const made = await opts.db.tx(ctx, (tx) => createBuyerLink(tx, ctx, (req.body ?? {}) as { buyerId: string; days?: number; label?: string }, clock()))
+    return reply.code(201).send(made)
+  })
+  app.post<{ Params: { id: string } }>('/api/buyer-links/:id/revoke', async (req) => {
+    const ctx = ctxOf(req)
+    await opts.db.tx(ctx, (tx) => revokeBuyerLink(tx, ctx, req.params.id))
+    return { ok: true }
+  })
+
   app.get('/api/my/stages', async (req, reply) => {
     const ctx = ctxOf(req)
     const today = istDate(clock())
@@ -199,6 +252,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         results.push({ clientUuid, result: 'rejected', code: e.code, message: e.message })
       }
     }
+    // Updates change colours, so bring the warnings up to date. As the system, and never allowed to fail the send.
+    try { await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, today)) } catch (e) { req.log.error({ err: e }, 'warning refresh failed') }
     return { results }
   })
 
