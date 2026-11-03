@@ -96,9 +96,15 @@ export function projectOrder(
     const dataDates = [...perDay.keys()].sort((a, b) => compareDates(b, a))
     const dataDays = dataDates.length
 
-    const windowAvg = dataDays
-      ? dataDates.slice(0, settings.windowDays).reduce((s, d) => s + (perDay.get(d) ?? 0), 0) /
-        Math.min(dataDays, settings.windowDays)
+    // The rate comes from COMPLETED days. Today is still being worked, so a morning's first small
+    // update is not a low day and must not drag the rate down (and raise a false warning). Today only
+    // counts toward the rate when there are too few finished days to go on. Today's pieces still count
+    // in full toward what has been made.
+    const finished = dataDates.filter((d) => compareDates(d, today) < 0)
+    const rateDates = finished.length >= settings.minDataDays ? finished : dataDates
+    const windowAvg = rateDates.length
+      ? rateDates.slice(0, settings.windowDays).reduce((s, d) => s + (perDay.get(d) ?? 0), 0) /
+        Math.min(rateDates.length, settings.windowDays)
       : null
     const thin = dataDays < settings.minDataDays
     const made = thin ? (st.plannedRate ?? windowAvg) : windowAvg

@@ -67,6 +67,17 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return body as T
 }
 
+/** Fetch a file (a photo) with the sign-in header. An <img> tag cannot send headers, so the bytes are fetched here. */
+export async function apiBlob(path: string, headerToken?: string): Promise<Blob> {
+  const token = headerToken ?? getToken()
+  let res: Response
+  try { res = await fetch(`${API_BASE}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }) }
+  catch { throw new ApiError(0, 'unreachable', signInMessage('unreachable')) }
+  if (res.status === 401 && !headerToken) clearToken()
+  if (!res.ok) throw new ApiError(res.status, 'error', 'That picture could not be loaded.')
+  return res.blob()
+}
+
 export type SignInResult = { ok: true; role: Role } | { ok: false; kind: SignInFailure; message: string }
 
 const KIND_BY_CODE: Record<string, SignInFailure> = {

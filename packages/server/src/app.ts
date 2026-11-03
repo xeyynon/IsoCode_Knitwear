@@ -9,6 +9,8 @@ import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type Ne
 import { getOrderDetail } from './orderDetailService.js'
 import { getMyStages } from './myService.js'
 import { confirmWarning, dismissWarning, listReview, refreshWarnings } from './warningService.js'
+import { approvePhoto, getBuyerPhotoBytes, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
+import type { MediaStore } from './mediaStore.js'
 import { createBuyerLink, getBuyerView, listBuyerLinks, resolveBuyerToken, revokeBuyerLink } from './buyerService.js'
 import { istDate } from './today.js'
 
@@ -22,6 +24,8 @@ export interface AppOptions {
   trustProxy?: boolean
   clock?: () => Date
   logger?: boolean
+  /** Where photo bytes are kept. Without it the photo routes answer 503 instead of pretending to work. */
+  media?: MediaStore
 }
 
 declare module 'fastify' {
@@ -144,6 +148,44 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     return { today: istDate(clock()), rows }
   })
 
+  // ---- photos
+  // A photo arrives as the raw JPEG (not JSON), with its details in headers.
+  app.addContentTypeParser('image/jpeg', { parseAs: 'buffer', bodyLimit: MAX_PHOTO_BYTES + 1024 }, (_req, body, done) => done(null, body))
+  const mediaOr503 = (): MediaStore => { if (!opts.media) throw new AppError(503, 'photos_unavailable', 'Photos are not set up on this server'); return opts.media }
+  const sendPhoto = (reply: import('fastify').FastifyReply, bytes: Buffer) => reply
+    .header('Content-Type', 'image/jpeg').header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer').send(bytes)
+
+  app.post('/api/photos', { bodyLimit: MAX_PHOTO_BYTES + 1024 }, async (req) => {
+    const ctx = ctxOf(req)
+    const media = mediaOr503()
+    const h = req.headers
+    const stage = typeof h['x-stage'] === 'string' ? decodeURIComponent(h['x-stage']) : ''
+    if (!Buffer.isBuffer(req.body)) throw badRequest('Send the photo as image/jpeg')
+    return opts.db.tx(ctx, (tx) => savePhoto(tx, ctx, media, {
+      clientUuid: String(h['x-client-uuid'] ?? ''), orderId: String(h['x-order-id'] ?? ''), stage, date: String(h['x-date'] ?? ''), bytes: req.body as Buffer,
+    }, istDate(clock())))
+  })
+  app.get<{ Params: { id: string } }>('/api/photos/:id/file', async (req, reply) => {
+    const ctx = ctxOf(req)
+    const media = mediaOr503()
+    return sendPhoto(reply, await opts.db.tx(ctx, (tx) => getPhotoBytes(tx, media, req.params.id)))
+  })
+  app.post<{ Params: { id: string } }>('/api/photos/:id/approve', async (req) => {
+    const ctx = ctxOf(req)
+    await opts.db.tx(ctx, (tx) => approvePhoto(tx, ctx, req.claims!.sub, req.params.id))
+    return { ok: true }
+  })
+  app.post<{ Params: { id: string } }>('/api/photos/:id/reject', async (req) => {
+    const ctx = ctxOf(req)
+    await opts.db.tx(ctx, (tx) => rejectPhoto(tx, ctx, req.params.id))
+    return { ok: true }
+  })
+  app.get<{ Params: { id: string } }>('/api/buyer/photos/:id', async (req, reply) => {
+    const ctx: Ctx = { role: 'buyer', buyerId: req.buyerId! }
+    const media = mediaOr503()
+    return sendPhoto(reply, await opts.db.tx(ctx, (tx) => getBuyerPhotoBytes(tx, media, ctx.buyerId!, req.params.id)))
+  })
+
   // ---- the buyer's read-only view (link token, not a sign-in)
   app.get('/api/buyer/orders', async (req, reply) => {
     const ctx: Ctx = { role: 'buyer', buyerId: req.buyerId! }
@@ -158,7 +200,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     // Bring the warnings up to date first, as the system, so the queue is never stale.
     await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, istDate(clock())))
     reply.header('Cache-Control', 'no-store')
-    return opts.db.tx(ctx, (tx) => listReview(tx, ctx))
+    return opts.db.tx(ctx, async (tx) => ({ ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx) }))
   })
   app.post<{ Params: { id: string } }>('/api/warnings/:id/confirm', async (req) => {
     const ctx = ctxOf(req)

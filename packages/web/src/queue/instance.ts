@@ -5,11 +5,18 @@ import { apiFetch, subscribe as onSession, snapshot as sessionSnapshot } from '.
 import { createQueueController, type QueueController, type QueueState } from './controller'
 import { createIdbStore, type IdbStore } from './idbStore'
 import { memoryStore } from './sync'
-import type { BatchItemResult, SendBatch } from './types'
+import type { BatchItemResult, SendBatch, UploadPhoto } from './types'
 
 const SYNC_EVERY_MS = 30_000
 
 const send: SendBatch = (events) => apiFetch<{ results: BatchItemResult[] }>('/api/events/batch', { method: 'POST', body: JSON.stringify({ events }) })
+
+/** One photo as the raw JPEG. Its own id makes a retry return the same photo. */
+const uploadPhoto: UploadPhoto = ({ photoUuid, orderId, stage, date, blob }) =>
+  apiFetch<{ id: string }>('/api/photos', {
+    method: 'POST', body: blob,
+    headers: { 'content-type': 'image/jpeg', 'x-client-uuid': photoUuid, 'x-order-id': orderId, 'x-stage': encodeURIComponent(stage), 'x-date': date },
+  })
 
 export interface Queue { ctl: QueueController; idb: IdbStore | null }
 let started: Promise<Queue> | null = null
@@ -18,7 +25,7 @@ export function getQueue(): Promise<Queue> {
   started ??= (async () => {
     let idb: IdbStore | null = null
     try { idb = await createIdbStore() } catch { /* fall back to memory; the screen warns */ }
-    const ctl = createQueueController({ store: idb ?? memoryStore(false), send })
+    const ctl = createQueueController({ store: idb ?? memoryStore(false), send, uploadPhoto })
     await ctl.refresh()
 
     // When to try sending: opening the app, the signal returning, the app coming back to the

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { API_BASE } from '../api/session'
 import { shortDate } from '../board/boardLogic'
 import { readBuyerToken, severityStatus, type Severity } from '../review/reviewLogic'
+import { AuthImage } from '../ui/AuthImage'
 import { Loading } from '../ui/Loading'
 import { StatusBadge } from '../ui/StatusBadge'
 
@@ -10,7 +11,7 @@ interface View {
   orders: {
     po: string; style: string; colour: string; qty: number; exFactory: string
     milestones: { stage: string; plannedEnd: string }[]
-    photos: { id: string }[]
+    photos: { id: string; stage: string; takenOn: string }[]
     warnings: { stage: string; severity: Severity; text: string; since: string }[]
   }[]
 }
@@ -36,10 +37,12 @@ function takeToken(): string | null {
 export default function Buyer() {
   const [view, setView] = useState<View | null>(null)
   const [problem, setProblem] = useState<'invalid' | 'unreachable' | null>(null)
+  const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
     const token = takeToken()
     if (!token) { setProblem('invalid'); return }
+    setToken(token)
     const ctl = new AbortController()
     fetch(`${API_BASE}/api/buyer/orders`, { headers: { authorization: `Bearer ${token}` }, signal: ctl.signal })
       .then(async (res) => {
@@ -79,6 +82,17 @@ export default function Buyer() {
                       <li key={w.stage}>
                         <StatusBadge status={severityStatus(w.severity)} />
                         <span>{w.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {o.photos.length > 0 && token && (
+                  <ul className="plain photogrid" aria-label="Photos from the factory">
+                    {o.photos.map((p) => (
+                      <li key={p.id}>
+                        <AuthImage path={`/api/buyer/photos/${p.id}`} token={token} alt={`${cap(p.stage)}, ${shortDate(p.takenOn)}`} />
+                        <span className="sub">{cap(p.stage)} · {shortDate(p.takenOn)}</span>
                       </li>
                     ))}
                   </ul>

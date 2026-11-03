@@ -1,4 +1,4 @@
-import type { QueueStore, QueuedEvent, SendBatch, SyncError, SyncOutcome } from './types'
+import type { QueueStore, QueuedEvent, SendBatch, SyncError, SyncOutcome, UploadPhoto } from './types'
 
 export const BATCH_SIZE = 200   // the server accepts 1 to 200 per request
 
@@ -19,18 +19,41 @@ export function classifyError(e: unknown): SyncError {
  *  - anything that fails to send leaves the whole batch queued, untouched, to be retried.
  * Nothing is ever dropped without the server's say-so, which is what makes it safe to retry
  * after a lost response.
+ *
+ * A photo is a first step: it is uploaded (keyed by its own id, so a retry cannot make a second),
+ * the update then carries the photo's id, and the local copy is freed. If the server REFUSES a
+ * photo for good (not a JPEG, too large), the photo is dropped with a note and the pieces are
+ * still sent: a count must never be lost because of a picture.
  */
-export async function syncQueue(store: QueueStore, send: SendBatch): Promise<SyncOutcome> {
-  const pending = (await store.list()).filter((e) => e.status === 'pending').sort((a, b) => a.createdAt - b.createdAt)
+export async function syncQueue(store: QueueStore, send: SendBatch, upload?: UploadPhoto): Promise<SyncOutcome> {
+  let pending = (await store.list()).filter((e) => e.status === 'pending').sort((a, b) => a.createdAt - b.createdAt)
   let sent = 0
   let rejected = 0
   let error: SyncError = null
+
+  if (upload) {
+    for (const item of pending) {
+      if (error || !item.photo || item.photoId) continue
+      try {
+        const { id } = await upload({ photoUuid: item.photoUuid ?? item.clientUuid, orderId: item.orderId, stage: item.stage, date: item.date, blob: item.photo })
+        await store.update(item.clientUuid, { photoId: id, photo: undefined })
+      } catch (e) {
+        const kind = classifyError(e)
+        const status = (e as { status?: number })?.status ?? 0
+        if (kind === 'server' && status >= 400 && status < 500 && status !== 429) {
+          await store.update(item.clientUuid, { photo: undefined, photoNote: (e as Error).message || 'The photo was not accepted.' })
+        } else { error = kind; await store.update(item.clientUuid, { attempts: item.attempts + 1 }) }
+      }
+    }
+    pending = (await store.list()).filter((e) => e.status === 'pending').sort((a, b) => a.createdAt - b.createdAt)
+    if (error) return { sent, rejected, remaining: pending.length, error }
+  }
 
   for (let i = 0; i < pending.length && !error; i += BATCH_SIZE) {
     const batch = pending.slice(i, i + BATCH_SIZE)
     let results
     try {
-      ;({ results } = await send(batch.map(({ clientUuid, orderId, stage, date, qty }) => ({ clientUuid, orderId, stage, date, qty }))))
+      ;({ results } = await send(batch.map(({ clientUuid, orderId, stage, date, qty, photoId }) => ({ clientUuid, orderId, stage, date, qty, ...(photoId ? { photoId } : {}) }))))
     } catch (e) {
       error = classifyError(e)
       await Promise.all(batch.map((b) => store.update(b.clientUuid, { attempts: b.attempts + 1 })))

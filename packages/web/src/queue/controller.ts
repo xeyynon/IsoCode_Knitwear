@@ -2,7 +2,7 @@
 // the screen. No React and no browser globals are used directly (they are passed in), so the
 // whole thing runs under test.
 import { syncQueue } from './sync'
-import type { NewEvent, QueuedEvent, QueueStore, SendBatch, SyncError } from './types'
+import type { NewEvent, QueuedEvent, QueueStore, SendBatch, SyncError, UploadPhoto } from './types'
 
 export interface QueueState {
   pending: number
@@ -21,6 +21,8 @@ export interface SentRecord { clientUuid: string; orderId: string; stage: string
 export interface ControllerDeps {
   store: QueueStore
   send: SendBatch
+  /** Uploads a photo before its update is sent. Left out, a queued photo simply stays with its update. */
+  uploadPhoto?: UploadPhoto
   now?: () => number
   uuid?: () => string
   isOnline?: () => boolean
@@ -52,7 +54,9 @@ export function createQueueController(deps: ControllerDeps) {
 
   /** Write to storage first; only then is the update "saved". Syncing happens after, and never blocks saving. */
   async function enqueue(e: NewEvent): Promise<QueuedEvent> {
-    const item: QueuedEvent = { ...e, clientUuid: uuid(), createdAt: now(), status: 'pending', attempts: 0 }
+    const { photo, ...rest } = e
+    const clientUuid = uuid()
+    const item: QueuedEvent = { ...rest, clientUuid, createdAt: now(), status: 'pending', attempts: 0, ...(photo ? { photo, photoUuid: uuid() } : {}) }
     await deps.store.add(item)
     await refresh()
     void syncNow()
@@ -78,7 +82,7 @@ export function createQueueController(deps: ControllerDeps) {
           }
           sentLog = sentLog.slice(-200)
           return r
-        })
+        }, deps.uploadPhoto)
         await refresh()
         publish({ syncing: false, error: out.error, lastSyncedAt: out.error ? state.lastSyncedAt : now() })
       } catch {

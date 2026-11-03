@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { resizeToJpeg, sizeText } from '../photo/resize'
 import { Link, useParams } from 'react-router-dom'
 import { shortDate } from '../board/boardLogic'
 import { istDate, parsePieces, remainingPieces } from '../dates'
@@ -22,8 +23,13 @@ export default function Update() {
   const st = useStages(queue?.idb ?? null, state?.lastSyncedAt ?? 0)
   const [raw, setRaw] = useState('')
   const [confirming, setConfirming] = useState(false)
-  const [saved, setSaved] = useState<{ qty: number; at: number } | null>(null)
+  const [saved, setSaved] = useState<{ qty: number; at: number; photo: boolean } | null>(null)
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [preparing, setPreparing] = useState(false)
   const input = useRef<HTMLInputElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
 
   useEffect(() => { input.current?.focus() }, [queue])
 
@@ -40,10 +46,20 @@ export default function Update() {
   async function send() {
     if (qty === null || !queue || !stage) return
     if (overLeft && !confirming) { setConfirming(true); return }
-    await queue.ctl.enqueue({ orderId, stage: stageName, date, qty })
-    setSaved({ qty, at: Date.now() })
-    setRaw(''); setConfirming(false)
+    await queue.ctl.enqueue({ orderId, stage: stageName, date, qty, ...(photo ? { photo: photo.blob } : {}) })
+    setSaved({ qty, at: Date.now(), photo: photo !== null })
+    setRaw(''); setConfirming(false); setPhoto(null)
     input.current?.focus()
+  }
+
+  async function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''                      // so choosing the same picture again still fires
+    if (!file) return
+    setPhotoError(null); setPreparing(true)
+    try { const blob = await resizeToJpeg(file); setPhoto({ blob, url: URL.createObjectURL(blob) }) }
+    catch (err) { setPhotoError(err instanceof Error ? err.message : 'That picture could not be used.') }
+    setPreparing(false)
   }
 
   return (
@@ -73,6 +89,19 @@ export default function Update() {
             </label>
             <p id="hint" className="sub">Enter the pieces made since your last update. They are added to today's total.</p>
 
+            <div className="photobox">
+              <input ref={fileInput} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={pick} aria-label="Take or choose a photo" tabIndex={-1} />
+              {!photo && <button type="button" className="btn" disabled={preparing} onClick={() => fileInput.current?.click()}>{preparing ? 'Preparing…' : 'Add a photo'}</button>}
+              {photo && (
+                <div className="photobox__preview">
+                  <img src={photo.url} alt="The photo that will be sent with this update" />
+                  <div><span className="sub">Photo ready ({sizeText(photo.blob.size)})</span><br />
+                    <button type="button" className="link" onClick={() => setPhoto(null)}>Remove photo</button></div>
+                </div>
+              )}
+              {photoError && <p className="error" role="alert">{photoError}</p>}
+            </div>
+
             {confirming && qty !== null && (
               <p className="banner" role="alert">{qty} is more than the {left} pieces left. Check the number, then tap Send again.</p>
             )}
@@ -82,7 +111,7 @@ export default function Update() {
 
             {saved && (
               <p className="saved" role="status" aria-live="polite">
-                Saved {saved.qty} pieces. {state && state.pending > 0 ? `${state.pending} ${t('sync.waiting')} to send.` : 'Sent.'}
+                Saved {saved.qty} pieces{saved.photo ? ' with a photo' : ''}. {state && state.pending > 0 ? `${state.pending} ${t('sync.waiting')} to send.` : 'Sent.'}
               </p>
             )}
           </form>

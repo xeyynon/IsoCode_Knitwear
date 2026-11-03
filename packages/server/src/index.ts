@@ -11,4 +11,6 @@ export { getOrderDetail, type OrderDetail, type StageDetail, type HistoryEntry }
 export { getMyStages, type MyStage } from './myService.js'
 export { refreshWarnings, listReview, confirmWarning, dismissWarning, buyerText, type ReviewItem } from './warningService.js'
 export { createBuyerLink, listBuyerLinks, revokeBuyerLink, resolveBuyerToken, getBuyerView, hashToken, TOKEN_PREFIX, type BuyerView } from './buyerService.js'
+export { savePhoto, approvePhoto, rejectPhoto, getPhotoBytes, listPendingPhotos, looksLikeJpeg, MAX_PHOTO_BYTES, type PendingPhoto } from './photoService.js'
+export { diskStore, memoryMediaStore, type MediaStore } from './mediaStore.js'
 export { getBoard, type BoardRow } from './boardService.js'

@@ -8,7 +8,7 @@ npm run dev -w @isocode/web      # terminal 2
 npm run snapshots                # terminal 3: rewrites this folder
 ```
 
-Last taken: 2026-11-03. 26 pictures.
+Last taken: 2026-11-03. 27 pictures.
 
 ## Desktop
 
@@ -143,4 +143,9 @@ A read-only page opened from a private link, with no sign-in. Only this buyer's 
 A missing, unknown, cancelled or expired link all show this same message, so nothing tells an outsider which case it was.
 
 ![A link that does not work](26-buyer-link-not-valid.png)
+
+### Daily update with a photo
+Tap Add a photo to use the camera. The photo is shrunk on the phone (a large camera picture becomes roughly 150 KB) and its size is shown, so it sends quickly even on a weak signal. It is saved with the update and uploaded when there is signal. Nothing here has been sent.
+
+![Daily update with a photo](27-update-photo-ready-phone.png)
 

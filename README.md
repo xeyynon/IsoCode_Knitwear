@@ -27,9 +27,9 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | Web app: sign-in, order board, public status page | Built (`build-1000`) |
 | Supervisor app: "My orders today", the daily update, an offline queue that survives restarts, "3 waiting" status, and the app opening with no signal | Built (`build-1001`), 14 browser checks |
 | Order setup (with a schedule preview before creating) and order detail (planned versus projected dates, the working behind each colour, date-change history, change ex-factory with a reason) | Built (`build-1002`) |
-| Photos and notes on an update | **Not built** |
+| A photo on a daily update: shrunk on the phone, uploaded safely even after a lost signal or a lost reply, approved in the review queue before a buyer can see it | Built (`build-1004`) |
 | Review queue (confirm, reword or hide a warning before a buyer can see it), buyer links (create, cancel, expire) and the buyer's read-only page, with automated cross-buyer leak tests | Built (`build-1003`) |
-| Voice and text notes | **Not built** |
+| Typed and voice notes | **Not built** |
 
 **Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
 
@@ -114,6 +114,7 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `TOKEN_SECRET` | At least 32 random characters. The server refuses to start without it |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins. Cleaned of stray quotes, brackets and slashes; invalid entries are dropped with a warning |
 | `TRUST_PROXY` | Set to `1` behind a reverse proxy so rate limits see real addresses |
+| `MEDIA_DIR` | Folder where uploaded photos are kept. Leave it unset to switch photos off (the photo routes then answer 503). Swap in an S3-compatible store for production |
 | `PORT` | Defaults to 8787 |
 
 Run the migrations in `packages/server/db/migrations` as the table owner, then give `app_user` login and a password separately. Secrets never belong in the repository (see [Security model](#security-model)).
@@ -137,6 +138,9 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `POST /api/warnings/:id/confirm`, `.../dismiss` | merchandiser | Confirm a warning for buyers (optionally rewording it), or hide it |
 | `GET/POST /api/buyer-links`, `POST /api/buyer-links/:id/revoke` | merchandiser | Make, list and cancel a buyer's private link |
 | `GET /api/buyer/orders` | buyer link | The buyer's own orders, planned dates and confirmed warnings. A link opens only this |
+| `POST /api/photos` | supervisor | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). Checked to be a real JPEG, 1 KB to 3 MB |
+| `GET /api/photos/:id/file`, `POST /api/photos/:id/approve`, `.../reject` | merchandiser | View, approve or withdraw a photo |
+| `GET /api/buyer/photos/:id` | buyer link | An approved photo of the buyer's own |
 | `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
 | `POST /api/events`, `POST /api/events/batch` | supervisor | Send daily counts; the batch form serves the offline queue |
 
@@ -206,10 +210,10 @@ git push origin main --tags
 | **Dependabot** | Weekly | Proposes npm and GitHub Actions updates |
 
 ## Roadmap
-1. **Supervisor app, remaining:** photo and a typed or voice note on an update, photo resize, and trying it on real low-end phones. (The daily update and offline queue are built.)
+1. **Supervisor app, remaining:** a typed or voice note on an update, Tamil wording for the whole screen, and trying it on real low-end phones. (The daily update, offline queue and photos are built.)
 2. **Order screens, remaining:** a TNA template editor (templates are seeded for now), and setting an order's stages by hand.
-3. **Review gate, remaining:** photos in the queue (warnings are done; photo upload is not built).
-4. **Buyer view, remaining:** approved photos on the buyer page, and a real-Postgres run of the isolation tests.
+3. **Review gate, remaining:** notes in the queue. (Warnings and photos are done.)
+4. **Buyer view, remaining:** a real-Postgres run of the isolation tests, and a way to withdraw an approved photo from the screen (the API already can).
 5. **Notes:** typed and voice notes in Tamil, translated and categorised, always with the original kept and low-confidence items sent to review.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 

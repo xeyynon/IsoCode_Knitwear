@@ -66,8 +66,8 @@ export interface BuyerOrder {
   qty: number
   exFactory: string
   milestones: { stage: string; plannedEnd: string }[]
-  /** Photos a merchandiser has approved. (Photo upload is not built yet, so this is always empty for now.) */
-  photos: { id: string }[]
+  /** Photos a merchandiser has approved, to be fetched one by one from /api/buyer/photos/:id. */
+  photos: { id: string; stage: string; takenOn: string }[]
   /** Warnings a merchandiser has confirmed. Nothing else about progress is shown to a buyer. */
   warnings: { stage: string; severity: 'attention' | 'late_risk'; text: string; since: string }[]
 }
@@ -86,7 +86,9 @@ export async function getBuyerView(tx: Tx, ctx: Ctx): Promise<BuyerView> {
     'select id::text as id, po, style, colour, qty, ex_factory::text as ex_factory from orders where buyer_id = $1 order by ex_factory, po', [ctx.buyerId])
   const ms = await tx.query<{ order_id: string; stage: string; planned_end: string }>(
     'select order_id::text as order_id, stage, planned_end::text as planned_end from milestone where buyer_id = $1 order by sequence', [ctx.buyerId])
-  const photos = await tx.query<{ order_id: string; id: string }>('select order_id::text as order_id, id::text as id from photo where buyer_id = $1', [ctx.buyerId])
+  const photos = await tx.query<{ order_id: string; id: string; stage: string; taken_on: string }>(
+    `select order_id::text as order_id, id::text as id, stage, taken_on::text as taken_on from photo
+      where buyer_id = $1 and approved_by is not null and rejected_at is null order by taken_on, created_at`, [ctx.buyerId])
   const warns = await tx.query<{ order_id: string; stage: string; status: 'amber' | 'red'; buyer_text: string; since: string }>(
     `select order_id::text as order_id, stage, status, buyer_text,
             to_char(confirmed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as since
@@ -96,7 +98,7 @@ export async function getBuyerView(tx: Tx, ctx: Ctx): Promise<BuyerView> {
     orders: orders.map((o) => ({
       po: o.po, style: o.style, colour: o.colour, qty: o.qty, exFactory: o.ex_factory,
       milestones: ms.filter((m) => m.order_id === o.id).map((m) => ({ stage: m.stage, plannedEnd: m.planned_end })),
-      photos: photos.filter((p) => p.order_id === o.id).map((p) => ({ id: p.id })),
+      photos: photos.filter((p) => p.order_id === o.id).map((p) => ({ id: p.id, stage: p.stage, takenOn: p.taken_on })),
       warnings: warns.filter((w) => w.order_id === o.id).map((w) => ({
         stage: w.stage, severity: w.status === 'red' ? 'late_risk' as const : 'attention' as const, text: w.buyer_text, since: w.since,
       })),

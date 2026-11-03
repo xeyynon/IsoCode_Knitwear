@@ -2,6 +2,7 @@
 // with illustrative data. Used by `npm run dev:api` and by the browser tests. NOT for production.
 import type { PGlite } from '@electric-sql/pglite'
 import { buildApp } from './app.js'
+import { memoryMediaStore } from './mediaStore.js'
 import { migratedDb, pgliteDb, resetAndSeed, ID, TODAY } from '../test/helpers.js'
 
 export interface Demo { pg: PGlite; port: number; close: () => Promise<void> }
@@ -31,6 +32,7 @@ export async function startDemoApi(opts: { port?: number; origins?: string[] } =
     allowedOrigins: opts.origins ?? ['http://localhost:5173', 'http://127.0.0.1:5173'],
     clock: () => new Date(`${TODAY}T04:30:00Z`),   // fixed so the seeded figures line up
     logger: false,
+    media: memoryMediaStore(),   // photos live in memory in the demo and vanish with it
   })
   const port = opts.port ?? 8787
   await app.listen({ port, host: '127.0.0.1' })

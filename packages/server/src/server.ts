@@ -3,10 +3,12 @@
 //   TOKEN_SECRET     at least 32 random characters
 //   ALLOWED_ORIGINS  comma-separated browser origins, e.g. https://app.example.com
 //   TRUST_PROXY      "1" behind a reverse proxy
+//   MEDIA_DIR        folder for uploaded photos (leave unset to switch photos off)
 //   PORT             default 8787
 import pg from 'pg'
 import { buildApp } from './app.js'
 import { parseOrigins } from './cors.js'
+import { diskStore } from './mediaStore.js'
 import { pgDb } from './pgDb.js'
 
 const need = (name: string): string => {
@@ -23,6 +25,7 @@ const app = buildApp({
   tokenSecret: need('TOKEN_SECRET'),
   allowedOrigins: origins,
   trustProxy: process.env.TRUST_PROXY === '1',
+  ...(process.env.MEDIA_DIR ? { media: diskStore(process.env.MEDIA_DIR) } : {}),
   logger: true,
 })
 

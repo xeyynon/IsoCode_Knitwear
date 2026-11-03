@@ -186,3 +186,31 @@ describe('calendar helpers', () => {
     expect(workingDaysBetween({}, '2026-03-27', '2026-03-31')).toBe(3) // Sat, Mon, Tue; Sunday 29 Mar closed
   })
 })
+
+describe('a day that is not over yet', () => {
+  it("a morning's first small update does not drag the rate down", () => {
+    const events = [...days('stitching', FIVE, 350), ev('stitching', TODAY, 100)]   // five full days of 350, then 100 so far today
+    const s = run([stitching()], events).stages[0]!
+    expect(s.made).toBe(350)                          // not (350*4 + 100) / 5 = 300
+    expect(s.produced).toBe(1750 + 100)               // but today's pieces still count as made
+    expect(s.remaining).toBe(4550 - 1850)
+  })
+  it('even a large update today leaves the rate alone: it shows up as fewer pieces remaining', () => {
+    const s = run([stitching()], [...days('stitching', FIVE, 350), ev('stitching', TODAY, 2000)]).stages[0]!
+    expect(s.made).toBe(350)
+    expect(s.remaining).toBe(800)
+    expect(s.status).toBe('green')                    // 800 left over 6 working days needs only 133 a day
+  })
+  it('with fewer than 3 finished days, today is all there is to go on, so it counts', () => {
+    const s = run([stitching()], [...days('stitching', ['2026-11-02', '2026-11-03'], 300), ev('stitching', TODAY, 600)]).stages[0]!
+    expect(s.madeIsEstimate).toBe(false)              // three days of data
+    expect(s.made).toBe(400)                          // (300 + 300 + 600) / 3
+  })
+  it('with exactly 3 finished days, the rate is those 3 and ignores today', () => {
+    const s = run([stitching()], [...days('stitching', ['2026-10-31', '2026-11-02', '2026-11-03'], 300), ev('stitching', TODAY, 50)]).stages[0]!
+    expect(s.made).toBe(300)
+  })
+  it('the quoted example is unchanged when nothing has been sent today', () => {
+    expect(run([stitching()], days('stitching', FIVE, 350)).stages[0]!.made).toBe(350)
+  })
+})

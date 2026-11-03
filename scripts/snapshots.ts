@@ -244,6 +244,35 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await bad.close()
 }
 
+// ---------------------------------------------------------------- a photo ready to send (nothing is sent)
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.click('button:has-text("Supervisor")')
+  await page.fill('input[type=tel]', SUP.phone)
+  await page.fill('input[type=password]', SUP.pin)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('.stage')
+  await page.click('.stage >> nth=0 >> a:has-text("Update")')
+  await page.waitForSelector('input.input--big')
+  // a large, busy picture made in the page stands in for a camera shot
+  const bytes = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 3000; c.height = 2000
+    const g = c.getContext('2d')!
+    const grad = g.createLinearGradient(0, 0, 3000, 2000); grad.addColorStop(0, '#2a6f97'); grad.addColorStop(1, '#f4a261')
+    g.fillStyle = grad; g.fillRect(0, 0, 3000, 2000)
+    for (let i = 0; i < 2500; i++) { g.fillStyle = `hsl(${(i * 37) % 360} 40% ${35 + (i % 30)}%)`; g.fillRect((i * 7919) % 3000, (i * 104729) % 2000, 60 + (i % 90), 60 + (i % 60)) }
+    const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/jpeg', 0.95))
+    return Array.from(new Uint8Array(await blob.arrayBuffer()))
+  })
+  await page.setInputFiles('input[type=file]', { name: 'camera.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(bytes) })
+  await page.waitForSelector('.photobox__preview')
+  await page.fill('input.input--big', '120')
+  await snap(page, 27, 'update-photo-ready-phone', 'phone', 'Daily update with a photo', 'Tap Add a photo to use the camera. The photo is shrunk on the phone (a large camera picture becomes roughly 150 KB) and its size is shown, so it sends quickly even on a weak signal. It is saved with the update and uploaded when there is signal. Nothing here has been sent.')
+  await ctx.close()
+}
+
 await browser.close()
 
 // ---------------------------------------------------------------- the index

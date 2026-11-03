@@ -40,6 +40,19 @@ const chip = (page: Page) => page.locator('.sync').first()
 const chipText = async (page: Page) => ((await chip(page).textContent()) ?? '').replace(/\s+/g, ' ').trim()
 
 /** Enter a number and tap Send. Returns only once THIS update is saved on the phone, and any sync it started has finished. */
+/** A big, busy picture made in the page (stands in for a camera shot), as bytes. */
+async function fakeCameraShot(page: Page, w = 2400, h = 1600): Promise<Buffer> {
+  const bytes = await page.evaluate(async ([w, h]) => {
+    const c = document.createElement('canvas'); c.width = w!; c.height = h!
+    const g = c.getContext('2d')!
+    g.fillStyle = '#2a6f97'; g.fillRect(0, 0, w!, h!)
+    for (let i = 0; i < 3000; i++) { g.fillStyle = `hsl(${(i * 37) % 360} 60% ${30 + (i % 40)}%)`; g.fillRect((i * 7919) % w!, (i * 104729) % h!, 40 + (i % 90), 40 + (i % 60)) }
+    const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/jpeg', 0.95))
+    return Array.from(new Uint8Array(await blob.arrayBuffer()))
+  }, [w, h])
+  return Buffer.from(bytes)
+}
+
 async function sendPieces(page: Page, qty: number) {
   await page.fill('input.input--big', String(qty))
   await page.click('form button.btn--big')
@@ -139,6 +152,43 @@ try {
   await page.waitForFunction(() => /All sent/.test(document.querySelector('.sync')?.textContent ?? ''), null, { timeout: 30_000 })
   const final = await eventsFor(demo)
   check('retrying after the lost reply did NOT double-count', final.n - b4.n === 3 && final.total - b4.total === 66, `${final.n - b4.n} rows, ${final.total - b4.total} pieces`)
+
+  // ---- photos: three updates with photos taken with no signal; two photo uploads reach the server but their replies are lost
+  await page.goto(`${WEB}/today`)
+  await page.waitForSelector('.stage')
+  await page.click('.stage >> nth=0 >> a:has-text("Update")')
+  await page.waitForSelector('input.input--big')
+  const photosBefore = (await demo.pg.query<{ n: number }>('select count(*)::int as n from photo')).rows[0]!.n
+  await ctx.setOffline(true)
+  const raw = await fakeCameraShot(page)
+  for (const q of [7, 8, 9]) {
+    await page.setInputFiles('input[type=file]', { name: 'camera.jpg', mimeType: 'image/jpeg', buffer: raw })
+    await page.waitForSelector('.photobox__preview')
+    await sendPieces(page, q)
+  }
+  check('3 updates with photos taken offline show as "3 waiting"', (await chipText(page)).includes('3'), await chipText(page))
+  check('no photo reached the server while offline', (await demo.pg.query<{ n: number }>('select count(*)::int as n from photo')).rows[0]!.n === photosBefore)
+  let lostPhotoReplies = 0
+  await page.route('**/api/photos', async (route) => {
+    if (lostPhotoReplies < 2) { try { await route.fetch(); lostPhotoReplies++ } catch { /* the server is fine */ } await route.abort('connectionreset'); return }
+    await route.continue()
+  })
+  await ctx.setOffline(false)
+  for (let i = 0; i < 40 && !/All sent/.test(await chipText(page)); i++) {       // a failed sync waits for the next trigger: nudge it
+    await page.click('button:has-text("Try now")').catch(() => undefined)
+    await new Promise((r) => setTimeout(r, 700))
+  }
+  check('everything is eventually sent', /All sent/.test(await chipText(page)), await chipText(page))
+  const ph = (await demo.pg.query<{ n: number; small: number; big: number; distinct_linked: number }>(
+    `select (select count(*) from photo)::int as n,
+            (select count(*) from photo where bytes < 1024)::int as small, (select count(*) from photo where bytes > 400000)::int as big,
+            (select count(distinct photo_id) from update_event where photo_id is not null)::int as distinct_linked`)).rows[0]!
+  check('exactly 3 photos stored despite two lost upload replies (a retry never makes a second)', ph.n - photosBefore === 3, `${ph.n - photosBefore} new, ${lostPhotoReplies} replies lost`)
+  check('each update points at its own photo', ph.distinct_linked === ph.n, `${ph.distinct_linked} linked of ${ph.n}`)
+  check('photos were shrunk on the phone (all under 400 KB, none empty)', ph.big === 0 && ph.small === 0, `${ph.big} too big, ${ph.small} too small`)
+  const firstPhoto = (await demo.pg.query<{ b: number }>('select max(bytes)::int as b from photo')).rows[0]!.b
+  check('and smaller than the original', firstPhoto < raw.length, `${Math.round(firstPhoto / 1024)} KB from ${Math.round(raw.length / 1024)} KB`)
+  await page.unroute('**/api/photos')
 
   check('no script errors in the page', errors.length === 0, errors.join(' | '))
   await browser.close()

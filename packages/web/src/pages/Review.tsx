@@ -4,16 +4,18 @@ import { ApiError, apiFetch } from '../api/session'
 import { buyerLinkUrl, linkStatus, parseDays } from '../review/reviewLogic'
 import { AppBar } from '../ui/AppBar'
 import { Loading } from '../ui/Loading'
+import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
+interface PendingPhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string; bytes: number }
 interface LinkRow { id: string; buyerId: string; buyerName: string; label: string | null; expiresAt: string; revoked: boolean; expired: boolean }
 interface Options { buyers: { id: string; name: string }[] }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function Review() {
-  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[] } | null>(null)
+  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[] } | null>(null)
   const [links, setLinks] = useState<LinkRow[]>([])
   const [buyers, setBuyers] = useState<Options['buyers']>([])
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +34,7 @@ export default function Review() {
   const load = useCallback(async () => {
     try {
       const [r, l] = await Promise.all([
-        apiFetch<{ needsReview: Item[]; confirmed: Item[] }>('/api/review'),
+        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[] }>('/api/review'),
         apiFetch<{ links: LinkRow[] }>('/api/buyer-links'),
       ])
       setData(r); setLinks(l.links); setError(null)
@@ -51,6 +53,16 @@ export default function Review() {
       setAnnounce(action === 'confirm' ? `Confirmed. ${item.po} ${item.stage} is now visible to ${item.buyerName}.` : `Dismissed. ${item.buyerName} will not see it.`)
       await load()
       pendingHeading.current?.focus()      // the card that had focus is gone: put focus somewhere sensible
+    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    setBusy(null)
+  }
+
+  async function decidePhoto(p: PendingPhoto, action: 'approve' | 'reject') {
+    setBusy(p.id); setActionError(null)
+    try {
+      await apiFetch(`/api/photos/${p.id}/${action}`, { method: 'POST', body: '{}' })
+      setAnnounce(action === 'approve' ? `Approved. The ${p.stage} photo for ${p.po} is now visible to ${p.buyerName}.` : 'Rejected. It will not be shown.')
+      await load(); pendingHeading.current?.focus()
     } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
     setBusy(null)
   }
@@ -109,6 +121,22 @@ export default function Review() {
                 </li>
               ))}
             </ul>
+
+            <h2>Photos waiting for approval ({data.photos.length})</h2>
+            {data.photos.length === 0 ? <p className="sub">No photos are waiting. A photo a supervisor sends with an update appears here first; a buyer cannot see it until you approve it.</p> : (
+              <ul className="plain photogrid">
+                {data.photos.map((p) => (
+                  <li key={p.id} className="stagecard">
+                    <AuthImage path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
+                    <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
+                    <div className="actions">
+                      <button className="btn btn--primary btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve')}>Approve for buyer</button>
+                      <button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject')}>Reject</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             <h2>Visible to buyers now ({data.confirmed.length})</h2>
             {data.confirmed.length === 0 ? <p className="sub">No warning is currently visible to any buyer.</p> : (
