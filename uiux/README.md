@@ -8,7 +8,7 @@ npm run dev -w @isocode/web      # terminal 2
 npm run snapshots                # terminal 3: rewrites this folder
 ```
 
-Last taken: 2026-11-03. 28 pictures.
+Last taken: 2026-11-03. 31 pictures.
 
 ## Desktop
 
@@ -81,6 +81,21 @@ Each stage with the planned finish date beside the projected one, how far apart 
 Nothing reaches a buyer until a merchandiser confirms it. Each warning shows the wording the buyer would read (editable) and, in grey, the figures behind it that only the factory sees. "Do not show" hides it from buyers.
 
 ![Review queue](24-review-queue.png)
+
+### Setup: people
+Who can sign in, and what the merchandiser can do about it: reset a PIN, sign someone out on every phone (a lost phone), or stop an account (a leaver). Easy PINs such as 1234 and 1111 are refused. Phone numbers show only their last four digits.
+
+![Setup: people](29-setup-people.png)
+
+### Setup: closed days
+Sundays are closed by default. Add a holiday such as Deepavali or an extra day worked, for one unit at a time, so a subcontractor can close on different days. The board uses the new working days at once.
+
+![Setup: closed days](30-setup-closed-days.png)
+
+### Setup: a template, with a mistake explained
+Stages are listed in the order they happen, each with the working days before ex-factory and the unit that does it. If a later stage would finish before an earlier one, it says so in plain words and the Save button stays off. Nothing is saved from this picture.
+
+![Setup: a template, with a mistake explained](31-setup-template-editor.png)
 
 ## Phone
 

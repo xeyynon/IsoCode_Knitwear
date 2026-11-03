@@ -28,6 +28,8 @@ export interface TokenClaims {
   sub: string                    // account id
   role: 'merchandiser' | 'supervisor'
   unitId?: string
+  /** The account's token_version when this was made. Raising it in the database signs the person out everywhere. */
+  ver?: number
   exp: number                    // seconds since epoch
 }
 

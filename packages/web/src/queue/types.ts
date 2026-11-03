@@ -22,6 +22,8 @@ export interface QueuedEvent {
   photoId?: string
   /** Why a photo was left out when the pieces were still sent. */
   photoNote?: string
+  /** Who wrote it (the signed-in account). An update is only ever sent under its own author's sign-in. */
+  owner?: string
   /** A reason and/or a few words about why the stage is slow. Sent with the update in the same request. */
   note?: { text?: string; category?: string }
 }

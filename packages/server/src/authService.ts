@@ -28,7 +28,7 @@ export function normalisePhone(raw: string): string | null {
 
 interface Row {
   id: string; role: 'merchandiser' | 'supervisor'; password_hash: string | null; pin_hash: string | null
-  unit_id: string | null; failed_attempts: number; locked: boolean
+  unit_id: string | null; failed_attempts: number; locked: boolean; token_version: number; disabled: boolean
 }
 
 /**
@@ -53,9 +53,10 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
   const outcome = await db.tx({ role: 'auth' }, async (tx) => {
     const found = (await tx.query<Row>(
       `select id::text as id, role, password_hash, pin_hash, unit_id::text as unit_id, failed_attempts,
-              coalesce(locked_until > $2::timestamptz, false) as locked
+              coalesce(locked_until > $2::timestamptz, false) as locked, token_version, disabled_at is not null as disabled
          from account where ${lookup.sql}`, [lookup.key, now.toISOString()]))[0]
-    if (!found) { verifySecret(lookup.secret, DUMMY_HASH); return { kind: 'invalid' as const } }
+    // A stopped account answers exactly like an unknown one, and costs the same time.
+    if (!found || found.disabled) { verifySecret(lookup.secret, DUMMY_HASH); return { kind: 'invalid' as const } }
     if (found.locked) return { kind: 'locked' as const }
     if (!verifySecret(lookup.secret, found[field])) {
       const attempts = found.failed_attempts + 1
@@ -75,6 +76,6 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
   const { account } = outcome
   const ttlSeconds = account.role === 'supervisor' ? SUPERVISOR_TOKEN_DAYS * 86_400 : MERCHANDISER_TOKEN_HOURS * 3_600
   const exp = Math.floor(now.getTime() / 1000) + ttlSeconds
-  const claims: TokenClaims = { sub: account.id, role: account.role, exp, ...(account.unit_id ? { unitId: account.unit_id } : {}) }
+  const claims: TokenClaims = { sub: account.id, role: account.role, exp, ver: account.token_version, ...(account.unit_id ? { unitId: account.unit_id } : {}) }
   return { token: signToken(claims, secret), role: account.role, expiresAt: new Date(exp * 1000).toISOString() }
 }

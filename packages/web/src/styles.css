@@ -239,3 +239,22 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 .reason[aria-checked="true"]::before { content: "\2713 "; }
 .lang-tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; color: var(--muted); }
 .orig { font-size: 18px; margin: 6px 0; }
+
+/* ---- setup */
+.seg--tabs { max-width: 640px; margin-bottom: 8px; flex-wrap: wrap; }
+.seg--tabs .seg__btn { min-width: 120px; }
+.people__actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.inline { display: flex; gap: 6px; align-items: center; width: 100%; }
+.inline .input { width: 120px; }
+.tplrows { display: grid; gap: 8px; margin-bottom: 10px; }
+.tplrow { display: grid; grid-template-columns: 1.4fr .8fr 1.2fr auto; gap: 8px; align-items: center; }
+.tplrow__btns { display: flex; gap: 4px; }
+@media (max-width: 720px) {
+  .tplrow { grid-template-columns: 1fr 1fr; }
+  .tplrow__btns { grid-column: 1 / -1; }
+  .people thead { display: none; }
+  .people, .people tbody, .people tr, .people td { display: block; width: 100%; }
+  .people tr { border-bottom: 1px solid var(--border); padding: 8px 0; }
+  .people td { border: 0; padding: 3px 4px; display: flex; gap: 8px; justify-content: space-between; }
+  .people td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 13px; flex: 0 0 64px; }
+}

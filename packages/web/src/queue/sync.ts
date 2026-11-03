@@ -25,8 +25,12 @@ export function classifyError(e: unknown): SyncError {
  * photo for good (not a JPEG, too large), the photo is dropped with a note and the pieces are
  * still sent: a count must never be lost because of a picture.
  */
-export async function syncQueue(store: QueueStore, send: SendBatch, upload?: UploadPhoto): Promise<SyncOutcome> {
-  let pending = (await store.list()).filter((e) => e.status === 'pending').sort((a, b) => a.createdAt - b.createdAt)
+/** Updates written under another person's sign-in are NOT ours to send: the server would refuse them as not that unit's. Updates with no author (from before this was tracked) go with whoever is signed in. */
+export const isMine = (e: QueuedEvent, owner: string | null | undefined): boolean => !e.owner || !owner || e.owner === owner
+
+export async function syncQueue(store: QueueStore, send: SendBatch, upload?: UploadPhoto, owner?: string | null): Promise<SyncOutcome> {
+  const mine = async () => (await store.list()).filter((e) => e.status === 'pending' && isMine(e, owner)).sort((a, b) => a.createdAt - b.createdAt)
+  let pending = await mine()
   let sent = 0
   let rejected = 0
   let error: SyncError = null
@@ -45,7 +49,7 @@ export async function syncQueue(store: QueueStore, send: SendBatch, upload?: Upl
         } else { error = kind; await store.update(item.clientUuid, { attempts: item.attempts + 1 }) }
       }
     }
-    pending = (await store.list()).filter((e) => e.status === 'pending').sort((a, b) => a.createdAt - b.createdAt)
+    pending = await mine()
     if (error) return { sent, rejected, remaining: pending.length, error }
   }
 
@@ -75,7 +79,7 @@ export async function syncQueue(store: QueueStore, send: SendBatch, upload?: Upl
     await store.remove(done)
   }
 
-  const remaining = (await store.list()).filter((e) => e.status === 'pending').length
+  const remaining = (await mine()).length
   return { sent, rejected, remaining, error }
 }
 

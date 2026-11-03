@@ -63,6 +63,34 @@ export async function listPendingPhotos(tx: Tx, ctx: Ctx): Promise<PendingPhoto[
   return rows.map((r) => ({ id: r.id, orderId: r.order_id, po: r.po, buyerName: r.buyer_name, stage: r.stage, takenOn: r.taken_on, bytes: r.bytes, createdAt: r.created_at }))
 }
 
+export interface VisiblePhoto { id: string; orderId: string; po: string; buyerName: string; stage: string; takenOn: string }
+
+/** Photos a buyer can see right now, newest first, so one can be withdrawn. */
+export async function listApprovedPhotos(tx: Tx, ctx: Ctx): Promise<VisiblePhoto[]> {
+  if (!isStaff(ctx)) throw forbidden('The review queue is for merchandisers')
+  const rows = await tx.query<{ id: string; order_id: string; po: string; buyer_name: string; stage: string; taken_on: string }>(
+    `select p.id::text as id, p.order_id::text as order_id, o.po, b.name as buyer_name, p.stage, p.taken_on::text as taken_on
+       from photo p join orders o on o.id = p.order_id join buyer b on b.id = p.buyer_id
+      where p.approved_by is not null and p.rejected_at is null and p.purged_at is null order by p.approved_at desc, p.id limit 60`)
+  return rows.map((r) => ({ id: r.id, orderId: r.order_id, po: r.po, buyerName: r.buyer_name, stage: r.stage, takenOn: r.taken_on }))
+}
+
+/**
+ * Delete the FILES of photos rejected more than `days` ago. The row stays (an update may point at it) and
+ * is marked purged, so it simply reads as "not found" from then on. Safe to run again and again.
+ */
+export async function purgeRejectedPhotos(tx: Tx, ctx: Ctx, store: MediaStore, days: number): Promise<number> {
+  if (!isStaff(ctx)) throw forbidden()
+  if (!Number.isInteger(days) || days < 0 || days > 3650) throw badRequest('days must be a whole number from 0 to 3650')
+  const rows = await tx.query<{ id: string; storage_key: string }>(
+    `select id::text as id, storage_key from photo where rejected_at is not null and purged_at is null and rejected_at < now() - make_interval(days => $1::int)`, [days])
+  for (const r of rows) {
+    await store.delete(r.storage_key)
+    await tx.query('update photo set purged_at = now() where id = $1', [r.id])
+  }
+  return rows.length
+}
+
 /** Show a photo to its buyer. Withdrawing it later is a reject. */
 export async function approvePhoto(tx: Tx, ctx: Ctx, userId: string, id: string): Promise<void> {
   if (!isStaff(ctx)) throw forbidden()

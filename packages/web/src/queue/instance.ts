@@ -1,7 +1,7 @@
 // The one queue for the whole app, created on first use. It prefers IndexedDB; if the browser
 // refuses, it falls back to memory AND marks itself not durable so the screen says so.
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { apiFetch, subscribe as onSession, snapshot as sessionSnapshot } from '../api/session'
+import { apiFetch, getClaims, subscribe as onSession, snapshot as sessionSnapshot } from '../api/session'
 import { createQueueController, type QueueController, type QueueState } from './controller'
 import { createIdbStore, type IdbStore } from './idbStore'
 import { memoryStore } from './sync'
@@ -25,7 +25,7 @@ export function getQueue(): Promise<Queue> {
   started ??= (async () => {
     let idb: IdbStore | null = null
     try { idb = await createIdbStore() } catch { /* fall back to memory; the screen warns */ }
-    const ctl = createQueueController({ store: idb ?? memoryStore(false), send, uploadPhoto })
+    const ctl = createQueueController({ store: idb ?? memoryStore(false), send, uploadPhoto, getOwner: () => getClaims()?.sub ?? null })
     await ctl.refresh()
 
     // When to try sending: opening the app, the signal returning, the app coming back to the

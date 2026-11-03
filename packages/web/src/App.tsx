@@ -11,6 +11,7 @@ const Board = lazy(() => import('./pages/Board'))
 const OrderSetup = lazy(() => import('./pages/OrderSetup'))
 const OrderDetail = lazy(() => import('./pages/OrderDetail'))
 const Review = lazy(() => import('./pages/Review'))
+const Setup = lazy(() => import('./pages/Setup'))
 const Buyer = lazy(() => import('./pages/Buyer'))
 const Today = lazy(() => import('./pages/Today'))
 const Update = lazy(() => import('./pages/Update'))
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/status" element={<Status />} />
           <Route path="/board" element={<RequireRole role="merchandiser"><Board /></RequireRole>} />
           <Route path="/buyer" element={<Buyer />} />
+          <Route path="/setup" element={<RequireRole role="merchandiser"><Setup /></RequireRole>} />
           <Route path="/review" element={<RequireRole role="merchandiser"><Review /></RequireRole>} />
           <Route path="/orders/new" element={<RequireRole role="merchandiser"><OrderSetup /></RequireRole>} />
           <Route path="/orders/:id" element={<RequireRole role="merchandiser"><OrderDetail /></RequireRole>} />

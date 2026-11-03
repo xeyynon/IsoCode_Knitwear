@@ -10,6 +10,7 @@ import { StatusBadge } from '../ui/StatusBadge'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
 interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null }
+interface VisiblePhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string }
 interface PendingPhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string; bytes: number }
 interface LinkRow { id: string; buyerId: string; buyerName: string; label: string | null; expiresAt: string; revoked: boolean; expired: boolean }
 interface Options { buyers: { id: string; name: string }[] }
@@ -17,7 +18,7 @@ interface Options { buyers: { id: string; name: string }[] }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function Review() {
-  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; notes: PendingNote[]; reasons: Reason[] } | null>(null)
+  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[] } | null>(null)
   const [meaning, setMeaning] = useState<Record<string, string>>({})
   const [noteReason, setNoteReason] = useState<Record<string, string>>({})
   const [links, setLinks] = useState<LinkRow[]>([])
@@ -38,7 +39,7 @@ export default function Review() {
   const load = useCallback(async () => {
     try {
       const [r, l] = await Promise.all([
-        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; notes: PendingNote[]; reasons: Reason[] }>('/api/review'),
+        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[] }>('/api/review'),
         apiFetch<{ links: LinkRow[] }>('/api/buyer-links'),
       ])
       setData(r); setLinks(l.links); setError(null)
@@ -74,7 +75,7 @@ export default function Review() {
     setBusy(null)
   }
 
-  async function decidePhoto(p: PendingPhoto, action: 'approve' | 'reject') {
+  async function decidePhoto(p: PendingPhoto | VisiblePhoto, action: 'approve' | 'reject') {
     setBusy(p.id); setActionError(null)
     try {
       await apiFetch(`/api/photos/${p.id}/${action}`, { method: 'POST', body: '{}' })
@@ -177,6 +178,19 @@ export default function Review() {
                       <button className="btn btn--primary btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve')}>Approve for buyer</button>
                       <button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject')}>Reject</button>
                     </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <h2>Photos visible to buyers now ({data.approvedPhotos.length})</h2>
+            {data.approvedPhotos.length === 0 ? <p className="sub">No photo is currently visible to any buyer.</p> : (
+              <ul className="plain photogrid">
+                {data.approvedPhotos.map((p) => (
+                  <li key={p.id} className="stagecard">
+                    <AuthImage path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
+                    <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
+                    <div className="actions"><button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject')}>Withdraw from buyer</button></div>
                   </li>
                 ))}
               </ul>

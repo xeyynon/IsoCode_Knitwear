@@ -30,6 +30,8 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | A photo on a daily update: shrunk on the phone, uploaded safely even after a lost signal or a lost reply, approved in the review queue before a buyer can see it | Built (`build-1004`) |
 | Review queue (confirm, reword or hide a warning before a buyer can see it), buyer links (create, cancel, expire) and the buyer's read-only page, with automated cross-buyer leak tests | Built (`build-1003`) |
 | A reason (one tap from a fixed list) and a few typed words, in Tamil or English, on a daily update; a merchandiser reviews them, adding the English meaning of Tamil text. Notes are internal and never shown to buyers | Built (`build-1005`) |
+| **Setup** for the pilot: add supervisors and merchandisers (easy PINs refused), reset a PIN, sign someone out on every phone, stop an account, add units, set closed days per unit, create and edit TNA templates | Built (`build-1006`) |
+| Withdraw an approved photo from the screen, and clear the files of old rejected photos | Built (`build-1006`) |
 | Voice notes, automatic translation, and automatic reason suggestions | **Not built** (they need a speech and translation service agreement; until then a person does the translating) |
 
 **Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
@@ -143,6 +145,11 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `POST /api/notes/:id/confirm` | merchandiser | Review a note: add the English meaning of a Tamil note and settle the reason |
 | `POST /api/photos` | supervisor | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). Checked to be a real JPEG, 1 KB to 3 MB |
 | `GET /api/photos/:id/file`, `POST /api/photos/:id/approve`, `.../reject` | merchandiser | View, approve or withdraw a photo |
+| `POST /api/photos/purge` | merchandiser | Delete the files of photos rejected more than N days ago (waiting and approved photos are never touched) |
+| `GET/POST /api/units` | merchandiser | List and add units (your own floors and subcontractors) |
+| `GET /api/accounts`, `POST /api/accounts/supervisors`, `.../merchandisers`, `.../:id/pin`, `.../:id/sign-out`, `.../:id/disabled` | merchandiser | Who can sign in; add people; reset a PIN; sign out everywhere; stop or allow an account |
+| `GET/POST /api/calendar`, `POST /api/calendar/clear` | merchandiser | Closed days and extra worked days per unit |
+| `GET/POST /api/templates`, `POST /api/templates/:id/delete` | merchandiser | List, create, edit and delete TNA templates (orders already made keep their dates) |
 | `GET /api/buyer/photos/:id` | buyer link | An approved photo of the buyer's own |
 | `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
 | `POST /api/events`, `POST /api/events/batch` | supervisor | Send daily counts, optionally with a photo and a note (a reason and/or words); the batch form serves the offline queue |
@@ -152,7 +159,8 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 - **Buyers** see only their own orders, approved photos and confirmed warnings, and never the events a colour is computed from.
 - **Supervisors** see only their own unit.
 - **Sign-in:** secrets are hashed with scrypt. A wrong password and an unknown account give the same answer in the same time. Five wrong tries lock an account for 15 minutes and failures are rate-limited per address. A 4-digit PIN is weak on its own; the lockout is what protects it.
-- **Tokens** are stateless signed claims (12 hours for merchandisers, 30 days for supervisors). To sign everyone out, rotate `TOKEN_SECRET`. A revocation list is not built.
+- **Tokens** are signed claims (12 hours for merchandisers, 30 days for supervisors) that carry the account's version. Each request checks the account is not stopped and the version still matches, so a merchandiser can sign a person out on every phone at once (a lost phone), reset a PIN, or stop an account, and it takes effect on the very next request. A person moved to another unit is signed out too. To sign **everyone** out, rotate `TOKEN_SECRET`.
+- **PINs:** easy ones (the same digit, a run such as 1234, a repeated pair, common choices) are refused when a supervisor is added or a PIN is reset.
 - **History is append-only:** a database trigger rejects edits and deletes of daily events and date changes, even by the table owner.
 - **No detail leaks:** unexpected errors return a plain message with no stack trace, path or SQL.
 - **Never commit** keys, `.env` files, real worker or buyer data, or recordings. `scripts/check_repo.mjs` refuses these and key-shaped strings, in tracked and new files.
@@ -214,9 +222,9 @@ git push origin main --tags
 
 ## Roadmap
 1. **Supervisor app, remaining:** Tamil wording for the whole screen (reviewed by supervisors), voice notes, and trying it on real low-end phones. (The daily update, offline queue, photos and typed notes are built.)
-2. **Order screens, remaining:** a TNA template editor (templates are seeded for now), and setting an order's stages by hand.
+2. **Order screens, remaining:** setting an order's stages by hand, and an option to re-date existing orders when a holiday is added.
 3. **Review gate:** done for warnings, photos and notes.
-4. **Buyer view, remaining:** a real-Postgres run of the isolation tests, and a way to withdraw an approved photo from the screen (the API already can).
+4. **Buyer view, remaining:** a real-Postgres run of the isolation tests.
 5. **Notes, remaining:** voice notes, and automatic translation and reason suggestions with low-confidence ones sent to review. The original is always kept beside any translation.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 

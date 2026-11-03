@@ -14,4 +14,6 @@ export { createBuyerLink, listBuyerLinks, revokeBuyerLink, resolveBuyerToken, ge
 export { savePhoto, approvePhoto, rejectPhoto, getPhotoBytes, listPendingPhotos, looksLikeJpeg, MAX_PHOTO_BYTES, type PendingPhoto } from './photoService.js'
 export { diskStore, memoryMediaStore, type MediaStore } from './mediaStore.js'
 export { loadReasons, parseNote, detectLanguage, cleanNote, confirmNote, listPendingNotes, MAX_NOTE_CHARS, type Reason, type ReviewNote } from './noteService.js'
+export * from './adminService.js'
+export { listApprovedPhotos, purgeRejectedPhotos, type VisiblePhoto } from './photoService.js'
 export { getBoard, type BoardRow } from './boardService.js'

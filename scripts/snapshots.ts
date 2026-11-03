@@ -294,6 +294,33 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await ctx.close()
 }
 
+// ---------------------------------------------------------------- setup (views only: nothing is saved)
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.fill('input[type=email]', MERCH.email)
+  await page.fill('input[type=password]', MERCH.password)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('table.board')
+
+  await page.goto(`${WEB}/setup`)
+  await page.waitForSelector('table.people')
+  await snap(page, 29, 'setup-people', 'desktop', 'Setup: people', 'Who can sign in, and what the merchandiser can do about it: reset a PIN, sign someone out on every phone (a lost phone), or stop an account (a leaver). Easy PINs such as 1234 and 1111 are refused. Phone numbers show only their last four digits.', true)
+
+  await page.goto(`${WEB}/setup?tab=days`)
+  await page.waitForSelector('text=Closed days')
+  await snap(page, 30, 'setup-closed-days', 'desktop', 'Setup: closed days', 'Sundays are closed by default. Add a holiday such as Deepavali or an extra day worked, for one unit at a time, so a subcontractor can close on different days. The board uses the new working days at once.', true)
+
+  await page.goto(`${WEB}/setup?tab=templates`)
+  await page.waitForSelector('button:has-text("New template")')
+  await page.click('button:has-text("Edit")')
+  await page.waitForSelector('.tplrow')
+  await page.getByLabel('Stage 1 working days before ex-factory').fill('2')
+  await snap(page, 31, 'setup-template-editor', 'desktop', 'Setup: a template, with a mistake explained', 'Stages are listed in the order they happen, each with the working days before ex-factory and the unit that does it. If a later stage would finish before an earlier one, it says so in plain words and the Save button stays off. Nothing is saved from this picture.', true)
+  await ctx.close()
+}
+
 await browser.close()
 
 // ---------------------------------------------------------------- the index

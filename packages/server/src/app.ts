@@ -9,8 +9,12 @@ import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type Ne
 import { getOrderDetail } from './orderDetailService.js'
 import { getMyStages } from './myService.js'
 import { confirmWarning, dismissWarning, listReview, refreshWarnings } from './warningService.js'
+import {
+  clearCalendarDay, createMerchandiser, createSupervisor, createUnit, deleteTemplate, listAccounts, listCalendar, listTemplates, listUnits,
+  resetPin, saveTemplate, setCalendarDay, setDisabled, signOutEverywhere,
+} from './adminService.js'
 import { confirmNote, listPendingNotes, loadReasons } from './noteService.js'
-import { approvePhoto, getBuyerPhotoBytes, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
+import { approvePhoto, getBuyerPhotoBytes, listApprovedPhotos, purgeRejectedPhotos, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
 import type { MediaStore } from './mediaStore.js'
 import { createBuyerLink, getBuyerView, listBuyerLinks, resolveBuyerToken, revokeBuyerLink } from './buyerService.js'
 import { istDate } from './today.js'
@@ -80,6 +84,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     }
     const claims = token ? verifyToken(token, opts.tokenSecret, clock()) : null
     if (!claims) throw new AppError(401, 'unauthenticated', 'Please sign in')
+    // A token is only good while the account is: not stopped, not signed out everywhere, still in the same unit.
+    const acct = (await opts.db.tx({ role: 'auth' }, (tx) => tx.query<{ token_version: number; disabled: boolean; unit_id: string | null }>(
+      'select token_version, disabled_at is not null as disabled, unit_id::text as unit_id from account where id = $1', [claims.sub])))[0]
+    if (!acct || acct.disabled || acct.token_version !== (claims.ver ?? 0) || (claims.role === 'supervisor' && acct.unit_id !== (claims.unitId ?? null))) {
+      throw new AppError(401, 'unauthenticated', 'Please sign in')
+    }
     req.claims = claims
     req.ctx = claims.role === 'supervisor'
       ? { role: 'supervisor', unitId: claims.unitId! }
@@ -187,6 +197,31 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     return sendPhoto(reply, await opts.db.tx(ctx, (tx) => getBuyerPhotoBytes(tx, media, ctx.buyerId!, req.params.id)))
   })
 
+  // ---- setup: people, units, closed days, templates, photo clean-up (merchandisers)
+  app.post('/api/photos/purge', async (req) => {
+    const ctx = ctxOf(req)
+    const days = Number((req.body as { days?: unknown } | null)?.days ?? 7)
+    return { purged: await opts.db.tx(ctx, (tx) => purgeRejectedPhotos(tx, ctx, mediaOr503(), days)) }
+  })
+  app.get('/api/units', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { units: await opts.db.tx(ctx, (tx) => listUnits(tx, ctx)) } })
+  app.post('/api/units', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createUnit(tx, ctx, (req.body ?? {}) as never))) })
+  app.get('/api/accounts', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { accounts: await opts.db.tx(ctx, (tx) => listAccounts(tx, ctx, clock())) } })
+  app.post('/api/accounts/supervisors', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createSupervisor(tx, ctx, (req.body ?? {}) as never))) })
+  app.post('/api/accounts/merchandisers', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createMerchandiser(tx, ctx, (req.body ?? {}) as never))) })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/pin', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => resetPin(tx, ctx, req.params.id, (req.body as { pin?: unknown } | null)?.pin)); return { ok: true } })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/sign-out', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => signOutEverywhere(tx, ctx, req.params.id)); return { ok: true } })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/disabled', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setDisabled(tx, ctx, req.claims!.sub, req.params.id, (req.body as { disabled?: unknown } | null)?.disabled)); return { ok: true } })
+  app.get('/api/calendar', async (req, reply) => {
+    const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store')
+    const unitId = (req.query as { unitId?: string }).unitId
+    return { days: await opts.db.tx(ctx, (tx) => listCalendar(tx, ctx, unitId)) }
+  })
+  app.post('/api/calendar', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setCalendarDay(tx, ctx, (req.body ?? {}) as never)); return { ok: true } })
+  app.post('/api/calendar/clear', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => clearCalendarDay(tx, ctx, (req.body ?? {}) as never)); return { ok: true } })
+  app.get('/api/templates', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { templates: await opts.db.tx(ctx, (tx) => listTemplates(tx, ctx)) } })
+  app.post('/api/templates', async (req) => { const ctx = ctxOf(req); return opts.db.tx(ctx, (tx) => saveTemplate(tx, ctx, (req.body ?? {}) as never)) })
+  app.post<{ Params: { id: string } }>('/api/templates/:id/delete', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => deleteTemplate(tx, ctx, req.params.id)); return { ok: true } })
+
   // ---- the buyer's read-only view (link token, not a sign-in)
   app.get('/api/buyer/orders', async (req, reply) => {
     const ctx: Ctx = { role: 'buyer', buyerId: req.buyerId! }
@@ -202,7 +237,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, istDate(clock())))
     reply.header('Cache-Control', 'no-store')
     return opts.db.tx(ctx, async (tx) => ({
-      ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx),
+      ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx), approvedPhotos: await listApprovedPhotos(tx, ctx),
       notes: await listPendingNotes(tx, ctx), reasons: await loadReasons(tx),
     }))
   })

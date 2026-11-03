@@ -84,6 +84,7 @@ export default function Board() {
                 {today ? ` · Today ${shortDate(today)}` : ''}
               </span>
               <button className="btn btn--small" onClick={() => void load()}>{t('board.refresh')}</button>
+              <Link className="btn btn--small" to="/setup">Setup</Link>
               <Link className="btn btn--small" to="/review">Review{reviewCount ? <b className="count"> {reviewCount}</b> : null}</Link>
               <Link className="btn btn--primary btn--small" to="/orders/new">New order</Link>
             </div>

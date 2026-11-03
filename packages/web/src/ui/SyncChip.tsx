@@ -8,7 +8,7 @@ import type { QueueController, QueueState } from '../queue/controller'
  */
 export function SyncChip({ state, ctl }: { state: QueueState; ctl: QueueController }) {
   const { t } = useLang()
-  const { pending, rejected, syncing, online, error } = state
+  const { pending, rejected, syncing, online, error, foreign } = state
 
   let text: string
   let tone: 'ok' | 'wait' | 'problem' = 'wait'
@@ -29,6 +29,7 @@ export function SyncChip({ state, ctl }: { state: QueueState; ctl: QueueControll
       {pending > 0 && online && !syncing && (
         <button className="btn btn--small" onClick={() => void ctl.syncNow()}>Try now</button>
       )}
+      {foreign > 0 && <span className="sync sync--problem">{foreign} from another sign-in wait{foreign === 1 ? 's' : ''} for that person</span>}
       {rejected.length > 0 && <span className="sync sync--problem">{rejected.length} need{rejected.length === 1 ? 's' : ''} attention</span>}
     </div>
   )

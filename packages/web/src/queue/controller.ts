@@ -1,11 +1,13 @@
 // The queue's brain: owns the store, decides when to sync, and exposes a stable snapshot for
 // the screen. No React and no browser globals are used directly (they are passed in), so the
 // whole thing runs under test.
-import { syncQueue } from './sync'
+import { isMine, syncQueue } from './sync'
 import type { NewEvent, QueuedEvent, QueueStore, SendBatch, SyncError, UploadPhoto } from './types'
 
 export interface QueueState {
   pending: number
+  /** Waiting under ANOTHER person's sign-in on this phone: they send when that person signs in. */
+  foreign: number
   rejected: QueuedEvent[]
   syncing: boolean
   online: boolean
@@ -23,6 +25,8 @@ export interface ControllerDeps {
   send: SendBatch
   /** Uploads a photo before its update is sent. Left out, a queued photo simply stays with its update. */
   uploadPhoto?: UploadPhoto
+  /** The signed-in account's id. Updates are stamped with it, and only the author's sign-in sends them. */
+  getOwner?: () => string | null
   now?: () => number
   uuid?: () => string
   isOnline?: () => boolean
@@ -36,7 +40,8 @@ export function createQueueController(deps: ControllerDeps) {
   let items: QueuedEvent[] = []
   let sentLog: SentRecord[] = []
   let inFlight: Promise<void> | null = null
-  let state: QueueState = { pending: 0, rejected: [], syncing: false, online: isOnline(), error: null, lastSyncedAt: null, durable: deps.store.durable }
+  const owner = () => deps.getOwner?.() ?? null
+  let state: QueueState = { pending: 0, foreign: 0, rejected: [], syncing: false, online: isOnline(), error: null, lastSyncedAt: null, durable: deps.store.durable }
   const listeners = new Set<() => void>()
 
   const publish = (patch: Partial<QueueState>) => {
@@ -46,7 +51,8 @@ export function createQueueController(deps: ControllerDeps) {
   const refresh = async () => {
     items = await deps.store.list()
     publish({
-      pending: items.filter((e) => e.status === 'pending').length,
+      pending: items.filter((e) => e.status === 'pending' && isMine(e, owner())).length,
+      foreign: items.filter((e) => e.status === 'pending' && !isMine(e, owner())).length,
       rejected: items.filter((e) => e.status === 'rejected'),
       online: isOnline(),
     })
@@ -56,7 +62,8 @@ export function createQueueController(deps: ControllerDeps) {
   async function enqueue(e: NewEvent): Promise<QueuedEvent> {
     const { photo, ...rest } = e
     const clientUuid = uuid()
-    const item: QueuedEvent = { ...rest, clientUuid, createdAt: now(), status: 'pending', attempts: 0, ...(photo ? { photo, photoUuid: uuid() } : {}) }
+    const who = owner()
+    const item: QueuedEvent = { ...rest, clientUuid, createdAt: now(), status: 'pending', attempts: 0, ...(who ? { owner: who } : {}), ...(photo ? { photo, photoUuid: uuid() } : {}) }
     await deps.store.add(item)
     await refresh()
     void syncNow()
@@ -82,7 +89,7 @@ export function createQueueController(deps: ControllerDeps) {
           }
           sentLog = sentLog.slice(-200)
           return r
-        }, deps.uploadPhoto)
+        }, deps.uploadPhoto, owner())
         await refresh()
         publish({ syncing: false, error: out.error, lastSyncedAt: out.error ? state.lastSyncedAt : now() })
       } catch {
@@ -100,7 +107,7 @@ export function createQueueController(deps: ControllerDeps) {
 
   /** Waiting pieces for one stage and day, so the screen can show "today so far" including what is not sent yet. */
   const waitingQty = (orderId: string, stage: string, date: string): number =>
-    items.filter((e) => e.status === 'pending' && e.orderId === orderId && e.stage === stage && e.date === date).reduce((s, e) => s + e.qty, 0)
+    items.filter((e) => e.status === 'pending' && isMine(e, owner()) && e.orderId === orderId && e.stage === stage && e.date === date).reduce((s, e) => s + e.qty, 0)
 
   /** Pieces the server accepted AFTER a given moment: not yet visible in a list fetched before then. */
   const sentSince = (orderId: string, stage: string, date: string, sinceMs: number): number =>
