@@ -22,9 +22,11 @@ export interface QueuedEvent {
   photoId?: string
   /** Why a photo was left out when the pieces were still sent. */
   photoNote?: string
+  /** A reason and/or a few words about why the stage is slow. Sent with the update in the same request. */
+  note?: { text?: string; category?: string }
 }
 
-export type NewEvent = Pick<QueuedEvent, 'orderId' | 'stage' | 'date' | 'qty'> & { photo?: Blob }
+export type NewEvent = Pick<QueuedEvent, 'orderId' | 'stage' | 'date' | 'qty' | 'note'> & { photo?: Blob }
 
 /** Where the queue is kept. IndexedDB in the browser; a plain array in tests. */
 export interface QueueStore {
@@ -37,7 +39,7 @@ export interface QueueStore {
 }
 
 export interface BatchItemResult { clientUuid?: unknown; result: 'accepted' | 'duplicate' | 'rejected'; code?: string; message?: string }
-export type SendBatch = (events: (Pick<QueuedEvent, 'clientUuid' | 'orderId' | 'stage' | 'date' | 'qty'> & { photoId?: string })[]) => Promise<{ results: BatchItemResult[] }>
+export type SendBatch = (events: (Pick<QueuedEvent, 'clientUuid' | 'orderId' | 'stage' | 'date' | 'qty' | 'note'> & { photoId?: string })[]) => Promise<{ results: BatchItemResult[] }>
 
 export interface PhotoUpload { photoUuid: string; orderId: string; stage: string; date: string; blob: Blob }
 /** Sends one photo; resolves to the server's id for it. Throws like a failed request (with a status). */

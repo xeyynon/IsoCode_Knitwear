@@ -9,6 +9,7 @@ import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type Ne
 import { getOrderDetail } from './orderDetailService.js'
 import { getMyStages } from './myService.js'
 import { confirmWarning, dismissWarning, listReview, refreshWarnings } from './warningService.js'
+import { confirmNote, listPendingNotes, loadReasons } from './noteService.js'
 import { approvePhoto, getBuyerPhotoBytes, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
 import type { MediaStore } from './mediaStore.js'
 import { createBuyerLink, getBuyerView, listBuyerLinks, resolveBuyerToken, revokeBuyerLink } from './buyerService.js'
@@ -200,7 +201,10 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     // Bring the warnings up to date first, as the system, so the queue is never stale.
     await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, istDate(clock())))
     reply.header('Cache-Control', 'no-store')
-    return opts.db.tx(ctx, async (tx) => ({ ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx) }))
+    return opts.db.tx(ctx, async (tx) => ({
+      ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx),
+      notes: await listPendingNotes(tx, ctx), reasons: await loadReasons(tx),
+    }))
   })
   app.post<{ Params: { id: string } }>('/api/warnings/:id/confirm', async (req) => {
     const ctx = ctxOf(req)
@@ -208,6 +212,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     await opts.db.tx(ctx, (tx) => confirmWarning(tx, ctx, req.claims!.sub, req.params.id, text))
     return { ok: true }
   })
+  app.post<{ Params: { id: string } }>('/api/notes/:id/confirm', async (req) => {
+    const ctx = ctxOf(req)
+    await opts.db.tx(ctx, (tx) => confirmNote(tx, ctx, req.claims!.sub, req.params.id, (req.body ?? {}) as { textEn?: string; category?: string }))
+    return { ok: true }
+  })
+  // The fixed list of reasons, for the phone's picker. Any signed-in person may read it.
+  app.get('/api/reasons', async (req, reply) => {
+    const ctx = ctxOf(req)
+    reply.header('Cache-Control', 'no-store')
+    return { reasons: await opts.db.tx(ctx, (tx) => loadReasons(tx)) }
+  })
+
   app.post<{ Params: { id: string } }>('/api/warnings/:id/dismiss', async (req) => {
     const ctx = ctxOf(req)
     await opts.db.tx(ctx, (tx) => dismissWarning(tx, ctx, req.params.id))

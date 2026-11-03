@@ -13,4 +13,5 @@ export { refreshWarnings, listReview, confirmWarning, dismissWarning, buyerText,
 export { createBuyerLink, listBuyerLinks, revokeBuyerLink, resolveBuyerToken, getBuyerView, hashToken, TOKEN_PREFIX, type BuyerView } from './buyerService.js'
 export { savePhoto, approvePhoto, rejectPhoto, getPhotoBytes, listPendingPhotos, looksLikeJpeg, MAX_PHOTO_BYTES, type PendingPhoto } from './photoService.js'
 export { diskStore, memoryMediaStore, type MediaStore } from './mediaStore.js'
+export { loadReasons, parseNote, detectLanguage, cleanNote, confirmNote, listPendingNotes, MAX_NOTE_CHARS, type Reason, type ReviewNote } from './noteService.js'
 export { getBoard, type BoardRow } from './boardService.js'

@@ -273,6 +273,27 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await ctx.close()
 }
 
+// ---------------------------------------------------------------- a reason and a Tamil note, ready to send (nothing is sent)
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.click('button:has-text("Supervisor")')
+  await page.fill('input[type=tel]', SUP.phone)
+  await page.fill('input[type=password]', SUP.pin)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('.stage')
+  await page.click('.stage >> nth=0 >> a:has-text("Update")')
+  await page.waitForSelector('input.input--big')
+  await page.click('button[aria-label=Menu]')
+  await page.click('[role=menuitem]:first-child')   // Tamil
+  await page.click('.reason >> nth=2')
+  await page.fill('textarea', 'இன்று மூன்று இயந்திரங்கள் வேலை செய்யவில்லை')
+  await page.fill('input.input--big', '60')
+  await snap(page, 28, 'update-reason-note-tamil-phone', 'phone', 'Daily update: a reason and a note, in Tamil', 'Why is it slow? is a short list of big buttons, so the usual cause is one tap. The note is optional free text typed in Tamil or English. The reason words come from a list the factory controls; the Tamil here is unreviewed and must be corrected by supervisors. Nothing has been sent.', true)
+  await ctx.close()
+}
+
 await browser.close()
 
 // ---------------------------------------------------------------- the index

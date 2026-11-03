@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
 import type { IdbStore } from '../queue/idbStore'
+import { DEFAULT_REASONS, usableReasons, type Reason } from '../notes/reasons'
 
 export interface Stage {
   orderId: string
@@ -18,6 +19,23 @@ export interface Stage {
 
 const CACHE_KEY = 'stages'
 interface Saved { today: string; stages: Stage[]; savedAt: number }
+
+/** The reason list: fresh from the server when possible, else the copy on the phone, else the built-in list. */
+export function useReasons(idb: IdbStore | null): Reason[] {
+  const [reasons, setReasons] = useState<Reason[]>(DEFAULT_REASONS)
+  useEffect(() => {
+    let live = true
+    void idb?.getMeta<unknown>('reasons').then((c) => { if (live && c) setReasons(usableReasons(c)) }).catch(() => undefined)
+    apiFetch<{ reasons: unknown }>('/api/reasons').then((r) => {
+      if (!live) return
+      const list = usableReasons(r.reasons)
+      setReasons(list)
+      void idb?.setMeta('reasons', list).catch(() => undefined)
+    }).catch(() => undefined)
+    return () => { live = false }
+  }, [idb])
+  return reasons
+}
 
 export interface StagesState {
   stages: Stage[] | null

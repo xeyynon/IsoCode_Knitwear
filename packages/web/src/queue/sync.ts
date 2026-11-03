@@ -53,7 +53,7 @@ export async function syncQueue(store: QueueStore, send: SendBatch, upload?: Upl
     const batch = pending.slice(i, i + BATCH_SIZE)
     let results
     try {
-      ;({ results } = await send(batch.map(({ clientUuid, orderId, stage, date, qty, photoId }) => ({ clientUuid, orderId, stage, date, qty, ...(photoId ? { photoId } : {}) }))))
+      ;({ results } = await send(batch.map(({ clientUuid, orderId, stage, date, qty, photoId, note }) => ({ clientUuid, orderId, stage, date, qty, ...(photoId ? { photoId } : {}), ...(note ? { note } : {}) }))))
     } catch (e) {
       error = classifyError(e)
       await Promise.all(batch.map((b) => store.update(b.clientUuid, { attempts: b.attempts + 1 })))

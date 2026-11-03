@@ -161,9 +161,11 @@ try {
   const photosBefore = (await demo.pg.query<{ n: number }>('select count(*)::int as n from photo')).rows[0]!.n
   await ctx.setOffline(true)
   const raw = await fakeCameraShot(page)
+  const TAMIL_NOTE = 'இன்று மூன்று இயந்திரங்கள் வேலை செய்யவில்லை'
   for (const q of [7, 8, 9]) {
     await page.setInputFiles('input[type=file]', { name: 'camera.jpg', mimeType: 'image/jpeg', buffer: raw })
     await page.waitForSelector('.photobox__preview')
+    if (q === 7) { await page.click('.reason:has-text("Machine problem")'); await page.fill('textarea', TAMIL_NOTE) }   // one update also carries a reason and a Tamil note
     await sendPieces(page, q)
   }
   check('3 updates with photos taken offline show as "3 waiting"', (await chipText(page)).includes('3'), await chipText(page))
@@ -189,6 +191,10 @@ try {
   const firstPhoto = (await demo.pg.query<{ b: number }>('select max(bytes)::int as b from photo')).rows[0]!.b
   check('and smaller than the original', firstPhoto < raw.length, `${Math.round(firstPhoto / 1024)} KB from ${Math.round(raw.length / 1024)} KB`)
   await page.unroute('**/api/photos')
+  const nt = (await demo.pg.query<{ n: number; lang: string; cat: string; txt: string; linked: number }>(
+    `select count(*)::int as n, max(language) as lang, max(category) as cat, max(text_ta) as txt,
+            (select count(*) from update_event e join note x on x.id = e.note_id where e.qty = 7)::int as linked from note`)).rows[0]!
+  check('the Tamil note and reason arrived once, with the update they belong to', nt.n === 1 && nt.lang === 'ta' && nt.cat === 'machine' && nt.txt === TAMIL_NOTE && nt.linked === 1, `${nt.n} note, ${nt.lang}, ${nt.cat}, linked ${nt.linked}`)
 
   check('no script errors in the page', errors.length === 0, errors.join(' | '))
   await browser.close()

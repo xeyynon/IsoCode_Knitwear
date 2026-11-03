@@ -2,6 +2,7 @@ import { formatMaths, projectOrder, type Status } from '@isocode/engine'
 import { badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { loadEngineData } from './engineData.js'
+import { listOrderNotes } from './noteService.js'
 
 export interface StageDetail {
   stage: string
@@ -43,6 +44,8 @@ export interface OrderDetail {
   }
   stages: StageDetail[]
   history: HistoryEntry[]
+  /** What supervisors reported, in their words, with the reason. Internal: buyers never see notes. */
+  notes: Awaited<ReturnType<typeof listOrderNotes>>
 }
 
 const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -90,6 +93,7 @@ export async function getOrderDetail(tx: Tx, ctx: Ctx, orderId: string, today: s
       qty: o.qty, exFactory: o.exFactory, status: stages.length ? result.status : 'grey',
     },
     stages: detail,
+    notes: await listOrderNotes(tx, ctx, o.id),
     history: rows.map((r) => ({
       at: r.at, by: r.by, what: r.entity === 'orders' ? 'Ex-factory date' : `${label(r.stage ?? 'stage')} finish date`,
       from: r.old, to: r.new, reason: r.reason,

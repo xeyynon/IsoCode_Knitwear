@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { shortDate, type Status } from '../board/boardLogic'
 import { isRealDate, slipText } from '../orders/orderForm'
+import { DEFAULT_REASONS, reasonById } from '../notes/reasons'
 import { AppBar } from '../ui/AppBar'
 import { Loading } from '../ui/Loading'
 import { StatusBadge } from '../ui/StatusBadge'
@@ -12,11 +13,13 @@ interface StageDetail {
   status: Status; reasons: string[]; plannedEnd: string; projectedEnd: string | null; maths: string
   madeIsEstimate: boolean; noRecentUpdate: boolean
 }
+interface NoteEntry { id: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null; reviewed: boolean }
 interface HistoryEntry { at: string; by: string | null; what: string; from: string | null; to: string | null; reason: string }
 interface Detail {
   order: { id: string; po: string; buyerName: string; style: string; colour: string; sizes: Record<string, number>; qty: number; exFactory: string; status: Status }
   stages: StageDetail[]
   history: HistoryEntry[]
+  notes: NoteEntry[]
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -119,6 +122,23 @@ export default function OrderDetail() {
               </details>
               {moved && <p className="notice-box" role="status">{moved}</p>}
             </section>
+
+            <h2>Notes from the floor</h2>
+            {d.notes.length === 0 ? <p className="sub">No notes have been written on this order.</p> : (
+              <ul className="plain stagelist">
+                {d.notes.map((n) => (
+                  <li key={n.id} className="stagecard">
+                    <div className="stagecard__top">
+                      <b>{cap(n.stage)}</b><span className="sub">{n.takenOn}</span>
+                      {n.category && <span className="sub">· {reasonById(DEFAULT_REASONS, n.category)?.en}{n.categoryBy === 'merchandiser' ? ' (set by you)' : ''}</span>}
+                      <span className="sub" style={{ marginLeft: 'auto' }}>{n.reviewed ? 'Reviewed' : 'Not reviewed yet'}</span>
+                    </div>
+                    {n.original && <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p>}
+                    {n.language === 'ta' && n.textEn && <p className="why">In English: {n.textEn}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
 
             <h2>History of date changes</h2>
             {d.history.length === 0 ? <p className="sub">No dates have been changed on this order.</p> : (

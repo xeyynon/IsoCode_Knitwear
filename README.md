@@ -29,7 +29,8 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | Order setup (with a schedule preview before creating) and order detail (planned versus projected dates, the working behind each colour, date-change history, change ex-factory with a reason) | Built (`build-1002`) |
 | A photo on a daily update: shrunk on the phone, uploaded safely even after a lost signal or a lost reply, approved in the review queue before a buyer can see it | Built (`build-1004`) |
 | Review queue (confirm, reword or hide a warning before a buyer can see it), buyer links (create, cancel, expire) and the buyer's read-only page, with automated cross-buyer leak tests | Built (`build-1003`) |
-| Typed and voice notes | **Not built** |
+| A reason (one tap from a fixed list) and a few typed words, in Tamil or English, on a daily update; a merchandiser reviews them, adding the English meaning of Tamil text. Notes are internal and never shown to buyers | Built (`build-1005`) |
+| Voice notes, automatic translation, and automatic reason suggestions | **Not built** (they need a speech and translation service agreement; until then a person does the translating) |
 
 **Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
 
@@ -138,11 +139,13 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `POST /api/warnings/:id/confirm`, `.../dismiss` | merchandiser | Confirm a warning for buyers (optionally rewording it), or hide it |
 | `GET/POST /api/buyer-links`, `POST /api/buyer-links/:id/revoke` | merchandiser | Make, list and cancel a buyer's private link |
 | `GET /api/buyer/orders` | buyer link | The buyer's own orders, planned dates and confirmed warnings. A link opens only this |
+| `GET /api/reasons` | signed in | The fixed list of reasons for a slow stage |
+| `POST /api/notes/:id/confirm` | merchandiser | Review a note: add the English meaning of a Tamil note and settle the reason |
 | `POST /api/photos` | supervisor | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). Checked to be a real JPEG, 1 KB to 3 MB |
 | `GET /api/photos/:id/file`, `POST /api/photos/:id/approve`, `.../reject` | merchandiser | View, approve or withdraw a photo |
 | `GET /api/buyer/photos/:id` | buyer link | An approved photo of the buyer's own |
 | `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
-| `POST /api/events`, `POST /api/events/batch` | supervisor | Send daily counts; the batch form serves the offline queue |
+| `POST /api/events`, `POST /api/events/batch` | supervisor | Send daily counts, optionally with a photo and a note (a reason and/or words); the batch form serves the offline queue |
 
 ## Security model
 - **Row-level security, forced, on every table.** The API connects as a role that owns nothing. Each request runs in one transaction that begins by stating who is asking, using transaction-local settings that cannot leak between pooled requests. With nothing set, every policy denies: the schema fails closed.
@@ -210,11 +213,11 @@ git push origin main --tags
 | **Dependabot** | Weekly | Proposes npm and GitHub Actions updates |
 
 ## Roadmap
-1. **Supervisor app, remaining:** a typed or voice note on an update, Tamil wording for the whole screen, and trying it on real low-end phones. (The daily update, offline queue and photos are built.)
+1. **Supervisor app, remaining:** Tamil wording for the whole screen (reviewed by supervisors), voice notes, and trying it on real low-end phones. (The daily update, offline queue, photos and typed notes are built.)
 2. **Order screens, remaining:** a TNA template editor (templates are seeded for now), and setting an order's stages by hand.
-3. **Review gate, remaining:** notes in the queue. (Warnings and photos are done.)
+3. **Review gate:** done for warnings, photos and notes.
 4. **Buyer view, remaining:** a real-Postgres run of the isolation tests, and a way to withdraw an approved photo from the screen (the API already can).
-5. **Notes:** typed and voice notes in Tamil, translated and categorised, always with the original kept and low-confidence items sent to review.
+5. **Notes, remaining:** voice notes, and automatic translation and reason suggestions with low-confidence ones sent to review. The original is always kept beside any translation.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 
 ## Licence

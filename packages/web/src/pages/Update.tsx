@@ -5,7 +5,8 @@ import { shortDate } from '../board/boardLogic'
 import { istDate, parsePieces, remainingPieces } from '../dates'
 import { useLang } from '../i18n'
 import { useQueue } from '../queue/instance'
-import { useStages } from '../stages/useStages'
+import { useReasons, useStages } from '../stages/useStages'
+import { MAX_NOTE, noteToSend, reasonLabel } from '../notes/reasons'
 import { AppBar } from '../ui/AppBar'
 import { Loading } from '../ui/Loading'
 import { SyncChip } from '../ui/SyncChip'
@@ -16,17 +17,20 @@ import { SyncChip } from '../ui/SyncChip'
  * the chip says when the server has it.
  */
 export default function Update() {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const { orderId = '', stage: stageParam = '' } = useParams()
   const stageName = decodeURIComponent(stageParam)
   const { queue, state } = useQueue()
   const st = useStages(queue?.idb ?? null, state?.lastSyncedAt ?? 0)
+  const reasons = useReasons(queue?.idb ?? null)
   const [raw, setRaw] = useState('')
   const [confirming, setConfirming] = useState(false)
-  const [saved, setSaved] = useState<{ qty: number; at: number; photo: boolean } | null>(null)
+  const [saved, setSaved] = useState<{ qty: number; at: number; photo: boolean; note: boolean } | null>(null)
   const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
+  const [reason, setReason] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
@@ -46,9 +50,10 @@ export default function Update() {
   async function send() {
     if (qty === null || !queue || !stage) return
     if (overLeft && !confirming) { setConfirming(true); return }
-    await queue.ctl.enqueue({ orderId, stage: stageName, date, qty, ...(photo ? { photo: photo.blob } : {}) })
-    setSaved({ qty, at: Date.now(), photo: photo !== null })
-    setRaw(''); setConfirming(false); setPhoto(null)
+    const note = noteToSend(noteText, reason)
+    await queue.ctl.enqueue({ orderId, stage: stageName, date, qty, ...(photo ? { photo: photo.blob } : {}), ...(note ? { note } : {}) })
+    setSaved({ qty, at: Date.now(), photo: photo !== null, note: note !== undefined })
+    setRaw(''); setConfirming(false); setPhoto(null); setReason(null); setNoteText('')
     input.current?.focus()
   }
 
@@ -89,6 +94,18 @@ export default function Update() {
             </label>
             <p id="hint" className="sub">Enter the pieces made since your last update. They are added to today's total.</p>
 
+            <fieldset className="reasons">
+              <legend>{t('sup.reason')}</legend>
+              <div className="reasons__list" role="radiogroup" aria-label={t('sup.reason')}>
+                {reasons.map((r) => (
+                  <button key={r.id} type="button" role="radio" aria-checked={reason === r.id} className="reason"
+                    onClick={() => setReason(reason === r.id ? null : r.id)}>{reasonLabel(r, lang)}</button>
+                ))}
+              </div>
+            </fieldset>
+            <label className="field"><span>{t('sup.note')}</span>
+              <textarea className="input textarea" rows={2} maxLength={MAX_NOTE} value={noteText} onChange={(e) => setNoteText(e.target.value)} /></label>
+
             <div className="photobox">
               <input ref={fileInput} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={pick} aria-label="Take or choose a photo" tabIndex={-1} />
               {!photo && <button type="button" className="btn" disabled={preparing} onClick={() => fileInput.current?.click()}>{preparing ? 'Preparing…' : 'Add a photo'}</button>}
@@ -111,7 +128,7 @@ export default function Update() {
 
             {saved && (
               <p className="saved" role="status" aria-live="polite">
-                Saved {saved.qty} pieces{saved.photo ? ' with a photo' : ''}. {state && state.pending > 0 ? `${state.pending} ${t('sync.waiting')} to send.` : 'Sent.'}
+                Saved {saved.qty} pieces{saved.photo ? ' with a photo' : ''}{saved.note ? ' and a note' : ''}. {state && state.pending > 0 ? `${state.pending} ${t('sync.waiting')} to send.` : 'Sent.'}
               </p>
             )}
           </form>

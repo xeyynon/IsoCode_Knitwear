@@ -4,10 +4,12 @@ import { ApiError, apiFetch } from '../api/session'
 import { buyerLinkUrl, linkStatus, parseDays } from '../review/reviewLogic'
 import { AppBar } from '../ui/AppBar'
 import { Loading } from '../ui/Loading'
+import { reasonById, type Reason } from '../notes/reasons'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
+interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null }
 interface PendingPhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string; bytes: number }
 interface LinkRow { id: string; buyerId: string; buyerName: string; label: string | null; expiresAt: string; revoked: boolean; expired: boolean }
 interface Options { buyers: { id: string; name: string }[] }
@@ -15,7 +17,9 @@ interface Options { buyers: { id: string; name: string }[] }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function Review() {
-  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[] } | null>(null)
+  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; notes: PendingNote[]; reasons: Reason[] } | null>(null)
+  const [meaning, setMeaning] = useState<Record<string, string>>({})
+  const [noteReason, setNoteReason] = useState<Record<string, string>>({})
   const [links, setLinks] = useState<LinkRow[]>([])
   const [buyers, setBuyers] = useState<Options['buyers']>([])
   const [error, setError] = useState<string | null>(null)
@@ -34,7 +38,7 @@ export default function Review() {
   const load = useCallback(async () => {
     try {
       const [r, l] = await Promise.all([
-        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[] }>('/api/review'),
+        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; notes: PendingNote[]; reasons: Reason[] }>('/api/review'),
         apiFetch<{ links: LinkRow[] }>('/api/buyer-links'),
       ])
       setData(r); setLinks(l.links); setError(null)
@@ -53,6 +57,19 @@ export default function Review() {
       setAnnounce(action === 'confirm' ? `Confirmed. ${item.po} ${item.stage} is now visible to ${item.buyerName}.` : `Dismissed. ${item.buyerName} will not see it.`)
       await load()
       pendingHeading.current?.focus()      // the card that had focus is gone: put focus somewhere sensible
+    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    setBusy(null)
+  }
+
+  async function reviewNote(n: PendingNote) {
+    setBusy(n.id); setActionError(null)
+    try {
+      await apiFetch(`/api/notes/${n.id}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ ...(n.language === 'ta' && meaning[n.id]?.trim() ? { textEn: meaning[n.id] } : {}), ...(noteReason[n.id] ? { category: noteReason[n.id] } : {}) }),
+      })
+      setAnnounce(`Reviewed the note on ${n.po}.`)
+      await load(); pendingHeading.current?.focus()
     } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
     setBusy(null)
   }
@@ -121,6 +138,33 @@ export default function Review() {
                 </li>
               ))}
             </ul>
+
+            <h2>Notes from the floor ({data.notes.length})</h2>
+            <p className="sub">What supervisors wrote about why a stage is slow. These are only for you: buyers never see notes. Add the English meaning of a Tamil note and check the reason.</p>
+            {data.notes.length === 0 ? <p className="sub">No notes are waiting.</p> : (
+              <ul className="plain stagelist">
+                {data.notes.map((n) => {
+                  const chosen = noteReason[n.id] ?? n.category ?? ''
+                  return (
+                    <li key={n.id} className="stagecard">
+                      <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {n.takenOn}</span></div>
+                      {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
+                      {n.language === 'ta' && (
+                        <label className="field"><span>What it means, in English</span>
+                          <textarea className="input textarea" rows={2} maxLength={500} value={meaning[n.id] ?? ''} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></label>
+                      )}
+                      <label className="field"><span>Reason{n.category && !noteReason[n.id] ? ' (chosen by the supervisor)' : ''}</span>
+                        <select className="input" value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
+                          <option value="">No reason chosen</option>
+                          {data.reasons.map((r) => <option key={r.id} value={r.id}>{r.en}</option>)}
+                          {n.category && !data.reasons.some((r) => r.id === n.category) && <option value={n.category}>{reasonById(data.reasons, n.category)?.en}</option>}
+                        </select></label>
+                      <div className="actions"><button className="btn btn--primary" disabled={busy === n.id} onClick={() => void reviewNote(n)}>Mark as reviewed</button></div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
 
             <h2>Photos waiting for approval ({data.photos.length})</h2>
             {data.photos.length === 0 ? <p className="sub">No photos are waiting. A photo a supervisor sends with an update appears here first; a buyer cannot see it until you approve it.</p> : (
