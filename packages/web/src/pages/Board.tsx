@@ -7,6 +7,7 @@ import {
   SHIP_WEEKS, sortRows, SORTS, STATUSES, unitsOf, weekRange, withFilter, withQuery, withSort, type BoardRow, type ShipWeek, type Sort,
 } from '../board/boardLogic'
 import { istDate } from '../dates'
+import { pieces } from '../numberFormat'
 import { orderLink } from '../orders/orderDetailLogic'
 import { lowConfidenceText } from '../orders/visitEntry'
 import { useLang } from '../i18n'
@@ -281,7 +282,7 @@ export default function Board() {
                       </td>
                       <td role="cell" data-label="Buyer">{r.buyerName}</td>
                       <td role="cell" data-label="Ship" className="mono">{shortDate(r.exFactory)}</td>
-                      <td role="cell" data-label="Gap" className="mono">{r.shortBy && r.shortBy > 0 ? `${r.shortBy.toLocaleString('en-IN')} ${t('board.shortBy')}` : '–'}</td>
+                      <td role="cell" data-label="Gap" className="mono">{r.shortBy && r.shortBy > 0 ? `${pieces(r.shortBy)} ${t('board.shortBy')}` : '–'}</td>
                     </tr>
                   ))}
                 </tbody>

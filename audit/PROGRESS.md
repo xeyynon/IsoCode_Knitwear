@@ -233,3 +233,11 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 - **3.10 History cards:** the 4 px left accent stripe on the date-change history cards is gone; a guard fails on any left border outside the timeline's own line and shapes.
 - Tests: `merchandiserPolish.test.ts` (9). The stripe guard was **broken on purpose** (stripe put back: 2 failed; restored). **Measured in Edge** as above. Web tests 643 passed; typecheck clean.
 - **Not checked:** the history card with a real entry (the demo has none); the status page on a phone.
+
+## 3.5 One number rule, dates read back in words (8 Nov 2026, InBul13)
+
+- **Numbers (audit 02 finding 5):** one formatter, `pieces()` in `numberFormat.ts` (Indian grouping from four digits: 1,750; 4,550; 1,25,000; a dash for a value that is not a number, never "NaN"). Every screen now uses it, the supervisor's Today and Update included ("1,750 / 4,550", "left 2,800"); the places that grouped by hand (Board, Buyer, Order detail, New order, the visit-entry sentence) call it too, and a test fails if any of those files groups a number by itself again.
+- **Dates (finding 6):** a new atom `ui/atoms/DateWords` reads the date under every date field in words ("Thursday, 12 Nov 2026"): New order, Change date, the visit entry form and the Setup days tab. A half-typed or impossible date (31 Feb) draws nothing, so nothing wrong is read back. It is hidden from screen readers on purpose: the field already announces its own value and the words would be glued to the label.
+- Tests: `numberFormat.test.ts` (5), `dateWords.test.tsx` (8). Both written first and seen failing (the wiring checks were red until the screens were changed). Web tests 658 passed; typecheck clean.
+- **Measured** in Edge at 390 px with touch emulation: nothing drawn for an empty field; "Thursday, 12 Nov 2026" in the muted ink (316 px wide, no horizontal overflow).
+- **Not checked:** the Tamil supervisor screens with the grouped numbers on a real phone (Latin digits with Indian grouping are used on purpose, as the board already did; supervisors should say if they would rather see Tamil digits); a screen reader on the date fields.

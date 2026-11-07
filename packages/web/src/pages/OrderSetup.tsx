@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate } from '../board/boardLogic'
+import { pieces } from '../numberFormat'
+import { DateWords } from '../ui/atoms/DateWords'
 import { isRealDate, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
@@ -138,7 +140,7 @@ export default function OrderSetup() {
               </div>
               <div className="sizes__foot">
                 <button type="button" className="btn btn--small" onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>Add a size</button>
-                <span className="mono" aria-live="polite">Total <b>{sizes.total > 0 ? sizes.total.toLocaleString('en-IN') : '–'}</b>{sizes.total > 0 ? ' pieces' : ''}</span>
+                <span className="mono" aria-live="polite">Total <b>{sizes.total > 0 ? pieces(sizes.total) : '–'}</b>{sizes.total > 0 ? ' pieces' : ''}</span>
               </div>
               {err('sizes')}
             </section>
@@ -147,7 +149,7 @@ export default function OrderSetup() {
               <h2>Dates</h2>
               <div className="grid2">
                 <label className="field"><span>Ex-factory date</span>
-                  <input className="input" type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} />{err('exFactory')}</label>
+                  <input className="input" type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} /><DateWords iso={form.exFactory} />{err('exFactory')}</label>
                 <label className="field"><span>TNA template</span>
                   <select className="input" value={form.templateId} onChange={(e) => set('templateId', e.target.value)} aria-invalid={showErrors && !!errors.templateId}>
                     <option value="">Choose a template</option>

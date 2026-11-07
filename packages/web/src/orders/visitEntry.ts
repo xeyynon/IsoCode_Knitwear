@@ -1,6 +1,7 @@
 // A merchandiser enters a stage on a visit (a subcontractor has no one to send a daily count).
 // What the form checks and the words around it, without React, so it can be tested.
 import { shortDate } from '../board/boardLogic'
+import { pieces } from '../numberFormat'
 import { notWholeNumber, parsePieces } from '../dates'
 import { noteToSend } from '../notes/reasons'
 import { isRealDate } from './orderForm'
@@ -48,4 +49,4 @@ export function checkVisitEntry(
 
 /** What to say once the server has the entry. */
 export const visitEntryDone = (stage: string, qty: number, date: string): string =>
-  `Added ${qty.toLocaleString('en-IN')} piece${qty === 1 ? '' : 's'} to ${cap(stage)} for ${shortDate(date)}. It is marked as entered by a merchandiser.`
+  `Added ${pieces(qty)} piece${qty === 1 ? '' : 's'} to ${cap(stage)} for ${shortDate(date)}. It is marked as entered by a merchandiser.`

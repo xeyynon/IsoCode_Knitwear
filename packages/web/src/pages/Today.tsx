@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { istDate } from '../dates'
+import { pieces } from '../numberFormat'
 import { dayMonth, serverWords, stageLabel, useLang, type Key } from '../i18n'
 import { useQueue } from '../queue/instance'
 import { readStorageFacts, storageWarningKey } from '../queue/storageStatus'
@@ -58,7 +59,7 @@ export default function Today() {
             <ul className="plain">
               {state.rejected.map((r) => (
                 <li key={r.clientUuid}>
-                  <span><b className="mono">{r.qty}</b> {t('today.refusedLine', { date: dayMonth(lang, r.date), reason: serverWords(lang, r.reason, 'sync.refusedGeneric') })}</span>
+                  <span><b className="mono">{pieces(r.qty)}</b> {t('today.refusedLine', { date: dayMonth(lang, r.date), reason: serverWords(lang, r.reason, 'sync.refusedGeneric') })}</span>
                   <button className="link" onClick={() => { removed.current = true; void queue.ctl.discard(r.clientUuid) }}>{t('common.remove')}</button>
                 </li>
               ))}
@@ -71,7 +72,7 @@ export default function Today() {
             <h2>{t('sync.photoNotAccepted')}</h2>
             <ul className="plain">
               {queue.ctl.droppedPhotos().map((d) => (
-                <li key={d.clientUuid}><span><b className="mono">{d.qty}</b> {t('today.droppedLine', { stage: stageLabel(lang, d.stage), date: dayMonth(lang, d.date), note: serverWords(lang, d.note, 'sync.photoGeneric') })}</span></li>
+                <li key={d.clientUuid}><span><b className="mono">{pieces(d.qty)}</b> {t('today.droppedLine', { stage: stageLabel(lang, d.stage), date: dayMonth(lang, d.date), note: serverWords(lang, d.note, 'sync.photoGeneric') })}</span></li>
               ))}
             </ul>
             <button className="link" onClick={() => queue.ctl.clearDroppedPhotos()}>{t('common.ok')}</button>
@@ -104,8 +105,8 @@ export default function Today() {
                 </div>
                 <div className="stage__name">{stageLabel(lang, s.stage)}</div>
                 <div className="stage__nums mono">
-                  <span>{t('today.today')} <b>{n.today}</b></span>
-                  <span>{t('today.done')} <b>{n.total}</b> / {s.qty}</span>
+                  <span>{t('today.today')} <b>{pieces(n.today)}</b></span>
+                  <span>{t('today.done')} <b>{pieces(n.total)}</b> / {pieces(s.qty)}</span>
                   <span>{t('today.due')} <b>{dayMonth(lang, s.plannedEnd)}</b></span>
                 </div>
                 <Link className="btn btn--primary btn--block stage__go" to={stageHref(s.orderId, s.stage)}>{t('today.update')}</Link>

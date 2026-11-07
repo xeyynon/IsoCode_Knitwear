@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
+import { DateWords } from '../ui/atoms/DateWords'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate } from '../board/boardLogic'
 import { isRealDate } from '../orders/orderForm'
@@ -60,7 +61,7 @@ export function DaysTab() {
 
       <form className="card change" onSubmit={save} noValidate>
         <div className="grid3">
-          <label className="field"><span>Date</span><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <label className="field"><span>Date</span><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /><DateWords iso={date} /></label>
           <label className="field"><span>That day is</span>
             <select className="input" value={working ? 'yes' : 'no'} onChange={(e) => setWorking(e.target.value === 'yes')}>
               <option value="no">Closed</option><option value="yes">Worked (an extra day)</option></select></label>

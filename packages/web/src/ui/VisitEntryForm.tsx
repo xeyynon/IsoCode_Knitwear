@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
+import { DateWords } from './atoms/DateWords'
 import { checkVisitEntry, visitEntryDone, type VisitEntryForm as Fields } from '../orders/visitEntry'
 import { MAX_NOTE } from '../notes/reasons'
 import { setUnsentInput } from './unsentInput'
@@ -70,7 +71,7 @@ export function VisitEntryForm({ orderId, stages, today, onAdded }: { orderId: s
               {stages.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
             </select></label>
           <label className="field"><span>Date of the count</span>
-            <input ref={date} className="input" type="date" max={today} value={f.date} aria-invalid={bad('date')} aria-describedby={bad('date') ? `${uid}-err` : undefined} onChange={(e) => set({ date: e.target.value })} /></label>
+            <input ref={date} className="input" type="date" max={today} value={f.date} aria-invalid={bad('date')} aria-describedby={bad('date') ? `${uid}-err` : undefined} onChange={(e) => set({ date: e.target.value })} /><DateWords iso={f.date} /></label>
           <label className="field"><span>Pieces made that day</span>
             <input ref={pieces} className="input mono" inputMode="numeric" autoComplete="off" value={f.pieces} aria-invalid={bad('pieces')} aria-describedby={bad('pieces') ? `${uid}-err` : undefined} onChange={(e) => set({ pieces: e.target.value })} /></label>
           <label className="field"><span>Note (optional)</span>

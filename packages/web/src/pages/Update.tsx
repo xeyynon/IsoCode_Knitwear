@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PhotoError, resizeToJpeg, sizeText } from '../photo/resize'
 import { Link, useParams } from 'react-router-dom'
 import { istDate, notWholeNumber, parsePieces, remainingPieces } from '../dates'
+import { pieces } from '../numberFormat'
 import { dayMonth, savedText, serverWords, stageLabel, useLang, type Key } from '../i18n'
 import { useQueue } from '../queue/instance'
 import { oneAtATime } from '../queue/oneAtATime'
@@ -139,8 +140,8 @@ function UpdateStage() {
             <h1 className="mono">{stage.po}</h1>
             <p className="sub">{stage.style} · {stage.colour} · {t('update.due', { date: dayMonth(lang, stage.plannedEnd) })}</p>
             <p className="update__nums mono">
-              <span>{t('update.todaySoFar')} <b>{todayTotal}</b></span>
-              <span>{t('update.left')} <b>{left}</b></span>
+              <span>{t('update.todaySoFar')} <b>{pieces(todayTotal)}</b></span>
+              <span>{t('update.left')} <b>{pieces(left)}</b></span>
             </p>
 
             <label className="field">

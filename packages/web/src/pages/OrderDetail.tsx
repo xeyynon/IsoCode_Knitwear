@@ -8,6 +8,8 @@ import type { CalendarUnit } from '../orders/timelineLayout'
 import { isRealDate, slipText } from '../orders/orderForm'
 import { LOW_CONFIDENCE } from '../orders/visitEntry'
 import { istDate } from '../dates'
+import { pieces } from '../numberFormat'
+import { DateWords } from '../ui/atoms/DateWords'
 import { reasonById, usableReasons, type Reason } from '../notes/reasons'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
@@ -94,10 +96,10 @@ export default function OrderDetail() {
               </div>
               <p className="sub">{d.order.buyerName} · {d.order.style} · {d.order.colour}</p>
               <p className="summary__nums mono">
-                <span>Quantity <b>{d.order.qty.toLocaleString('en-IN')}</b></span>
+                <span>Quantity <b>{pieces(d.order.qty)}</b></span>
                 <span>Ex-factory <b>{shortDate(d.order.exFactory)}</b></span>
               </p>
-              <p className="sub mono">{Object.entries(d.order.sizes).map(([s, q]) => `${s} ${q.toLocaleString('en-IN')}`).join(' · ')}</p>
+              <p className="sub mono">{Object.entries(d.order.sizes).map(([s, q]) => `${s} ${pieces(q)}`).join(' · ')}</p>
               {d.history[0] && (
                 <p className="sub">Last date change: {when(d.history[0].at)} by {d.history[0].by ?? 'a person not recorded'}. <a className="link" href="#history">See the history</a></p>
               )}
@@ -116,8 +118,8 @@ export default function OrderDetail() {
                     <div className="stagecard__top">
                       <b>{cap(s.stage)}</b><span className="sub">{s.unitName}</span><StatusBadge status={s.status} />
                     </div>
-                    <div className="bar" role="img" aria-label={`${s.produced} of ${s.qty} pieces made`}><span style={{ width: `${pct}%` }} /></div>
-                    <p className="mono sub">{s.produced.toLocaleString('en-IN')} of {s.qty.toLocaleString('en-IN')} pieces</p>
+                    <div className="bar" role="img" aria-label={`${pieces(s.produced)} of ${pieces(s.qty)} pieces made`}><span style={{ width: `${pct}%` }} /></div>
+                    <p className="mono sub">{pieces(s.produced)} of {pieces(s.qty)} pieces</p>
                     <dl className="dates">
                       <div><dt>Plan</dt><dd className="mono">{shortDate(s.plannedEnd)}</dd></div>
                       <div><dt>Projected</dt><dd className="mono">{s.complete ? 'Done' : s.projectedEnd ? shortDate(s.projectedEnd) : 'Not enough data'}{!s.complete && slip ? <span className="sub"> ({slip})</span> : null}</dd></div>
@@ -139,7 +141,7 @@ export default function OrderDetail() {
                 <summary><b>Change the ex-factory date</b></summary>
                 <form onSubmit={change} noValidate className="change">
                   <label className="field"><span>New ex-factory date</span>
-                    <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+                    <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /><DateWords iso={date} /></label>
                   <label className="field"><span>Reason (kept in the history)</span>
                     <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></label>
                   {changeError && <p className="error" role="alert">{changeError}</p>}

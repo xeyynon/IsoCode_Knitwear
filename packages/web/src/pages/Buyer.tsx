@@ -3,6 +3,7 @@ import { downloadFile } from '../api/download'
 import { API_BASE } from '../api/session'
 import { shortDate } from '../board/boardLogic'
 import { istDate } from '../dates'
+import { pieces } from '../numberFormat'
 import { exportFileName } from '../review/exportLogic'
 import { readBuyerToken, severityWord, type Severity } from '../review/reviewLogic'
 import { AuthImage } from '../ui/AuthImage'
@@ -111,7 +112,7 @@ export default function Buyer() {
             {view.orders.map((o) => (
               <li key={orderKey(o)} className="stagecard">
                 <div className="stagecard__top"><h2 className="mono">{o.po}</h2><span className="sub">{o.style} · {o.colour}</span></div>
-                <p className="mono sub">{o.qty.toLocaleString('en-IN')} pieces · ships {shortDate(o.exFactory)}</p>
+                <p className="mono sub">{pieces(o.qty)} pieces · ships {shortDate(o.exFactory)}</p>
 
                 {o.warnings.length > 0 && (
                   <ul className="plain warns" aria-label="Notices from the factory">
