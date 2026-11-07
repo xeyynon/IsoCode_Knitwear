@@ -324,3 +324,19 @@ Pictures: `audit/redesign-supervisor/` (before-* and after-*, 390 px, touch emul
 - **Colour theme, from the Pantone reference the user gave** (https://www.pantone-colours.com/ is a swatch chart; Pantone Violet sampled from it as `#6E5BB1`): the action colour is Pantone Violet (5.53:1 with white), with a soft wash `--accent-soft #EEEBF7` for hero cards, a lavender-tinted page `#F6F5F9`, violet-grey borders `#8A85A0` and labels `#5A5670`. Status colours (red, amber, green, grey) are unchanged. Selected chips, review counts, reason pills and every progress fill now use the action colour instead of near-black. Contrast: `check_contrast` passes, with three new pairs (accent, ink and muted on the soft wash).
 - **Back button on Update** was a round ghost button with a typed arrow glyph, which looked out of place beside the square menu button. It is now the same shape as the menu button (8 px radius, same border) with a drawn arrow.
 - **Not checked:** a real phone in daylight (soft tints can wash out in glare: the borders and ink carry the layout, not the tints); Review, Buyer and Setup pages were only checked by the automated screens, not by eye.
+
+## 8D Colour-theme sweep of the screens not yet looked at (8 Nov 2026, branch ui2-theme-sweep)
+
+Looked at by eye, before and after, in Edge with a fake clock (pictures in `audit/theme-sweep/`, 58 of them): sign-in (supervisor in Tamil and English, merchandiser), the app menu (supervisor Tamil, merchandiser), Review (all sections), New order (empty and with every error showing), Setup Closed days, Templates, Alerts and Housekeeping, a delete dialog, the buyer's page (a real link, made and cancelled straight after, as `scripts/snapshots.ts` does) and a link that does not work, the status page (Tamil and English), the 404, and the "can't reach the server" screen, at 1280 px and at 390 px with touch emulation.
+
+**Result:** the InBul17 theme already held everywhere. No tinted card, notice, row or dialog was found, no literal colour or leftover indigo exists anywhere in `packages/web/src` (grep for hex, rgb and hsl: none outside the tokens), banners, notice boxes, dialogs, the photo viewer and the load-failed card are neutral white surfaces with neutral borders, and links, tabs, selected states and the focus ring all use the action colour.
+
+**One real clash found and fixed (frontendskill.md rule 10: red, amber and green mean order status only):** form errors were red. A field that did not pass its check had a red border, and the messages under it (and the red "could not sign in" kind of line) were red text. That is the status colour on something that is not a status, and it fought the violet theme. Now:
+- `.error` and `.field__error` are ink, semibold, with a drawn "!" mark in a ring before the words (so they still read in greyscale and are not colour alone; they were already `role="alert"` tied to their field);
+- an invalid field has a heavy ink border, the same look the supervisor's "asking" field already had.
+No new colour pair, so `check_contrast` is unchanged.
+
+**Guard:** `noStatusTints.test.ts` now reads EVERY stylesheet under `src` (it read five) and checks that a status colour is a fill, an edge or a text colour only on the badge pill and the status tiles' own icon and word; that a form error is ink with the "!" mark; and that the guard really reads the stylesheets it should. Written first: 5 of its 10 checks failed on the old CSS (red error text, the red invalid border, no mark), all pass now.
+
+**Not changed on purpose:** the small status badge pills stay tinted (as agreed); the status page's "Up" has no icon (it is system health, not order status; left as is); "Not sure" cases left to the people who own them: Setup People and the new Setup checklist (stream S).
+**Not checked:** the photo viewer (the demo has no photos), the "What's new" dialog (appears only after an update), a real phone in daylight, a screen reader.
