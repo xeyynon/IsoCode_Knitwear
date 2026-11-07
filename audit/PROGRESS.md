@@ -218,3 +218,18 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 **Measured now:** **50 of 50 screen-widths clean** (680 controls measured, 0 under the size, 0 overflow).
 **Proved it can fail:** with the touch token shrunk to 30 px the same run flagged **495 controls in 36 screen-widths** (only 14 of 50 clean), listing them by name; restored.
 **Not covered:** the buyer page with a real link; Setup's other sections; states (a dialog open, the Filters panel open, an error); Tamil on merchandiser screens; a mouse at the small widths.
+
+## Commits (8 Nov 2026)
+
+- **`cc30f72` `InBul11`: UI/UX 2.0 phase 0, foundation** (tokens and tap sizes, the component test harness, the measuring tools, the 1.0 and 2.0 picture sets, the audit documents). Checked on its own in an isolated checkout of HEAD plus only its files: typecheck clean, 189 web tests, contrast and docs checks pass. Tagged `InBul11` (the tool warned it expected InBul07: commits InBul07 to InBul10 exist without tags, an earlier gap).
+- **`dda2cd7` Build 1007: Supervisors keep Send in reach, and merchandisers get tabs and a phone-friendly board** (phases 1 and 3 so far, with `docs/builds/build-1007.md`, `CHANGELOG.md`, `build-info.json`). It also carries the UI work done between build 1006 and this session that was never committed, which lives in the same files and could not be separated. Tagged `build-1007`. Full suite 1431 tests, axe 48 screens, e2e 22 of 22 on this tree.
+- Left out on purpose: `scripts/zz_api.ts` and `scripts/zz_tmp_b15.ts` (scratch scripts from an earlier session). Nothing pushed.
+
+## 3.7 to 3.10 Small merchandiser fixes (8 Nov 2026, not yet committed: they batch into the next build)
+
+- **3.7 Review:** the two sections buyers can see are now "Photos visible to buyers now" and "Warnings visible to buyers now" (they were "Photos visible to buyers now" and "Visible to buyers now"); the summary chip's long name says what its number adds up ("Photos and warnings visible to buyers now").
+- **3.8 Status page:** "Checked 4 Nov, 10:00 am IST" (the day and the time zone, from `statusRules.ts`) instead of a bare clock time, and a "← Back to the app" link, so it is not a dead end.
+- **3.9 New order:** "Total –" until a size has a number, then "Total 250 pieces" (no placeholder zero).
+- **3.10 History cards:** the 4 px left accent stripe on the date-change history cards is gone; a guard fails on any left border outside the timeline's own line and shapes.
+- Tests: `merchandiserPolish.test.ts` (9). The stripe guard was **broken on purpose** (stripe put back: 2 failed; restored). **Measured in Edge** as above. Web tests 643 passed; typecheck clean.
+- **Not checked:** the history card with a real entry (the demo has none); the status page on a phone.

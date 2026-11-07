@@ -46,7 +46,7 @@ export function reviewSummary(c: ReviewCounts): SummaryItem[] {
     { key: 'warnings', label: 'Warnings', fullLabel: 'Warnings waiting for review', count: c.warnings, target: 'warnings' },
     { key: 'notes', label: 'Notes', fullLabel: 'Notes from the floor', count: c.notes, target: 'notes' },
     { key: 'photos', label: 'Photos', fullLabel: 'Photos waiting for approval', count: c.photos, target: 'photos' },
-    { key: 'visible', label: 'Visible', fullLabel: 'Visible to buyers now', count: c.approved + c.confirmed, target: visibleTarget },
+    { key: 'visible', label: 'Visible', fullLabel: 'Photos and warnings visible to buyers now', count: c.approved + c.confirmed, target: visibleTarget },
     { key: 'links', label: 'Links', fullLabel: 'Buyer links that work', count: c.activeLinks, target: 'links' },
   ]
 }

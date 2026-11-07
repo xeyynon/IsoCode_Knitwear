@@ -138,7 +138,7 @@ export default function OrderSetup() {
               </div>
               <div className="sizes__foot">
                 <button type="button" className="btn btn--small" onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>Add a size</button>
-                <span className="mono" aria-live="polite">Total <b>{sizes.total.toLocaleString('en-IN')}</b> pieces</span>
+                <span className="mono" aria-live="polite">Total <b>{sizes.total > 0 ? sizes.total.toLocaleString('en-IN') : '–'}</b>{sizes.total > 0 ? ' pieces' : ''}</span>
               </div>
               {err('sizes')}
             </section>

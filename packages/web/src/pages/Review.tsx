@@ -276,7 +276,7 @@ export default function Review() {
             </section>
 
             <section className={sec(data.confirmed.length)} aria-labelledby={sectionAnchor('confirmed')}>
-              <h2 id={sectionAnchor('confirmed')} tabIndex={-1} ref={confirmedHeading}>{sectionTitle('Visible to buyers now', data.confirmed.length)}</h2>
+              <h2 id={sectionAnchor('confirmed')} tabIndex={-1} ref={confirmedHeading}>{sectionTitle('Warnings visible to buyers now', data.confirmed.length)}</h2>
               {data.confirmed.length === 0 ? <p className="sub">{emptyLine('confirmed')}</p> : (
                 <ul className="plain stagelist">
                   {data.confirmed.map((w) => (
