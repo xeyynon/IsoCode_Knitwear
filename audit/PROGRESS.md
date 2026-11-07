@@ -250,3 +250,21 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 - **Measured** in Edge at 390 px with touch emulation and at 1280 px: no horizontal overflow; at 390 px the three tiles sit in one row (the summary card is about 120 px shorter than with the old inline numbers and the first version of the tiles, which wrapped to two rows).
 - **Not checked:** an order with several stages or with sizes listed (the demo order has one stage and no sizes line); Tamil does not apply (merchandiser screen); a screen reader.
 - **Fix to 3.8 found by `npm run ux` on this slice:** the status page's "← Back to the app" was a bare text link, 22 px high (under the 48 px touch size at every phone width). It is now a button (`btn`); the audit reads 50 of 50 screen-widths clean, 0 controls under the tap size.
+
+## 4.2 and 4.5 Measured load times, a first-paint shell, a skeleton for Today (8 Nov 2026, InBul15)
+
+**Measured first** (`npm run load`, new: builds the app, starts a demo API and the preview, drives Edge at 390 px with touch emulation). **This is emulation**: Chrome's network throttle (Slow 3G 500 kbit/s and 400 ms; Fast 3G 1.6 Mbit/s and 150 ms) and a 4x slower processor on this computer. It is not a 2 GB phone on a real network. The preview server sends no compression, so the bytes below are larger than a compressed host would send.
+
+| | Slow 3G | Fast 3G |
+| --- | --- | --- |
+| First visit, sign-in screen: first paint / first content / button usable | 1.1 s / 3.3 s / 3.4 s | 0.5 s / 1.5 s / 1.7 s |
+| Downloaded on that first visit | 342 KB | 355 KB |
+| Sign-in tap to the list of stages | 2.0 s | 0.9 s |
+| A later visit (app stored by the service worker): first content / list | 0.55 s / 1.5 s | 0.54 s / 1.1 s |
+
+- **Reading:** the first visit on a slow connection is a bare page for over 3 s (the 1 s bar in the plan is passed), and the list after sign-in takes 2 s. A later visit is fine, so nothing was done for it.
+- **4.5 First-paint shell** (`index.html`): a ring in the page colour, inside the app's root, with no words (nothing to translate). It is on screen from the moment the page arrives, so the first 3 s of Slow 3G are no longer an empty page (checked with a screenshot at 1.8 s: ring, page colour). The app clears it on mount (`#boot` is gone after the app starts: checked). The ring stands still under reduced motion. Its colours are written out in `index.html` because no stylesheet has loaded yet, and `bootShell.test.ts` keeps them equal to the tokens (the guard was broken on purpose: one digit changed, it failed; restored).
+- **4.2 Skeleton** (new atom `ui/atoms/Skeleton`): only on Today's list after sign-in (2.0 s measured). Three stage-shaped grey cards replace the spinner, held back 180 ms like the spinner so a fast load never flashes; the region carries the existing "Loading your orders" words in Tamil or English; still under reduced motion; neutral grey from the tokens. Photographed on Slow 3G with the list held back.
+- **Not given a skeleton:** the board and other screens (not measured over 1 s yet: only the supervisor's first sign-in was timed), a later visit (about 1 s, with real data already stored).
+- Tests: `bootShell.test.ts` (5), `skeleton.test.tsx` (4); written first (4 and 1 red). Web tests 677 passed; typecheck clean.
+- **Not checked:** a real low-end phone on a real network; a compressed host (the real number is smaller); the merchandiser's screens (their loading was not timed).

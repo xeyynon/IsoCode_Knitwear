@@ -172,6 +172,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 
 .stages { display: grid; gap: 12px; }
 .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.stage--skeleton { display: grid; gap: var(--space-3); border-color: var(--border-soft); }
 .stage__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .stage__po { font-size: 20px; }
 .stage__name { text-transform: capitalize; font-size: 18px; margin: 4px 0 8px; }

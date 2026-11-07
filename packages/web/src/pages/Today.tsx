@@ -10,7 +10,7 @@ import { dayProgress } from '../stages/dayProgress'
 import { stagesErrorText, useStages, type Stage } from '../stages/useStages'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
-import { Loading } from '../ui/Loading'
+import { Skeleton } from '../ui/atoms/Skeleton'
 import { SyncChip } from '../ui/SyncChip'
 
 export default function Today() {
@@ -82,7 +82,20 @@ export default function Today() {
         {st.source === 'saved' && st.savedAt && (
           <p className="notice" role="status">{t('today.savedList', { date: dayMonth(lang, istDate(new Date(st.savedAt))), time: new Date(st.savedAt).toLocaleTimeString() })}</p>
         )}
-        {st.stages === null && !st.error && <Loading label={t('today.loading')} />}
+        {st.stages === null && !st.error && (
+          <div className="skeletons" role="status" aria-label={t('today.loading')}>
+            <ul className="stages plain" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="stage stage--skeleton">
+                  <Skeleton width="45%" height={22} />
+                  <Skeleton width="30%" height={20} />
+                  <Skeleton width="70%" height={20} />
+                  <Skeleton height={56} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {st.stages === null && st.error && (
           <LoadFailed unreachable={st.error.unreachable} message={stagesErrorText(st.error, lang)} onRetry={() => void st.reload()} workSafe />
         )}

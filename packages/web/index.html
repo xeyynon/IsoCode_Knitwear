@@ -12,9 +12,20 @@
     <meta name="theme-color" content="#F7F7F5" />
     <link rel="icon" href="data:," />
     <title>Order tracking</title>
+    <!-- First-paint shell (UI/UX plan, slice 4.5). Measured on an emulated Slow 3G with a 4x slower processor the first content came after
+         3.3 s; this fills the wait with the page colour and a ring, so the screen does not look broken. No words, so nothing to translate.
+         The colours are the design tokens' --page, --border and --accent, written out because no stylesheet has loaded yet
+         (test/bootShell.test.ts keeps them equal). The app clears #boot when it mounts. -->
+    <style>
+      html { background: #F7F7F5; }
+      .boot { display: grid; place-items: center; min-height: 100vh; }
+      .boot__ring { width: 32px; height: 32px; border-radius: 50%; border: 4px solid #8C959F; border-top-color: #3346A8; animation: boot-spin 900ms linear infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot__ring { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="boot" class="boot" aria-hidden="true"><span class="boot__ring"></span></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
