@@ -1,6 +1,6 @@
 # Plan of action: UI/UX improvement with Atomic Design, 2026-11-08 (v2, reviewed)
 
-Status: **in progress (8 Nov 2026). Decisions D1 to D4 taken; D5 decided. Done: 0.1 to 0.7, phase 1 in full (1.0 to 1.10), 3.1, 3.2 and 3.3, and the keyboard test on a real Android phone** (see `audit/PROGRESS.md`). Phase 0 is complete (0.8 and 0.9 done: the per-screen touch and width audit, and the picture diff that makes phase 2 safe). Next: 3.4 to 3.10, then phase 2. Draft Tamil to review: `audit/TAMIL-REVIEW.md`. Not committed. Start a new session with `audit/NEXT-SESSION.md`.
+Status: **in progress (8 Nov 2026). Decisions D1 to D4 taken; D5 decided. Done: 0.1 to 0.9, phase 1 in full (1.0 to 1.10), phase 3 except 3.4 (3.1 to 3.3, 3.5 to 3.10), and the keyboard test on a real Android phone** (see `audit/PROGRESS.md`). Phase 0 is complete (0.8 and 0.9 done: the per-screen touch and width audit, and the picture diff that makes phase 2 safe). Next: 3.4 to 3.10, then phase 2. Draft Tamil to review: `audit/TAMIL-REVIEW.md`. Not committed. Start a new session with `audit/NEXT-SESSION.md`.
 Inputs: `audit/AUDIT-01-supervisor-phone.md`, `audit/AUDIT-02-merchandiser-and-public.md`, `audit/DESIGN-DIRECTION.md`, `md/production_visibility_uiux_research_and_design_strategy.md` (section 8), `frontendskill.md` (hard rules section 2; shipping section 10), and the code.
 v2 folds in an independent review of v1 and checks of its claims against the code (section 9).
 
