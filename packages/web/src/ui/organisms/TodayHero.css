@@ -1,8 +1,8 @@
-/* TodayHero (ui/organisms/TodayHero.tsx): an ink card, white text, tokens only. */
-.todayhero { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-l); background: var(--ink); color: var(--on-ink); margin-bottom: var(--space-4); }
+/* TodayHero (ui/organisms/TodayHero.tsx): a white card with a border, ink text, tokens only. */
+.todayhero { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-l); background: var(--surface); border: 1px solid var(--border); color: var(--ink); margin-bottom: var(--space-4); }
 .todayhero__main { display: flex; align-items: center; gap: var(--space-4); }
-.todayhero .ring { color: var(--on-ink); }
-.todayhero .ring__track { stroke: var(--muted); }
+.todayhero .ring { color: var(--ink); }
+.todayhero .ring__track { stroke: var(--border-soft); }
 .todayhero__n { font-size: 1.875rem; font-weight: 700; }
 .todayhero__of { font-size: 0.9375rem; }
 .todayhero__text { min-width: 0; }
