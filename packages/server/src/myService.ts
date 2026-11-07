@@ -32,7 +32,7 @@ export async function getMyStages(tx: Tx, ctx: Ctx, today: string): Promise<MySt
             coalesce((select sum(e.qty) from update_event e where e.order_id = m.order_id and e.stage = m.stage), 0)::int as produced,
             coalesce((select sum(e.qty) from update_event e where e.order_id = m.order_id and e.stage = m.stage and e.date = $1), 0)::int as today_qty
        from milestone m join orders o on o.id = m.order_id
-      order by m.planned_end, o.po, m.sequence`, [today])
+      order by m.planned_end, o.po, m.sequence, o.id, m.stage, m.id`, [today])
   return rows.map((r) => ({
     orderId: r.order_id, po: r.po, style: r.style, colour: r.colour, stage: r.stage, sequence: r.sequence,
     qty: r.qty, plannedEnd: r.planned_end, produced: r.produced, todayQty: r.today_qty,

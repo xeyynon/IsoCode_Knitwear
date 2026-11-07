@@ -1,6 +1,6 @@
-import { backSchedule, type TemplateStep, type UnitCalendar } from '@isocode/engine'
+import { backSchedule, isWorking, type Schedule, type TemplateStep, type UnitCalendar } from '@isocode/engine'
 import { workingDaysBack } from '@isocode/engine/dates'
-import { badRequest, forbidden, notFound, AppError } from './errors.js'
+import { badRequest, forbidden, notFound, orDuplicate, AppError } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { isIsoDate } from './today.js'
 
@@ -16,6 +16,12 @@ export interface NewOrder {
   templateId: string
 }
 
+/** Limits on the sizes of one order. Generous for a real order (a knitwear PO has a handful of sizes), small enough that nothing absurd is stored. */
+export const MAX_SIZES = 30
+export const MAX_SIZE_NAME_CHARS = 20
+export const MAX_QTY_PER_SIZE = 100_000
+export const MAX_ORDER_QTY = 1_000_000
+
 export interface CreatedOrder {
   orderId: string
   qty: number
@@ -30,6 +36,23 @@ const text = (v: unknown, name: string): string => {
   return v.trim().slice(0, 200)
 }
 
+/** Check the sizes of an order and return their total. Every message says which limit was passed. */
+export function checkSizes(sizes: unknown): number {
+  if (typeof sizes !== 'object' || sizes === null || Array.isArray(sizes) || !Object.keys(sizes).length) throw badRequest('Enter the quantity for at least one size')
+  const entries = Object.entries(sizes as Record<string, unknown>)
+  if (entries.length > MAX_SIZES) throw badRequest(`An order can have at most ${MAX_SIZES} sizes`)
+  let total = 0
+  for (const [size, q] of entries) {
+    if (!size.trim()) throw badRequest('A size has no name')
+    if (size.length > MAX_SIZE_NAME_CHARS) throw badRequest(`A size name can be at most ${MAX_SIZE_NAME_CHARS} characters`)
+    if (/[\u0000-\u001F\u007F]/.test(size)) throw badRequest('A size name has a character that is not allowed')
+    if (!Number.isInteger(q) || (q as number) < 0 || (q as number) > MAX_QTY_PER_SIZE) throw badRequest(`Size ${size.slice(0, 20)}: quantity must be a whole number from 0 to ${MAX_QTY_PER_SIZE}`)
+    total += q as number
+  }
+  if (total > MAX_ORDER_QTY) throw badRequest(`The order quantity can be at most ${MAX_ORDER_QTY} pieces`)
+  return total
+}
+
 async function calendarsFor(tx: Tx, unitIds: string[]): Promise<Record<string, UnitCalendar>> {
   const out: Record<string, UnitCalendar> = {}
   if (!unitIds.length) return out
@@ -39,12 +62,50 @@ async function calendarsFor(tx: Tx, unitIds: string[]): Promise<Record<string, U
   return out
 }
 
-/** The stages of a TNA template, as the engine wants them. */
-export async function loadTemplateSteps(tx: Tx, templateId: string): Promise<TemplateStep[]> {
-  const tpl = (await tx.query<{ offsets: unknown }>('select offsets from tna_template where id = $1', [templateId]))[0]
+/** A TNA template: its name and its stages, as the engine wants them. */
+export async function loadTemplate(tx: Tx, templateId: string): Promise<{ name: string; steps: TemplateStep[] }> {
+  const tpl = (await tx.query<{ name: string; offsets: unknown }>('select name, offsets from tna_template where id = $1', [templateId]))[0]
   if (!tpl) throw notFound('No such TNA template')
   const raw = Array.isArray(tpl.offsets) ? tpl.offsets as { stage: string; sequence: number; working_days_before: number; unit_id: string }[] : []
-  return raw.map((o) => ({ stage: o.stage, sequence: o.sequence, workingDaysBefore: o.working_days_before, unitId: o.unit_id }))
+  return { name: tpl.name, steps: raw.map((o) => ({ stage: o.stage, sequence: o.sequence, workingDaysBefore: o.working_days_before, unitId: o.unit_id })) }
+}
+export async function loadTemplateSteps(tx: Tx, templateId: string): Promise<TemplateStep[]> {
+  return (await loadTemplate(tx, templateId)).steps
+}
+
+/**
+ * The schedule an order would get, plus the plain reasons (if any) it cannot be created.
+ *
+ * DEC-023: a saved template can never be one order setup would refuse. Setup checks a template with NO closed days; the
+ * engine decides a template's faults from its offsets alone, and closed days only move dates (a later stage is held to
+ * the earlier stage's date). So the two checks agree whatever the units' calendars say, now and after closed days change.
+ * Should an engine change ever let a closed day refuse a template again, this says WHICH template, stage and closed day,
+ * rather than sending the person to fix offsets that are fine.
+ */
+async function planSchedule(tx: Tx, tpl: { name: string; steps: TemplateStep[] }, exFactory: string, today: string): Promise<{ schedule: Schedule; problems: string[]; namesTemplate: boolean }> {
+  const calendars = await calendarsFor(tx, [...new Set(tpl.steps.map((s) => s.unitId))])
+  const schedule = backSchedule(exFactory, tpl.steps, calendars, today)
+  if (!schedule.problems.length) return { schedule, problems: [], namesTemplate: false }
+  const own = backSchedule(exFactory, tpl.steps, {}, today).problems   // what Setup saw
+  if (own.length) return { schedule, problems: schedule.problems, namesTemplate: false }
+  const clash = await explainClosedDay(tx, tpl, calendars, exFactory)
+  return { schedule, problems: clash ? [clash] : schedule.problems, namesTemplate: !!clash }
+}
+
+async function explainClosedDay(tx: Tx, tpl: { name: string; steps: TemplateStep[] }, calendars: Record<string, UnitCalendar>, exFactory: string): Promise<string | null> {
+  const ordered = [...tpl.steps].sort((a, b) => a.sequence - b.sequence)
+  const ends = ordered.map((st) => workingDaysBack(calendars[st.unitId], exFactory, Math.max(0, st.workingDaysBefore)))
+  for (let i = 1; i < ordered.length; i++) {
+    if (ends[i]! >= ends[i - 1]!) continue
+    const cur = ordered[i]!
+    // The closed days of that unit that matter: set by hand, on a day the unit would otherwise work, between where the stage landed and ex-factory.
+    const closed = Object.entries(calendars[cur.unitId]?.days ?? {})
+      .filter(([date, working]) => !working && date >= ends[i]! && date <= exFactory && isWorking({}, date)).map(([date]) => date).sort().slice(0, 3)
+    if (!closed.length) continue
+    const unit = (await tx.query<{ name: string }>('select name from unit where id = $1', [cur.unitId]))[0]?.name ?? 'The unit'
+    return `Template "${tpl.name}": stage "${cur.stage}" would fall before "${ordered[i - 1]!.stage}" because ${unit} is closed on ${closed.join(', ')}. Change the template or that closed day.`
+  }
+  return null
 }
 
 export interface SchedulePreview {
@@ -60,18 +121,17 @@ export interface SchedulePreview {
  * dates (and say plainly that an order is already late, or that a template is broken) BEFORE
  * the merchandiser commits to it.
  */
-export async function previewSchedule(tx: Tx, ctx: Ctx, input: { templateId: string; exFactory: string }, today: string): Promise<SchedulePreview> {
+export async function previewSchedule(tx: Tx, ctx: Ctx, input: { templateId: string; exFactory: string; sizes?: unknown }, today: string): Promise<SchedulePreview> {
   if (!isStaff(ctx)) throw forbidden('Only merchandisers set up orders')
   if (!UUID.test(String(input.templateId))) throw badRequest('Choose a TNA template')
   if (!isIsoDate(input.exFactory)) throw badRequest('Ex-factory date must be a real date (YYYY-MM-DD)')
-  const steps = await loadTemplateSteps(tx, input.templateId)
-  const calendars = await calendarsFor(tx, [...new Set(steps.map((s) => s.unitId))])
-  const schedule = backSchedule(input.exFactory, steps, calendars, today)
+  if (input.sizes !== undefined) checkSizes(input.sizes)   // the preview ignores sizes, but refuses absurd ones if the form sends them
+  const { schedule, problems } = await planSchedule(tx, await loadTemplate(tx, input.templateId), input.exFactory, today)
   const units = await tx.query<{ id: string; name: string }>('select id::text as id, name from unit')
   const name = new Map(units.map((u) => [u.id, u.name]))
   return {
     milestones: schedule.milestones.map((m) => ({ ...m, unitName: name.get(m.unitId) ?? '' })),
-    problems: schedule.problems,
+    problems,
     alreadyDue: schedule.alreadyDue,
   }
 }
@@ -84,8 +144,8 @@ export interface OrderOptions {
 /** What the order form offers in its drop-downs. */
 export async function getOrderOptions(tx: Tx, ctx: Ctx): Promise<OrderOptions> {
   if (!isStaff(ctx)) throw forbidden('Only merchandisers set up orders')
-  const buyers = await tx.query<{ id: string; name: string; country: string | null }>('select id::text as id, name, country from buyer order by name')
-  const tpls = await tx.query<{ id: string; name: string; offsets: unknown }>('select id::text as id, name, offsets from tna_template order by name')
+  const buyers = await tx.query<{ id: string; name: string; country: string | null }>('select id::text as id, name, country from buyer order by name, id')
+  const tpls = await tx.query<{ id: string; name: string; offsets: unknown }>('select id::text as id, name, offsets from tna_template order by name, id')
   return {
     buyers,
     templates: tpls.map((t) => ({
@@ -99,35 +159,29 @@ export async function getOrderOptions(tx: Tx, ctx: Ctx): Promise<OrderOptions> {
 /** Create an order and back-schedule its milestones from the template. Merchandisers only. */
 export async function createOrder(tx: Tx, ctx: Ctx, input: NewOrder, today: string): Promise<CreatedOrder> {
   if (!isStaff(ctx)) throw forbidden('Only merchandisers set up orders')
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) throw badRequest('Send the order as a JSON object')
   const po = text(input.po, 'PO'), style = text(input.style, 'Style'), colour = text(input.colour, 'Colour')
   if (!UUID.test(String(input.buyerId))) throw badRequest('Choose a buyer')
   if (!UUID.test(String(input.templateId))) throw badRequest('Choose a TNA template')
   if (!isIsoDate(input.exFactory)) throw badRequest('Ex-factory date must be a real date (YYYY-MM-DD)')
 
   const sizes = input.sizes
-  if (typeof sizes !== 'object' || sizes === null || Array.isArray(sizes) || !Object.keys(sizes).length) throw badRequest('Enter the quantity for at least one size')
-  let total = 0
-  for (const [size, q] of Object.entries(sizes)) {
-    if (!size.trim()) throw badRequest('A size has no name')
-    if (!Number.isInteger(q) || q < 0) throw badRequest(`Size ${size}: quantity must be a whole number, 0 or more`)
-    total += q
-  }
+  const total = checkSizes(sizes)
   if (total <= 0) throw badRequest('The order quantity must be more than 0')
   if (input.qty !== undefined && input.qty !== total) throw badRequest(`Quantity ${input.qty} does not match the sizes, which add up to ${total}`)
 
   if (!(await tx.query('select 1 from buyer where id = $1', [input.buyerId])).length) throw notFound('No such buyer')
-  const steps = await loadTemplateSteps(tx, input.templateId)
+  const tpl = await loadTemplate(tx, input.templateId)
+  const steps = tpl.steps
+  const { schedule, problems, namesTemplate } = await planSchedule(tx, tpl, input.exFactory, today)
+  if (problems.length) throw badRequest(namesTemplate ? problems.join('; ') : `This template ("${tpl.name}") cannot be used: ${problems.join('; ')}`)
 
-  const calendars = await calendarsFor(tx, [...new Set(steps.map((s) => s.unitId))])
-  const schedule = backSchedule(input.exFactory, steps, calendars, today)
-  if (schedule.problems.length) throw badRequest(`This template cannot be used: ${schedule.problems.join('; ')}`)
-
-  if ((await tx.query('select 1 from orders where buyer_id = $1 and po = $2 and style = $3 and colour = $4', [input.buyerId, po, style, colour])).length) {
-    throw new AppError(409, 'duplicate_order', `PO ${po} (${style}, ${colour}) already exists for this buyer`)
-  }
-  const order = (await tx.query<{ id: string }>(
+  const duplicate = new AppError(409, 'duplicate_order', `PO ${po} (${style}, ${colour}) already exists for this buyer`)
+  if ((await tx.query('select 1 from orders where buyer_id = $1 and po = $2 and style = $3 and colour = $4', [input.buyerId, po, style, colour])).length) throw duplicate
+  // The check can lose a race with another request creating the same order; the table's unique rule then refuses the insert, with the same answer.
+  const order = (await orDuplicate(() => tx.query<{ id: string }>(
     `insert into orders (buyer_id, po, style, colour, sizes, qty, ex_factory) values ($1, $2, $3, $4, $5::jsonb, $6, $7) returning id::text as id`,
-    [input.buyerId, po, style, colour, JSON.stringify(sizes), total, input.exFactory]))[0]!
+    [input.buyerId, po, style, colour, JSON.stringify(sizes), total, input.exFactory]), duplicate))[0]!
 
   const offsetOf = new Map(steps.map((s) => [s.stage, s.workingDaysBefore]))
   for (const m of schedule.milestones) {
@@ -156,6 +210,8 @@ export async function changeExFactory(
 ): Promise<ExFactoryChange> {
   if (!isStaff(ctx)) throw forbidden('Only merchandisers change dates')
   if (typeof reason !== 'string' || !reason.trim()) throw badRequest('Give a reason for the change')
+  // Same cap as the form; written once per moved row into an append-only table.
+  if (reason.trim().length > 300) throw badRequest('Keep the reason to 300 characters')
   if (!isIsoDate(newDate)) throw badRequest('Ex-factory date must be a real date (YYYY-MM-DD)')
   if (!UUID.test(String(orderId)) || !UUID.test(String(userId))) throw badRequest('Invalid request')
 
@@ -165,7 +221,7 @@ export async function changeExFactory(
   if (order.ex_factory === newDate) throw badRequest('That is already the ex-factory date')
 
   const ms = await tx.query<{ id: string; stage: string; unit_id: string; planned_end: string; working_days_before: number | null }>(
-    `select id::text as id, stage, unit_id::text as unit_id, planned_end::text as planned_end, working_days_before from milestone where order_id = $1 order by sequence`, [orderId])
+    `select id::text as id, stage, unit_id::text as unit_id, planned_end::text as planned_end, working_days_before from milestone where order_id = $1 order by sequence, stage, id`, [orderId])
   const calendars = await calendarsFor(tx, [...new Set(ms.map((m) => m.unit_id))])
 
   const log = (entity: string, entityId: string, field: string, oldV: string, newV: string) =>
@@ -178,9 +234,12 @@ export async function changeExFactory(
 
   const moved: ExFactoryChange['milestones'] = []
   const leftAlone: string[] = []
+  let prevEnd: string | null = null // as in backSchedule: closed days never put a later stage before an earlier one
   for (const m of ms) {
     if (m.working_days_before === null) { leftAlone.push(m.stage); continue }
-    const next = workingDaysBack(calendars[m.unit_id], newDate, m.working_days_before)
+    let next = workingDaysBack(calendars[m.unit_id], newDate, m.working_days_before)
+    if (prevEnd !== null && next < prevEnd) next = prevEnd
+    prevEnd = next
     if (next === m.planned_end) continue
     await tx.query('update milestone set planned_end = $2 where id = $1', [m.id, next])
     await log('milestone', m.id, 'planned_end', m.planned_end, next)

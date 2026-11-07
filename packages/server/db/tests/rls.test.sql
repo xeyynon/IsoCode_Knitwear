@@ -1,4 +1,15 @@
--- Row-level security tests. Run after 001_init.sql, as the owner, by packages/server/test/rls.test.ts (npm test).
+-- Row-level security tests. Run them after ALL the migrations (the last check looks at every table), as a table owner
+-- that is NOT a superuser and is a member of app_user:
+--   * not a superuser, because a superuser bypasses even FORCE ROW LEVEL SECURITY, so every check would pass and prove nothing;
+--   * a member of app_user, because the checks act as that role (set local role app_user), which a plain owner may only do
+--     if it has been granted the role. Grant it after the migrations, as a superuser, because 001 is what creates app_user:
+--       create role rls_owner nosuperuser createrole login password '...';  create database rls_ci owner rls_owner;
+--       DATABASE_URL=postgres://rls_owner:...@host/rls_ci npm run migrate
+--       grant app_user to rls_owner;
+--       psql -v ON_ERROR_STOP=1 -d rls_ci -f packages/server/db/tests/rls.test.sql      (as rls_owner)
+-- The CI step "Row-level security SQL as a non-superuser owner" (.github/workflows/ci.yml) does exactly this on Postgres 16.
+-- packages/server/test/rls.test.ts runs the same file on PGlite, once as that kind of owner and once as PGlite's superuser
+-- (the second only shows the file itself is sound; it proves nothing about row-level security).
 -- Every check raises an exception on failure, so ON_ERROR_STOP makes the run fail.
 \set ON_ERROR_STOP on
 
@@ -31,6 +42,8 @@ insert into warning (order_id, buyer_id, stage, status, maths, confirmed_by) val
   ('00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000c1', 'sewing', 'red', '{}', '00000000-0000-0000-0000-0000000000ee');
 insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty) values
   (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', '2026-11-03', 350);
+insert into outbox (channel, recipient_kind, recipient, subject, body, order_id) values
+  ('email', 'buyer', 'Buyer B', 'Update on PO B-1', 'x', '00000000-0000-0000-0000-0000000000d1');
 commit;
 
 -- ------------------------------------------------ helper: assert a count under a given identity
@@ -58,6 +71,7 @@ select test_expect('buyer B cannot fetch C order by id', (select count(*) from o
 select test_expect('buyer B sees only own milestones', (select count(*) from milestone), 1);
 select test_expect('buyer B sees only approved photos', (select count(*) from photo), 1);
 select test_expect('buyer B sees only confirmed warnings', (select count(*) from warning), 1);
+select test_expect('buyer B sees no outbox rows, not even its own alerts', (select count(*) from outbox), 0);
 select test_expect('buyer B sees no update events', (select count(*) from update_event), 0);
 select test_expect('buyer B sees no notes', (select count(*) from note), 0);
 select test_expect('buyer B sees no date changes', (select count(*) from date_change), 0);
@@ -90,6 +104,7 @@ select test_expect('supervisor sees orders of own unit only', (select count(*) f
 select test_expect('supervisor sees own unit milestones only', (select count(*) from milestone), 1);
 select test_expect('supervisor sees no warnings', (select count(*) from warning), 0);
 select test_expect('supervisor sees no accounts', (select count(*) from account), 0);
+select test_expect('supervisor sees no outbox rows', (select count(*) from outbox), 0);
 insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty)
   values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', '2026-11-04', 360);
 select test_expect('supervisor can add an event for own unit', (select count(*) from update_event), 2);
@@ -108,6 +123,30 @@ do $$ begin
     raise notice 'ok   supervisor cannot write for another unit (%)', sqlerrm;
   end;
 end $$;
+
+-- a supervisor cannot mark their own count as entered on behalf; a merchandiser can, for any unit's stage
+do $$ begin
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty, on_behalf)
+      values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', '2026-11-04', 1, true);
+    raise exception 'FAIL supervisor wrote an event marked on behalf';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot mark a count as entered on behalf (%)', sqlerrm;
+  end;
+end $$;
+begin;
+set local role app_user;
+select set_config('app.role', 'merchandiser', true);
+insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty, on_behalf, entered_by)
+  values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000c1', 'sewing', '00000000-0000-0000-0000-00000000aa02', '2026-11-04', 7, true, '00000000-0000-0000-0000-0000000000ee');
+select test_expect('merchandiser can enter a count on behalf', (select count(*) from update_event where on_behalf), 1);
+select set_config('app.role', 'buyer', true), set_config('app.buyer_id', '00000000-0000-0000-0000-0000000000c1', true);
+select test_expect('buyer cannot see who entered a count', (select count(*) from update_event where on_behalf), 0);
+rollback;
 
 -- a retried send with the same client_uuid is rejected, never double-counted
 do $$ declare u uuid := gen_random_uuid(); begin
@@ -153,8 +192,12 @@ do $$ begin
 end $$;
 
 -- the trigger is a second layer: it holds for the table owner too, who has the privilege
+-- (FORCE RLS binds the owner, so it acts as 'system' to see and write the rows)
+begin;
+select set_config('app.role', 'system', true);
 insert into date_change (entity, entity_id, field, old, new, reason, user_id)
   values ('orders', '00000000-0000-0000-0000-0000000000d1', 'ex_factory', 'a', 'b', 'owner insert', '00000000-0000-0000-0000-0000000000ee');
+select test_expect('the owner sees the date change it is about to edit', (select count(*) from date_change where reason = 'owner insert'), 1);
 do $$ begin
   begin
     update date_change set reason = 'edited by owner';
@@ -170,6 +213,7 @@ do $$ begin
     if sqlerrm like 'FAIL%' then raise; end if;
   end;
 end $$;
+commit;
 
 -- ------------------------------------------------ sign-in role: reads and updates accounts, nothing else
 begin;
@@ -190,8 +234,12 @@ select set_config('app.role', 'auth', true);
 update orders set qty = 1;
 delete from calendar_day;
 commit;
+begin;
+select set_config('app.role', 'system', true);
+select test_expect('the owner sees every order', (select count(*) from orders), 2);
 select test_expect('orders untouched by the auth role', (select count(*) from orders where qty = 1), 0);
 select test_expect('the fixture event is still there', (select count(*) from update_event), 1);
+commit;
 
 -- ------------------------------------------------ staff sees everything
 begin;
@@ -199,6 +247,7 @@ set local role app_user;
 select set_config('app.role', 'merchandiser', true);
 select test_expect('merchandiser sees all orders', (select count(*) from orders), 2);
 select test_expect('merchandiser sees unapproved photos', (select count(*) from photo), 3);
+select test_expect('merchandiser sees the outbox', (select count(*) from outbox), 1);
 rollback;
 
 -- ------------------------------------------------ the app role owns nothing and cannot bypass

@@ -132,6 +132,7 @@ describe('a lost phone, a forgotten PIN, a leaver', () => {
   })
   it('a merchandiser cannot stop their own account, and the flag must be true or false', async () => {
     expect((await post(`/api/accounts/${ID.merch}/disabled`, { disabled: true })).statusCode).toBe(400)
+    expect((await post(`/api/accounts/${ID.merch.toUpperCase()}/disabled`, { disabled: true })).statusCode).toBe(400)   // the same id in capitals
     expect((await post(`/api/accounts/${ID.sup1}/disabled`, { disabled: 'yes' })).statusCode).toBe(400)
     expect((await get('/api/board')).statusCode).toBe(200)                                    // still signed in
   })
@@ -277,6 +278,22 @@ describe('photos: withdraw and clean up', () => {
     expect((await app.inject({ url: `/api/buyer/photos/${id}`, headers: bearer(t) })).statusCode).toBe(404)
   })
 
+  it('lists every photo a buyer can see, not just the newest few, so the oldest can still be withdrawn', async () => {
+    const s = await sup(), m = await merch()
+    const ids: string[] = []
+    for (let i = 0; i < 61; i++) {
+      const id = (await app.inject({
+        method: 'POST', url: '/api/photos',
+        headers: { ...s, 'content-type': 'image/jpeg', 'x-client-uuid': crypto.randomUUID(), 'x-order-id': ID.orderRed, 'x-stage': 'sewing', 'x-date': '2026-11-04' }, payload: jpeg(),
+      })).json().id as string
+      await post(`/api/photos/${id}/approve`, {}, m)
+      ids.push(id)
+    }
+    const approved = (await get('/api/review', m)).json().approvedPhotos
+    expect(approved).toHaveLength(61)
+    expect(approved.map((p: any) => p.id)).toContain(ids[0])                                  // the first approved is still reachable
+  })
+
   it('cleans the files of old rejected photos, keeps the rows, and is safe to repeat', async () => {
     const id = await upload()
     await post(`/api/photos/${id}/reject`)
@@ -288,6 +305,18 @@ describe('photos: withdraw and clean up', () => {
     expect((await pg.query<any>('select purged_at from photo where id = $1', [id])).rows[0].purged_at).not.toBeNull()
     expect((await post('/api/photos/purge', { days: 0 })).json().purged).toBe(0)
     expect((await get(`/api/photos/${id}/file`)).statusCode).toBe(404)
+  })
+  it('refuses to approve a cleaned photo, and never lists one to the buyer', async () => {
+    const id = await upload()
+    await post(`/api/photos/${id}/reject`)
+    expect((await post('/api/photos/purge', { days: 0 })).json().purged).toBe(1)
+    expect((await post(`/api/photos/${id}/approve`)).statusCode).toBe(404)
+    const t = await buyerLink()
+    const listed = () => app.inject({ url: '/api/buyer/orders', headers: bearer(t) }).then((r) => JSON.stringify(r.json()).includes(id))
+    expect(await listed()).toBe(false)
+    // Even if the row were somehow marked approved again, a cleaned photo stays out of the buyer's view.
+    await pg.query('update photo set approved_by = (select id from account limit 1), approved_at = now(), rejected_at = null where id = $1', [id])
+    expect(await listed()).toBe(false)
   })
   it('never cleans a photo that is waiting or approved', async () => {
     const waiting = await upload(); const approved = await upload()

@@ -3,6 +3,7 @@ import { formatDay, formatMaths, projectOrder } from '@isocode/engine'
 import { badRequest, forbidden, notFound, AppError } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { loadEngineData } from './engineData.js'
+import { MERCHANDISERS_LABEL, writeOutbox } from './outboxService.js'
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -18,19 +19,24 @@ export function buyerText(stage: string, status: 'amber' | 'red', plannedEnd: st
     : `${cap(stage)} needs attention to finish on time (planned for ${formatDay(plannedEnd)}).`
 }
 
+/** Mocked alert to the merchandisers: a stage has just turned red. Internal, so it may carry the sum. */
+const alertRed = (tx: Tx, orderId: string, po: string, stage: string, maths: string) =>
+  writeOutbox(tx, { channel: 'whatsapp', recipientKind: 'merchandiser', recipient: MERCHANDISERS_LABEL, subject: `PO ${po}: ${stage} is red`, body: `${cap(stage)} for PO ${po} has turned red. ${maths}`, orderId })
+
 export interface RefreshResult { created: number; updated: number; resolved: number }
 
 /**
  * Bring the warnings in line with what the engine says now. A warning exists for each stage that
  * is amber or red and due within the warning window. It is created UNCONFIRMED, so nothing
- * reaches a buyer until a merchandiser confirms it. If the colour changes the wording changes,
- * so it needs confirming again. When a stage recovers its warning is resolved.
+ * reaches a buyer until a merchandiser confirms it. If the colour or the planned date changes the
+ * wording changes, so it needs confirming again. When a stage recovers its warning is resolved.
  */
 export async function refreshWarnings(tx: Tx, ctx: Ctx, today: string): Promise<RefreshResult> {
   if (!isStaff(ctx)) throw forbidden()
   const { orders, stagesBy, eventsBy, calendars, settings } = await loadEngineData(tx)
-  const open = await tx.query<{ id: string; order_id: string; stage: string; status: 'amber' | 'red'; dismissed: boolean }>(
-    `select id::text as id, order_id::text as order_id, stage, status, dismissed_at is not null as dismissed
+  const open = await tx.query<{ id: string; order_id: string; stage: string; status: 'amber' | 'red'; dismissed: boolean; planned_end: string | null }>(
+    `select id::text as id, order_id::text as order_id, stage, status, dismissed_at is not null as dismissed,
+            maths->>'plannedEnd' as planned_end
        from warning where resolved_at is null`)
   const byKey = new Map(open.map((w) => [`${w.order_id}/${w.stage}`, w]))
   const wanted = new Set<string>()
@@ -53,15 +59,24 @@ export async function refreshWarnings(tx: Tx, ctx: Ctx, today: string): Promise<
       const text = buyerText(r.stage, status, st.milestone)
       const have = byKey.get(key)
       if (!have) {
-        await tx.query(
-          `insert into warning (order_id, buyer_id, stage, status, maths, buyer_text) values ($1, $2, $3, $4, $5::jsonb, $6)`,
+        // A refresh running at the same moment (another merchandiser, a batch sync) may have just raised it: keep theirs.
+        const made = await tx.query(
+          `insert into warning (order_id, buyer_id, stage, status, maths, buyer_text) values ($1, $2, $3, $4, $5::jsonb, $6)
+           on conflict (order_id, stage) where resolved_at is null do nothing returning id`,
           [o.id, o.buyerId, r.stage, status, maths, text])
-        out.created++
+        if (made.length) { out.created++; if (status === 'red') await alertRed(tx, o.id, o.po, r.stage, formatMaths(r, st.milestone)) }
       } else if (have.status !== status) {
         // The colour changed: new wording, and a human must look at it again. A dismissal does not carry over.
         await tx.query(
           `update warning set status = $2, maths = $3::jsonb, buyer_text = $4, confirmed_by = null, confirmed_at = null, dismissed_at = null where id = $1`,
           [have.id, status, maths, text])
+        out.updated++
+        if (status === 'red') await alertRed(tx, o.id, o.po, r.stage, formatMaths(r, st.milestone))
+      } else if (!have.dismissed && have.planned_end !== null && have.planned_end !== st.milestone) {
+        // Same colour, but the planned date the wording names has moved: new wording, and a human must look again.
+        await tx.query(
+          `update warning set maths = $2::jsonb, buyer_text = $3, confirmed_by = null, confirmed_at = null where id = $1`,
+          [have.id, maths, text])
         out.updated++
       } else if (!have.dismissed) {
         // Same colour: keep the (possibly reworded, possibly confirmed) text, refresh the figures behind it.
@@ -112,8 +127,13 @@ export async function listReview(tx: Tx, ctx: Ctx): Promise<{ needsReview: Revie
   return { needsReview: items.filter((i) => i.state === 'needs_review'), confirmed: items.filter((i) => i.state === 'confirmed') }
 }
 
-/** Approve a warning for buyers, optionally rewording it first. */
-export async function confirmWarning(tx: Tx, ctx: Ctx, userId: string, id: string, text?: string): Promise<void> {
+/**
+ * Approve a warning for buyers, optionally rewording it first. `seen` is the colour and wording the
+ * merchandiser had on screen: if a refresh changed either since, nothing is confirmed (409 'changed'),
+ * because a person must look at the new state before a buyer does.
+ */
+export async function confirmWarning(tx: Tx, ctx: Ctx, userId: string, id: string, text?: string,
+  seen?: { status?: unknown; text?: unknown }): Promise<void> {
   if (!isStaff(ctx)) throw forbidden()
   if (!UUID.test(String(id)) || !UUID.test(String(userId))) throw badRequest('Invalid request')
   let reworded: string | null = null
@@ -122,10 +142,22 @@ export async function confirmWarning(tx: Tx, ctx: Ctx, userId: string, id: strin
     if (text.trim().length > MAX_BUYER_TEXT) throw badRequest(`Keep the wording under ${MAX_BUYER_TEXT} characters`)
     reworded = text.trim()
   }
-  const done = await tx.query(
+  const seenStatus = seen?.status ?? null
+  const seenText = seen?.text ?? null
+  if ((seenStatus !== null && seenStatus !== 'amber' && seenStatus !== 'red') || (seenText !== null && typeof seenText !== 'string')) throw badRequest('Invalid request')
+  const done = await tx.query<{ id: string; order_id: string; buyer_text: string }>(
     `update warning set confirmed_by = $2, confirmed_at = now(), buyer_text = coalesce($3, buyer_text)
-      where id = $1 and resolved_at is null and dismissed_at is null returning id`, [id, userId, reworded])
-  if (!done.length) {
+      where id = $1 and resolved_at is null and dismissed_at is null
+        and ($4::text is null or status = $4) and ($5::text is null or buyer_text = $5) returning id, order_id::text as order_id, buyer_text`,
+    [id, userId, reworded, seenStatus, seenText])
+  if (done.length) {
+    // Mocked alert to the buyer's contact, in this same transaction. Only the confirmed wording: never the figures behind it.
+    const o = (await tx.query<{ po: string; buyer_name: string }>(
+      'select o.po, b.name as buyer_name from orders o join buyer b on b.id = o.buyer_id where o.id = $1', [done[0]!.order_id]))[0]
+    if (o) await writeOutbox(tx, { channel: 'email', recipientKind: 'buyer', recipient: o.buyer_name, subject: `Update on PO ${o.po}`, body: done[0]!.buyer_text, orderId: done[0]!.order_id })
+  } else {
+    const open = await tx.query('select 1 from warning where id = $1 and resolved_at is null and dismissed_at is null', [id])
+    if (open.length) throw new AppError(409, 'changed', 'This warning changed since you opened it. Check the colour and wording again.')
     const exists = await tx.query('select 1 from warning where id = $1', [id])
     throw exists.length ? new AppError(409, 'not_open', 'This warning is no longer open') : notFound('No such warning')
   }

@@ -2,8 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
+import pgDriver from 'pg'
 import { hashSecret } from '../src/auth.js'
 import { CONTEXT_SQL, contextParams, type Db } from '../src/db.js'
+import { pgDb } from '../src/pgDb.js'
 
 const DB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'db')
 
@@ -30,21 +32,198 @@ export function statements(sql: string): string[] {
 export const sqlFile = (...parts: string[]): string =>
   fs.readFileSync(path.join(DB_DIR, ...parts), 'utf8').split('\n').filter((l) => !l.startsWith('\\')).join('\n')
 
-export async function runSql(pg: PGlite, sql: string): Promise<void> {
+export async function runSql(pg: { exec(sql: string): Promise<unknown> }, sql: string): Promise<void> {
   for (const stmt of statements(sql)) {
     try { await pg.exec(stmt) } catch (e) { throw new Error(`${(e as Error).message}\n  in: ${stmt.split('\n')[0]!.slice(0, 100)}`) }
   }
 }
 
-/** An empty database with every migration applied. PGlite is a superuser, so fixtures bypass RLS. */
+// ------------------------------------------------------------------ which database the tests run on
+//
+// Default: PGlite (Postgres in WebAssembly), in process, nothing to install.
+// TEST_DATABASE_URL set: a REAL Postgres server. Point it at a SUPERUSER connection string for a
+// disposable server, for example  postgres://postgres:postgres@localhost:5432/postgres . Every
+// migratedDb() then creates its own uniquely named database on that server (isotest_...), applies the
+// migrations with the same runSql the PGlite path uses, and drops the database again on close(). The
+// app's Db is the production driver (pgDb.ts over a pg.Pool) connected AS app_user, exactly as
+// DATABASE_URL does in production, so no `set local role` is needed there. Run it with `npm run test:pg`.
+// The cluster-wide role app_user is created (its password reset) on that server: never point this at
+// a server you care about.
+
+export const TEST_DATABASE_URL_ENV = 'TEST_DATABASE_URL'
+
+export type Backend = { kind: 'pglite' } | { kind: 'postgres'; url: string }
+
+/** A connection string with the password hidden, safe to put in an error message. */
+function redact(raw: string): string {
+  try { const u = new URL(raw); if (u.password) u.password = '***'; return u.toString() } catch { return raw.replace(/:[^:@/]*@/, ':***@') }
+}
+
+/** Pure: which database do the tests use? Unset or blank means PGlite. A bad URL is an error, never a silent fallback. */
+export function selectBackend(env: Record<string, string | undefined> = process.env): Backend {
+  const raw = env[TEST_DATABASE_URL_ENV]?.trim()
+  if (!raw) return { kind: 'pglite' }
+  let u: URL
+  try { u = new URL(raw) } catch {
+    throw new Error(`${TEST_DATABASE_URL_ENV} is set but is not a connection string (${redact(raw)}). Expected postgres://user:password@host:5432/database for a superuser on an empty, disposable server; unset it to use PGlite.`)
+  }
+  if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:') {
+    throw new Error(`${TEST_DATABASE_URL_ENV} must start with postgres:// or postgresql:// (got ${u.protocol}//). Unset it to use PGlite.`)
+  }
+  if (!u.hostname && !u.searchParams.get('host')) {
+    throw new Error(`${TEST_DATABASE_URL_ENV} has no host (${redact(raw)}). Expected postgres://user:password@host:5432/database.`)
+  }
+  return { kind: 'postgres', url: raw }
+}
+
+/** The server URL the real-Postgres tests need; throws the clear error when the switch is off. */
+export function requireRealUrl(): string {
+  const b = selectBackend()
+  if (b.kind !== 'postgres') throw new Error(`${TEST_DATABASE_URL_ENV} is not set: these tests need a real Postgres 16 (see npm run test:pg).`)
+  return b.url
+}
+
+export const usingRealPostgres = (): boolean => selectBackend().kind === 'postgres'
+
+const APP_USER_PASSWORD = 'app_user_test_only'
+const OWNER_PASSWORD = 'owner_role_test_only'
+const ROLE_LOCK = 727_001   // serialises the cluster-wide role setup across test files running in parallel
+
+/** The result shapes the tests read from PGlite: int8 as a number, a date as a Date at UTC midnight. */
+const pgliteLikeTypes = {
+  getTypeParser(oid: number, format?: 'text' | 'binary') {
+    if (oid === 20) return (s: string) => { const n = BigInt(s); return n < BigInt(Number.MIN_SAFE_INTEGER) || n > BigInt(Number.MAX_SAFE_INTEGER) ? n : Number(n) }
+    if (oid === 1082) return (s: string) => new Date(`${s}T00:00:00Z`)
+    return pgDriver.types.getTypeParser(oid as never, format as never)
+  },
+}
+
+/**
+ * The slice of PGlite's API the tests use (query, exec, transaction, close), over ONE session on a real
+ * server, so `begin; ...; commit;` sent as separate statements stays in one transaction like on PGlite.
+ * Tests are typed against PGlite; migratedDb() hands this object out through that type.
+ * `appPool` is the production path: a pool logged in as app_user, driven by pgDb.ts.
+ */
+export class RealPg {
+  private appDb: Db | undefined
+  constructor(
+    readonly databaseName: string,
+    readonly serverVersionNum: number,
+    private readonly session: pgDriver.Client,
+    readonly appPool: pgDriver.Pool,
+    private readonly teardown: () => Promise<void>,
+  ) {}
+
+  async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[]; affectedRows: number }> {
+    const r = await this.session.query(sql, params)
+    return { rows: r.rows as T[], affectedRows: r.rowCount ?? 0 }
+  }
+  /** Simple protocol: several statements in one string run as one implicit transaction, as on PGlite. */
+  async exec(sql: string): Promise<void> { await this.session.query(sql) }
+  async transaction<T>(fn: (t: { query: RealPg['query'] }) => Promise<T>): Promise<T> {
+    await this.session.query('begin')
+    try { const out = await fn({ query: (s, p) => this.query(s, p) }); await this.session.query('commit'); return out }
+    catch (e) { await this.session.query('rollback').catch(() => undefined); throw e }
+  }
+  /** The production Db (pgDb over app_user's pool), made once so its pool error listener is added once. */
+  db(): Db { return (this.appDb ??= pgDb(this.appPool)) }
+  async close(): Promise<void> { await this.teardown() }
+}
+
+const withDatabase = (raw: string, database: string, user?: string, password?: string): string => {
+  const u = new URL(raw)
+  u.pathname = `/${database}`
+  if (user) { u.username = user; u.password = password ?? '' }
+  return u.toString()
+}
+
+let counter = 0
+
+/**
+ * A fresh, empty, uniquely named database on the server in TEST_DATABASE_URL (not migrated yet).
+ * `asOwner`: the session is a plain table owner (not a superuser, so FORCE RLS binds it), as on
+ * managed Postgres; the default session is the superuser, like PGlite.
+ */
+export async function createRealPg(url: string, opts: { asOwner?: boolean } = {}): Promise<RealPg> {
+  const admin = new pgDriver.Client({ connectionString: url })
+  admin.on('error', () => undefined)
+  try { await admin.connect() } catch (e) {
+    throw new Error(`${TEST_DATABASE_URL_ENV} is set but the server did not accept the connection (${redact(url)}): ${(e as Error).message}`)
+  }
+  const suffix = `${process.pid}_${Date.now().toString(36)}_${(counter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  const name = `isotest_${suffix}`
+  const ownerRole = `isoowner_${suffix}`
+  const opened: Array<{ end(): Promise<void> }> = []
+  try {
+    const { rows: [who] } = await admin.query<{ super: boolean; v: string }>(
+      `select rolsuper as super, current_setting('server_version_num') as v from pg_roles where rolname = current_user`)
+    if (!who?.super) throw new Error(`${TEST_DATABASE_URL_ENV} must connect as a superuser: the tests create databases and roles (${redact(url)}).`)
+    await admin.query('select pg_advisory_lock($1)', [ROLE_LOCK])
+    try {
+      await admin.query(`do $$ begin if not exists (select from pg_roles where rolname = 'app_user') then create role app_user nologin; end if; end $$`)
+      await admin.query(`alter role app_user login password '${APP_USER_PASSWORD}'`)
+      if (opts.asOwner) {
+        await admin.query(`create role ${ownerRole} nosuperuser createrole login password '${OWNER_PASSWORD}'`)
+        await admin.query(`grant app_user to ${ownerRole}`)
+      }
+    } finally { await admin.query('select pg_advisory_unlock($1)', [ROLE_LOCK]) }
+    await admin.query(`create database ${name}${opts.asOwner ? ` owner ${ownerRole}` : ''}`)
+
+    const session = new pgDriver.Client({
+      connectionString: opts.asOwner ? withDatabase(url, name, ownerRole, OWNER_PASSWORD) : withDatabase(url, name),
+      types: pgliteLikeTypes as never,
+    })
+    session.on('error', () => undefined)
+    await session.connect()
+    opened.push({ end: () => session.end() })
+    const appPool = new pgDriver.Pool({ connectionString: withDatabase(url, name, 'app_user', APP_USER_PASSWORD), max: 4 })
+    opened.push({ end: () => appPool.end() })
+
+    const teardown = async () => {
+      await appPool.end().catch(() => undefined)
+      await session.end().catch(() => undefined)
+      try {
+        await admin.query(`drop database if exists ${name} with (force)`)
+        if (opts.asOwner) await admin.query(`drop role if exists ${ownerRole}`)
+      } finally { await admin.end().catch(() => undefined) }
+    }
+    return new RealPg(name, Number(who.v), session, appPool, teardown)
+  } catch (e) {
+    for (const o of opened) await o.end().catch(() => undefined)
+    await admin.query(`drop database if exists ${name} with (force)`).catch(() => undefined)
+    if (opts.asOwner) await admin.query(`drop role if exists ${ownerRole}`).catch(() => undefined)
+    await admin.end().catch(() => undefined)
+    throw e
+  }
+}
+
+const migrationFiles = (): string[] => fs.readdirSync(path.join(DB_DIR, 'migrations')).sort()
+
+/** A real-Postgres database with every migration applied, optionally as a non-superuser owner. */
+export async function migratedRealDb(opts: { asOwner?: boolean } = {}): Promise<RealPg> {
+  const real = await createRealPg(requireRealUrl(), opts)
+  try { for (const f of migrationFiles()) await runSql(real, sqlFile('migrations', f)) }
+  catch (e) { await real.close().catch(() => undefined); throw e }
+  return real
+}
+
+/**
+ * An empty database with every migration applied. PGlite is a superuser, so fixtures bypass RLS.
+ * With TEST_DATABASE_URL set it is a fresh database on that real server instead (see above).
+ */
 export async function migratedDb(): Promise<PGlite> {
+  if (usingRealPostgres()) return (await migratedRealDb()) as unknown as PGlite
   const pg = new PGlite()
-  for (const f of fs.readdirSync(path.join(DB_DIR, 'migrations')).sort()) await runSql(pg, sqlFile('migrations', f))
+  for (const f of migrationFiles()) await runSql(pg, sqlFile('migrations', f))
   return pg
 }
 
-/** The app's Db interface over PGlite. Each call acts as the non-owner app_user, like production. */
+/**
+ * The app's Db interface. Each call acts as the non-owner app_user, like production: on PGlite by
+ * `set local role app_user`, on a real server through the production pgDb driver logged in as app_user.
+ */
 export function pgliteDb(pg: PGlite): Db {
+  if ((pg as unknown) instanceof RealPg) return (pg as unknown as RealPg).db()
   return {
     tx: (ctx, fn) =>
       pg.transaction(async (t) => {

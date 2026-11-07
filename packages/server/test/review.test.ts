@@ -34,6 +34,30 @@ describe('raising warnings', () => {
     await review(); await review(); await review()
     expect(await rows()).toHaveLength(1)
   })
+  it('two refreshes at the same moment do not collide (one unresolved warning per stage)', async () => {
+    // PGlite has one connection, so emulate real Postgres: refresh A reads no open warnings, then a
+    // concurrent refresh B commits the same stage's warning, then A carries on and inserts.
+    let raced = false
+    const racy: Db = {
+      tx: (ctx, fn) => db.tx(ctx, (tx) => fn({
+        query: async (sql, params) => {
+          if (!raced && ctx.role === 'system' && /from warning where resolved_at is null/.test(sql)) {
+            raced = true
+            const seen = await tx.query(sql, params)
+            await tx.query(`insert into warning (order_id, buyer_id, stage, status, maths, buyer_text) values ($1, $2, 'sewing', 'red', '{}'::jsonb, 'B wrote this')`, [ID.orderRed, ID.buyerB])
+            return seen as never
+          }
+          return tx.query(sql, params)
+        },
+      })),
+    }
+    app = buildApp({ db: racy, tokenSecret: 'x'.repeat(40), clock: () => NOW })
+    const res = await app.inject({ url: '/api/review', headers: await merch() })
+    expect(raced).toBe(true)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().needsReview).toHaveLength(1)
+    expect(await rows()).toHaveLength(1)
+  })
   it('raises none for a stage due beyond the warning window, or for green and grey orders', async () => {
     await pg.query(`update milestone set planned_end = '2026-12-30' where order_id = $1`, [ID.orderRed])
     expect((await review()).needsReview).toEqual([])
@@ -145,6 +169,58 @@ describe('confirming and dismissing', () => {
     expect(w.confirmed_by).toBeNull()
     expect(w.buyer_text).toMatch(/at risk of finishing late/)
     expect((await review()).needsReview).toHaveLength(1)
+  })
+  it('when the planned date behind a confirmed warning moves, the wording names the new date and a person must look again', async () => {
+    const id = await firstId()
+    await act(`/api/warnings/${id}/confirm`)
+    await pg.query(`update milestone set planned_end = '2026-11-12' where order_id = $1 and stage = 'sewing'`, [ID.orderRed])
+    const r = await review()
+    const w = (await rows())[0]
+    expect(w.status).toBe('red')                                                // same colour...
+    expect(w.confirmed_by).toBeNull()                                           // ...but the date moved
+    expect(w.buyer_text).toBe('Sewing is at risk of finishing late (planned for 12 Nov).')
+    expect(r.needsReview.map((x: any) => x.id)).toEqual([id])
+    expect(r.confirmed).toEqual([])
+  })
+  it('a Confirm click on a screen that is out of date is refused: the colour or wording changed since it was shown', async () => {
+    const shown = (await review()).needsReview[0]
+    const amberText = buyerText('sewing', 'amber', '2026-11-11')
+    await pg.query(`update warning set status = 'amber', buyer_text = $2 where id = $1`, [shown.id, amberText])   // the screen showed it amber...
+    await review()                                                              // ...then a refresh turns it red behind the merchandiser's back
+    const res = await act(`/api/warnings/${shown.id}/confirm`, { text: 'Sewing needs a little attention.', seenStatus: 'amber', seenText: amberText })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe('changed')
+    const w = (await rows())[0]
+    expect(w.confirmed_by).toBeNull()                                           // nothing reaches the buyer
+    expect(w.buyer_text).toMatch(/at risk of finishing late/)
+    // same colour, but the wording was regenerated since it was shown
+    expect((await act(`/api/warnings/${shown.id}/confirm`, { seenStatus: 'red', seenText: 'Older wording' })).statusCode).toBe(409)
+    // what is shown now is what gets confirmed
+    expect((await act(`/api/warnings/${shown.id}/confirm`, { seenStatus: 'red', seenText: w.buyer_text })).statusCode).toBe(200)
+  })
+  it('a buyer never reads a confirmed warning the engine no longer backs, even if nobody opened Review since', async () => {
+    const id = await firstId()
+    await act(`/api/warnings/${id}/confirm`)
+    const token = (await act('/api/buyer-links', { buyerId: ID.buyerB })).json().token
+    const buyerWarnings = async () => (await app.inject({ url: '/api/buyer/orders', headers: { authorization: `Bearer ${token}` } })).json()
+      .orders.find((o: any) => o.po === 'B-PO-88240').warnings
+    expect(await buyerWarnings()).toHaveLength(1)
+    // a single supervisor update lifts the stage out of risk...
+    await app.inject({ method: 'POST', url: '/api/events', headers: await sup(),
+      payload: { clientUuid: crypto.randomUUID(), orderId: ID.orderRed, stage: 'sewing', date: '2026-11-04', qty: 2000 } })
+    expect((await rows())[0].resolved_at).not.toBeNull()                       // ...and that resolves it at once
+    expect(await buyerWarnings()).toEqual([])
+  })
+  it('a buyer never reads a confirmed warning after the ex-factory date moves the stage well out', async () => {
+    await pg.query(`update milestone set working_days_before = 8 where order_id = $1 and stage = 'sewing'`, [ID.orderRed])   // scheduled from the template
+    const id = await firstId()
+    await act(`/api/warnings/${id}/confirm`)
+    const token = (await act('/api/buyer-links', { buyerId: ID.buyerB })).json().token
+    const moved = await act(`/api/orders/${ID.orderRed}/ex-factory`, { exFactory: '2026-12-24', reason: 'Buyer moved the ship date' })
+    expect(moved.statusCode).toBe(200)
+    const o = (await app.inject({ url: '/api/buyer/orders', headers: { authorization: `Bearer ${token}` } })).json().orders.find((x: any) => x.po === 'B-PO-88240')
+    expect(o.milestones.find((m: any) => m.stage === 'sewing').plannedEnd).toBe('2026-12-15')
+    expect(o.warnings).toEqual([])
   })
   it('a supervisor cannot confirm or dismiss', async () => {
     const id = await firstId()

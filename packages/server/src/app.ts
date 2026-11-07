@@ -3,7 +3,7 @@ import { verifyToken, type TokenClaims } from './auth.js'
 import { login, type LoginInput } from './authService.js'
 import { getBoard } from './boardService.js'
 import type { Ctx, Db } from './db.js'
-import { AppError, badRequest } from './errors.js'
+import { AppError, badRequest, clientFault, duplicateFault } from './errors.js'
 import { submitEvent, type EventInput } from './eventService.js'
 import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type NewOrder } from './orderService.js'
 import { getOrderDetail } from './orderDetailService.js'
@@ -16,8 +16,11 @@ import {
 import { confirmNote, listPendingNotes, loadReasons } from './noteService.js'
 import { approvePhoto, getBuyerPhotoBytes, listApprovedPhotos, purgeRejectedPhotos, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
 import type { MediaStore } from './mediaStore.js'
-import { createBuyerLink, getBuyerView, listBuyerLinks, resolveBuyerToken, revokeBuyerLink } from './buyerService.js'
-import { istDate } from './today.js'
+import { createBuyerLink, getBuyerView, getBuyerViewFor, listBuyerLinks, resolveBuyerToken, revokeBuyerLink, type BuyerView } from './buyerService.js'
+import { buyerExportCsv, exportFileName } from './buyerExport.js'
+import { listOutbox } from './outboxService.js'
+import { listAudit } from './auditService.js'
+import { isStageName, istDate } from './today.js'
 
 export interface AppOptions {
   db: Db
@@ -35,6 +38,8 @@ export interface AppOptions {
 
 declare module 'fastify' {
   interface FastifyRequest { claims?: TokenClaims; ctx?: Ctx; buyerId?: string }
+  /** Every route registered, so a test can sweep them all and a new route is covered without anyone remembering to add it. */
+  interface FastifyInstance { routeList: { method: string; url: string }[] }
 }
 
 const PUBLIC = new Set(['GET /api/health', 'GET /api/status', 'POST /api/auth/login'])
@@ -50,6 +55,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   const clock = opts.clock ?? (() => new Date())
   const origins = new Set(opts.allowedOrigins ?? [])
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: opts.trustProxy ?? false })
+  const routeList: { method: string; url: string }[] = []
+  app.decorate('routeList', routeList)
+  app.addHook('onRoute', (r) => { for (const m of [r.method].flat()) if (m !== 'HEAD' && m !== 'OPTIONS') routeList.push({ method: m, url: r.url }) })
 
   // ---- CORS: exact-match allow list; nothing is allowed by default
   app.addHook('onRequest', async (req, reply) => {
@@ -71,7 +79,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   // ---- authentication: every route is guarded unless listed in PUBLIC, so a new route is guarded by default
   app.addHook('onRequest', async (req) => {
     if (req.method === 'OPTIONS') return
-    const path = req.url.split('?')[0]
+    // The route that matched, not the spelling in the address: "/api/%62uyer/orders" is the buyer route and must be treated as one
+    // (a staff sign-in must never reach a buyer route, nor a link a staff route). Unmatched addresses fall back to the raw path.
+    const path = req.routeOptions?.url ?? req.url.split('?')[0]
     if (PUBLIC.has(`${req.method} ${path}`)) return
     const header = req.headers.authorization
     const token = header?.startsWith('Bearer ') ? header.slice(7) : null
@@ -99,6 +109,10 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   // ---- errors: safe messages only; detail goes to the server log, never to the caller
   app.setErrorHandler((err: unknown, req, reply) => {
     if (err instanceof AppError) return reply.code(err.status).send({ error: { code: err.code, message: err.message } })
+    const fault = clientFault(err)
+    if (fault) return reply.code(fault.status).send({ error: { code: fault.code, message: fault.message } })
+    const dup = duplicateFault(err)   // the loser of a create race: the same plain 409 as the check
+    if (dup) return reply.code(dup.status).send({ error: { code: dup.code, message: dup.message } })
     const status = (err as { statusCode?: number }).statusCode
     if (status && status >= 400 && status < 500) return reply.code(400).send({ error: { code: 'bad_request', message: 'Invalid request' } })
     req.log.error({ err }, 'unhandled error')
@@ -107,6 +121,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: { code: 'not_found', message: 'Not found' } }))
 
   const ctxOf = (req: FastifyRequest): Ctx => { if (!req.ctx) throw new AppError(401, 'unauthenticated', 'Please sign in'); return req.ctx }
+  // Anything that can change a colour or a planned date brings the warnings up to date at once, so a buyer
+  // never reads one the engine no longer backs. As the system, and never allowed to fail the change itself.
+  const refreshAfter = async (req: FastifyRequest) => {
+    try { await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, istDate(clock()))) } catch (e) { req.log.error({ err: e }, 'warning refresh failed') }
+  }
 
   // ---- public
   app.get('/api/health', async () => ({ ok: true }))
@@ -134,15 +153,19 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (f && f.resetAt > now.getTime() && f.count >= LOGIN_BUDGET) throw new AppError(429, 'rate_limited', 'Too many attempts. Please wait and try again.')
     const body = req.body
     if (typeof body !== 'object' || body === null) throw badRequest('Invalid request')
+    // Spend the budget before the await and give it back if this try does not count, so a burst
+    // of requests in flight together cannot all pass the check above.
+    const slot = f && f.resetAt > now.getTime() ? f : { count: 0, resetAt: now.getTime() + LOGIN_WINDOW_MS }
+    slot.count++
+    failures.set(req.ip, slot)
     try {
       const result = await login(opts.db, body as LoginInput, opts.tokenSecret, now)
-      failures.delete(req.ip)          // a successful sign-in does not spend the budget
+      // A successful sign-in does not spend the budget, but it does not refund failures already spent either.
+      if (failures.get(req.ip) === slot) slot.count--
       return result
     } catch (e) {
-      if (e instanceof AppError && (e.code === 'invalid_credentials' || e.code === 'locked')) {
-        const cur = f && f.resetAt > now.getTime() ? f : { count: 0, resetAt: now.getTime() + LOGIN_WINDOW_MS }
-        failures.set(req.ip, { count: cur.count + 1, resetAt: cur.resetAt })
-      }
+      const counted = e instanceof AppError && (e.code === 'invalid_credentials' || e.code === 'locked')
+      if (!counted && failures.get(req.ip) === slot) slot.count--
       throw e
     } finally {
       reply.header('Cache-Control', 'no-store')
@@ -170,7 +193,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const ctx = ctxOf(req)
     const media = mediaOr503()
     const h = req.headers
-    const stage = typeof h['x-stage'] === 'string' ? decodeURIComponent(h['x-stage']) : ''
+    // The stage name travels URL-encoded in a header (it may be Tamil). Bad escapes are the caller's mistake, not a crash.
+    let stage = ''
+    if (typeof h['x-stage'] === 'string') {
+      try { stage = decodeURIComponent(h['x-stage']) } catch { throw badRequest('x-stage is not valid: send the stage name URL-encoded') }
+      if (!isStageName(stage)) throw badRequest('x-stage is not a valid stage name')
+    }
     if (!Buffer.isBuffer(req.body)) throw badRequest('Send the photo as image/jpeg')
     return opts.db.tx(ctx, (tx) => savePhoto(tx, ctx, media, {
       clientUuid: String(h['x-client-uuid'] ?? ''), orderId: String(h['x-order-id'] ?? ''), stage, date: String(h['x-date'] ?? ''), bytes: req.body as Buffer,
@@ -206,18 +234,23 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.get('/api/units', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { units: await opts.db.tx(ctx, (tx) => listUnits(tx, ctx)) } })
   app.post('/api/units', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createUnit(tx, ctx, (req.body ?? {}) as never))) })
   app.get('/api/accounts', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { accounts: await opts.db.tx(ctx, (tx) => listAccounts(tx, ctx, clock())) } })
-  app.post('/api/accounts/supervisors', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createSupervisor(tx, ctx, (req.body ?? {}) as never))) })
-  app.post('/api/accounts/merchandisers', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createMerchandiser(tx, ctx, (req.body ?? {}) as never))) })
-  app.post<{ Params: { id: string } }>('/api/accounts/:id/pin', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => resetPin(tx, ctx, req.params.id, (req.body as { pin?: unknown } | null)?.pin)); return { ok: true } })
-  app.post<{ Params: { id: string } }>('/api/accounts/:id/sign-out', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => signOutEverywhere(tx, ctx, req.params.id)); return { ok: true } })
+  // The audit trail of the actions below. A fixed path, and GET only: it cannot be read as an ":id" route.
+  app.get('/api/accounts/audit', async (req, reply) => {
+    const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store')
+    return { entries: await opts.db.tx(ctx, (tx) => listAudit(tx, ctx, (req.query as { subject?: unknown }).subject)) }
+  })
+  app.post('/api/accounts/supervisors', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createSupervisor(tx, ctx, (req.body ?? {}) as never, req.claims!.sub))) })
+  app.post('/api/accounts/merchandisers', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await opts.db.tx(ctx, (tx) => createMerchandiser(tx, ctx, (req.body ?? {}) as never, req.claims!.sub))) })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/pin', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => resetPin(tx, ctx, req.params.id, (req.body as { pin?: unknown } | null)?.pin, req.claims!.sub)); return { ok: true } })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/sign-out', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => signOutEverywhere(tx, ctx, req.params.id, req.claims!.sub)); return { ok: true } })
   app.post<{ Params: { id: string } }>('/api/accounts/:id/disabled', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setDisabled(tx, ctx, req.claims!.sub, req.params.id, (req.body as { disabled?: unknown } | null)?.disabled)); return { ok: true } })
   app.get('/api/calendar', async (req, reply) => {
     const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store')
     const unitId = (req.query as { unitId?: string }).unitId
     return { days: await opts.db.tx(ctx, (tx) => listCalendar(tx, ctx, unitId)) }
   })
-  app.post('/api/calendar', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setCalendarDay(tx, ctx, (req.body ?? {}) as never)); return { ok: true } })
-  app.post('/api/calendar/clear', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => clearCalendarDay(tx, ctx, (req.body ?? {}) as never)); return { ok: true } })
+  app.post('/api/calendar', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setCalendarDay(tx, ctx, (req.body ?? {}) as never)); await refreshAfter(req); return { ok: true } })
+  app.post('/api/calendar/clear', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => clearCalendarDay(tx, ctx, (req.body ?? {}) as never)); await refreshAfter(req); return { ok: true } })
   app.get('/api/templates', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { templates: await opts.db.tx(ctx, (tx) => listTemplates(tx, ctx)) } })
   app.post('/api/templates', async (req) => { const ctx = ctxOf(req); return opts.db.tx(ctx, (tx) => saveTemplate(tx, ctx, (req.body ?? {}) as never)) })
   app.post<{ Params: { id: string } }>('/api/templates/:id/delete', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => deleteTemplate(tx, ctx, req.params.id)); return { ok: true } })
@@ -230,11 +263,26 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     return opts.db.tx(ctx, (tx) => getBuyerView(tx, ctx))
   })
 
+  // The same orders as a file for Excel. Built from the buyer view above, so it can show nothing the page does not.
+  const sendCsv = (reply: import('fastify').FastifyReply, view: BuyerView) => reply
+    .header('Content-Type', 'text/csv; charset=utf-8')
+    .header('Content-Disposition', `attachment; filename="${exportFileName(view.buyer.name, istDate(clock()))}"`)
+    .header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer').header('X-Content-Type-Options', 'nosniff')
+    .send(buyerExportCsv(view))
+  app.get('/api/buyer/export.csv', async (req, reply) => {
+    const ctx: Ctx = { role: 'buyer', buyerId: req.buyerId! }
+    return sendCsv(reply, await opts.db.tx(ctx, (tx) => getBuyerView(tx, ctx)))
+  })
+  app.get<{ Params: { id: string } }>('/api/buyers/:id/export.csv', async (req, reply) => {
+    const ctx = ctxOf(req)
+    return sendCsv(reply, await opts.db.tx(ctx, (tx) => getBuyerViewFor(tx, ctx, req.params.id)))
+  })
+
   // ---- the review gate and buyer links (merchandisers)
   app.get('/api/review', async (req, reply) => {
     const ctx = ctxOf(req)
-    // Bring the warnings up to date first, as the system, so the queue is never stale.
-    await opts.db.tx({ role: 'system' }, (tx) => refreshWarnings(tx, { role: 'system' }, istDate(clock())))
+    // Bring the warnings up to date first, as the system, so the queue is never stale. A failed refresh never blocks the list.
+    await refreshAfter(req)
     reply.header('Cache-Control', 'no-store')
     return opts.db.tx(ctx, async (tx) => ({
       ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx), approvedPhotos: await listApprovedPhotos(tx, ctx),
@@ -243,8 +291,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   })
   app.post<{ Params: { id: string } }>('/api/warnings/:id/confirm', async (req) => {
     const ctx = ctxOf(req)
-    const { text } = (req.body ?? {}) as { text?: string }
-    await opts.db.tx(ctx, (tx) => confirmWarning(tx, ctx, req.claims!.sub, req.params.id, text))
+    const { text, seenStatus, seenText } = (req.body ?? {}) as { text?: string; seenStatus?: unknown; seenText?: unknown }
+    await opts.db.tx(ctx, (tx) => confirmWarning(tx, ctx, req.claims!.sub, req.params.id, text, { status: seenStatus, text: seenText }))
     return { ok: true }
   })
   app.post<{ Params: { id: string } }>('/api/notes/:id/confirm', async (req) => {
@@ -263,6 +311,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const ctx = ctxOf(req)
     await opts.db.tx(ctx, (tx) => dismissWarning(tx, ctx, req.params.id))
     return { ok: true }
+  })
+  // Mocked alerts (nothing is sent): the latest 50, newest first.
+  app.get('/api/outbox', async (req, reply) => {
+    const ctx = ctxOf(req)
+    reply.header('Cache-Control', 'no-store')
+    return { alerts: await opts.db.tx(ctx, (tx) => listOutbox(tx, ctx)) }
   })
   app.get('/api/buyer-links', async (req, reply) => {
     const ctx = ctxOf(req)
@@ -298,9 +352,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post('/api/orders/preview', async (req, reply) => {
     const ctx = ctxOf(req)
-    const { templateId, exFactory } = (req.body ?? {}) as { templateId?: string; exFactory?: string }
+    const { templateId, exFactory, sizes } = (req.body ?? {}) as { templateId?: string; exFactory?: string; sizes?: unknown }
     reply.header('Cache-Control', 'no-store')
-    return opts.db.tx(ctx, (tx) => previewSchedule(tx, ctx, { templateId: templateId as string, exFactory: exFactory as string }, istDate(clock())))
+    return opts.db.tx(ctx, (tx) => previewSchedule(tx, ctx, { templateId: templateId as string, exFactory: exFactory as string, sizes }, istDate(clock())))
   })
 
   app.get<{ Params: { id: string } }>('/api/orders/:id', async (req, reply) => {
@@ -318,12 +372,15 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.post<{ Params: { id: string } }>('/api/orders/:id/ex-factory', async (req) => {
     const ctx = ctxOf(req)
     const { exFactory, reason } = (req.body ?? {}) as { exFactory?: string; reason?: string }
-    return opts.db.tx(ctx, (tx) => changeExFactory(tx, ctx, req.claims!.sub, req.params.id, exFactory as string, reason as string))
+    const changed = await opts.db.tx(ctx, (tx) => changeExFactory(tx, ctx, req.claims!.sub, req.params.id, exFactory as string, reason as string))
+    await refreshAfter(req)
+    return changed
   })
 
   app.post('/api/events', async (req) => {
     const ctx = ctxOf(req)
-    const result = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, req.body as EventInput, istDate(clock())))
+    const result = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, req.body as EventInput, istDate(clock()), req.claims!.sub))
+    await refreshAfter(req)   // updates change colours, as in the batch route below
     return { ok: true, duplicate: result.duplicate }
   })
 
@@ -338,11 +395,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     for (const raw of events as EventInput[]) {
       const clientUuid = (raw as { clientUuid?: unknown } | null)?.clientUuid
       try {
-        const r = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, raw, today))
+        const r = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, raw, today, req.claims!.sub))
         results.push({ clientUuid, result: r.duplicate ? 'duplicate' : 'accepted' })
       } catch (e) {
-        if (!(e instanceof AppError)) throw e   // infrastructure trouble: fail the request so the client retries all
-        results.push({ clientUuid, result: 'rejected', code: e.code, message: e.message })
+        const fault = e instanceof AppError ? e : clientFault(e)   // a value the database refuses is this item's fault, not the server's
+        if (!fault) throw e   // infrastructure trouble: fail the request so the client retries all
+        results.push({ clientUuid, result: 'rejected', code: fault.code, message: fault.message })
       }
     }
     // Updates change colours, so bring the warnings up to date. As the system, and never allowed to fail the send.
