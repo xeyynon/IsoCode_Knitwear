@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ApiError, apiFetch, getClaims } from '../api/session'
+import { AlertsTab } from '../setup/AlertsTab'
 import { DaysTab } from '../setup/DaysTab'
 import { PeopleTab } from '../setup/PeopleTab'
+import { purgeDays } from '../setup/setupLogic'
 import { TemplatesTab } from '../setup/TemplatesTab'
 import { AppBar } from '../ui/AppBar'
 
-const TABS = [['people', 'People'], ['days', 'Closed days'], ['templates', 'Templates'], ['housekeeping', 'Housekeeping']] as const
+const TABS = [['people', 'People'], ['days', 'Closed days'], ['templates', 'Templates'], ['alerts', 'Alerts'], ['housekeeping', 'Housekeeping']] as const
 type Tab = (typeof TABS)[number][0]
 
 /** The things that have to be set up before the pilot: who can sign in, when each unit is closed, and the stage lists. */
@@ -14,21 +16,34 @@ export default function Setup() {
   const [params, setParams] = useSearchParams()
   const tab = (TABS.find(([id]) => id === params.get('tab'))?.[0] ?? 'people') as Tab
   const me = getClaims()?.sub
+  // Plain buttons with aria-current, not the ARIA tabs pattern: each section is a page of its own with its own h2.
+  // After a change focus moves to that h2, so a keyboard or screen-reader user lands on the new section, never on <body>.
+  const panel = useRef<HTMLDivElement>(null)
+  const changed = useRef(false)
+  useEffect(() => {
+    if (!changed.current) return
+    changed.current = false
+    const h = panel.current?.querySelector<HTMLElement>('h2')
+    if (h) { h.tabIndex = -1; h.focus() }
+  }, [tab])
 
   return (
     <>
       <AppBar title="Setup" />
       <main className="page page--form">
-        <Link className="link back" to="/board">← Order board</Link>
-        <div className="seg seg--tabs" role="tablist" aria-label="Setup sections">
+        <nav className="seg seg--tabs" aria-label="Setup sections">
           {TABS.map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={tab === id} className="seg__btn" onClick={() => setParams({ tab: id })}>{label}</button>
+            <button key={id} type="button" aria-current={tab === id ? 'true' : undefined} className="seg__btn"
+              onClick={() => { if (id !== tab) { changed.current = true; setParams({ tab: id }) } }}>{label}</button>
           ))}
+        </nav>
+        <div ref={panel}>
+          {tab === 'people' && <PeopleTab meId={me} />}
+          {tab === 'days' && <DaysTab />}
+          {tab === 'templates' && <TemplatesTab />}
+          {tab === 'alerts' && <AlertsTab />}
+          {tab === 'housekeeping' && <Housekeeping />}
         </div>
-        {tab === 'people' && <PeopleTab meId={me} />}
-        {tab === 'days' && <DaysTab />}
-        {tab === 'templates' && <TemplatesTab />}
-        {tab === 'housekeeping' && <Housekeeping />}
       </main>
     </>
   )
@@ -40,8 +55,8 @@ function Housekeeping() {
   const [error, setError] = useState<string | null>(null)
   async function purge(e: React.FormEvent) {
     e.preventDefault(); setError(null); setResult(null)
-    const n = Number(days)
-    if (!Number.isInteger(n) || n < 0 || n > 3650) return setError('Enter a whole number of days.')
+    const n = purgeDays(days)
+    if (n === null) return setError('Enter a whole number of days, from 0 to 3650.')
     try {
       const r = await apiFetch<{ purged: number }>('/api/photos/purge', { method: 'POST', body: JSON.stringify({ days: n }) })
       setResult(r.purged === 0 ? 'No photos were old enough to clear.' : `Cleared the files of ${r.purged} rejected photo${r.purged === 1 ? '' : 's'}.`)

@@ -1,4 +1,6 @@
-// Takes screenshots of every screen and saves them in uiux/, with an index (uiux/README.md).
+// Takes screenshots of every screen and saves them in uiux/2.0, with an index (uiux/2.0/README.md).
+// Nothing is ever deleted: uiux/1.0 is the frozen set from before the UI/UX 2.0 work and is never touched, and when 2.0
+// is taken again the set being replaced is first kept in uiux/2.0/previous/<date-time>/.
 // Run again whenever the interface changes:
 //
 //   npm run dev:api                    (terminal 1)
@@ -10,12 +12,14 @@
 // running it does not change the demo data. Apart from clock times ("Updated 2:14 AM"), the
 // pictures are the same every time.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium, type Page } from 'playwright-core'
+import { chromium, type BrowserContext, type Page } from 'playwright-core'
+import { changesMarkdown, diffSets } from './pngDiff'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const OUT = path.join(ROOT, 'uiux')
+const OUT = path.join(ROOT, 'uiux', '2.0')   // 1.0 is the frozen record of build 1006: this script never writes there
 const WEB = process.env.WEB ?? 'http://localhost:5173'
 const MERCH = { email: 'm@example.test', password: 'correct horse battery' }
 const SUP = { phone: '98765 43210', pin: '4321' }
@@ -29,24 +33,41 @@ async function up(): Promise<void> {
   process.exit(1)
 }
 
-fs.mkdirSync(OUT, { recursive: true })
-for (const f of fs.readdirSync(OUT)) if (f.endsWith('.png')) fs.rmSync(path.join(OUT, f))   // only ever pictures we made
+// Check the app first, then take every shot into a temporary folder; uiux/ is only replaced once all of them
+// worked, so a run with the app down, or one that fails partway, leaves the old pictures in place.
 await up()
+const STAGE = fs.mkdtempSync(path.join(os.tmpdir(), 'uiux-'))
 
 const browser = await chromium.launch({ channel: process.env.E2E_BROWSER ?? 'msedge', headless: true })
+
+// The demo API runs on a fixed clock (4 Nov 2026) and a merchandiser's sign-in lasts 12 hours, so on any later real date
+// the app refuses it ("This device's date or time looks wrong"). Every browser context therefore starts its own clock at
+// the API's "now" (as the status page reports it). Date is fixed (timers still run), so every run draws the same clock text.
+// (scripts/a11y.ts does the same.) Without this the merchandiser shots fail on every day after 4 Nov 2026.
+let serverNow: Date | null = null
+async function apiNow(): Promise<Date> {
+  if (serverNow) return serverNow
+  const s = (await (await fetch(`${WEB}/api/status`)).json()) as { checkedAt: string }
+  return (serverNow = new Date(s.checkedAt))
+}
+async function newContext(options: Parameters<typeof browser.newContext>[0]): Promise<BrowserContext> {
+  const ctx = await browser.newContext(options)
+  await ctx.clock.setFixedTime(await apiNow())   // fixed, not just started: the "Updated 10:00:01 AM" text is then the same in every run, so two runs of an unchanged app give identical pictures (scripts/pngDiff.ts)
+  return ctx
+}
 
 async function snap(page: Page, n: number, slug: string, device: Shot['device'], title: string, note: string, fullPage = false) {
   const file = `${String(n).padStart(2, '0')}-${slug}.png`
   await page.evaluate(() => window.scrollTo(0, 0))   // a sticky header would otherwise sit offset in a full-page picture
   await page.waitForTimeout(350)   // let transitions and fonts settle
-  await page.screenshot({ path: path.join(OUT, file), fullPage })
+  await page.screenshot({ path: path.join(STAGE, file), fullPage })
   shots.push({ file, title, note, device })
   console.log(`saved ${file}`)
 }
 
 // ---------------------------------------------------------------- desktop: merchandiser
 {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const ctx = await newContext({ viewport: { width: 1280, height: 900 } })
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.waitForSelector('text=Sign in')
@@ -67,7 +88,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await snap(page, 4, 'board-filtered-red', 'desktop', 'Order board: filtered to late risk', 'The filter is kept in the web address, so a reload or a shared link keeps it.')
   await page.click('.chip--red')
 
-  await page.click('button[aria-label=Menu]')
+  await page.click('button[aria-haspopup=menu]')
   await snap(page, 5, 'board-menu-open', 'desktop', 'App menu', 'Language and sign out live in one menu. Esc closes it and returns focus to the button.')
   await page.keyboard.press('Escape')
 
@@ -75,10 +96,10 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await snap(page, 6, 'board-greyscale', 'desktop', 'Order board in greyscale', 'The check that status never depends on colour alone: the late-risk row still reads from its triangle and its words.')
   await page.addStyleTag({ content: 'html{filter:none}' })
 
-  await page.click('button[aria-label=Menu]')
+  await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')
   await snap(page, 7, 'board-tamil', 'desktop', 'Order board in Tamil', 'The four status words in Tamil (taken from the design notes; not yet checked with supervisors). Anything not yet translated stays in English rather than guessing.')
-  await page.click('button[aria-label=Menu]')
+  await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')
 
   await page.goto(`${WEB}/status`)
@@ -89,7 +110,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 
 // ---------------------------------------------------------------- phone: merchandiser
 {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const ctx = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.fill('input[type=email]', MERCH.email)
@@ -100,9 +121,16 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await ctx.close()
 }
 
+// A supervisor with no stored language gets Tamil at sign-in, so a script that wants a language says so
+// first (what the language switch stores). Without this the English captions below would sit on Tamil pictures.
+async function chooseLanguage(ctx: BrowserContext, lang: 'en' | 'ta'): Promise<void> {
+  await ctx.addInitScript((l) => { try { window.localStorage.setItem('orders.lang', l) } catch { /* private window */ } }, lang)
+}
+
 // ---------------------------------------------------------------- phone: supervisor
 {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const ctx = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  await chooseLanguage(ctx, 'en')
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.click('button:has-text("Supervisor")')
@@ -113,10 +141,10 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.waitForSelector('.stage')
   await snap(page, 11, 'today-list-phone', 'phone', 'My orders today', "Only this supervisor's own unit. Large buttons, numbers first, soonest due first. The chip at the top says All sent.", true)
 
-  await page.click('button[aria-label=Menu]')
+  await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')
   await snap(page, 12, 'today-list-tamil-phone', 'phone', 'My orders today in Tamil', 'Only the title and the sync chip are in Tamil so far; stage names, labels and buttons are still English. Untranslated text is left in English rather than guessed. The Tamil that is here is unreviewed and must be corrected by supervisors, and the rest still has to be written, before the pilot.', true)
-  await page.click('button[aria-label=Menu]')
+  await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')
 
   await page.click('.stage >> nth=0 >> a:has-text("Update")')
@@ -142,7 +170,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 
 // ---------------------------------------------------------------- orders (nothing here changes any data)
 {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const ctx = await newContext({ viewport: { width: 1280, height: 900 } })
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.fill('input[type=email]', MERCH.email)
@@ -180,7 +208,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await snap(page, 21, 'order-detail', 'desktop', 'Order detail', 'Each stage with the planned finish date beside the projected one, how far apart they are, the progress, and the working behind the colour. Ex-factory can be changed here; a reason is required and is kept in the history.', true)
   await ctx.close()
 
-  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const phone = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
   const p2 = await phone.newPage()
   await p2.goto(`${WEB}/login`)
   await p2.fill('input[type=email]', MERCH.email)
@@ -201,7 +229,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 // changes nothing visible. Making a buyer link adds a row, so the script CANCELS it straight after, and the
 // picture of the queue is cropped above the links list so it never shows earlier runs' links.
 {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } })
+  const ctx = await newContext({ viewport: { width: 1280, height: 1000 } })
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.fill('input[type=email]', MERCH.email)
@@ -214,7 +242,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.waitForTimeout(350)
   const file = '24-review-queue.png'
-  await page.screenshot({ path: path.join(OUT, file), clip: { x: 0, y: 0, width: 1280, height: Math.max(300, Math.round((top?.y ?? 900) - 12)) } })
+  await page.screenshot({ path: path.join(STAGE, file), clip: { x: 0, y: 0, width: 1280, height: Math.max(300, Math.round((top?.y ?? 900) - 12)) } })
   shots.push({ file, title: 'Review queue', note: 'Nothing reaches a buyer until a merchandiser confirms it. Each warning shows the wording the buyer would read (editable) and, in grey, the figures behind it that only the factory sees. "Do not show" hides it from buyers.', device: 'desktop' })
   console.log(`saved ${file}`)
 
@@ -227,7 +255,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
     const made = await (await fetch('/api/buyer-links', { method: 'POST', headers: h, body: JSON.stringify({ buyerId: buyer.id, days: 1, label: 'snapshot' }) })).json()
     return { token: made.token as string, id: made.id as string, auth: login.token as string }
   }, MERCH)
-  const bctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const bctx = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
   const bp = await bctx.newPage()
   await bp.goto(`${WEB}/buyer#${token.token}`)
   await bp.waitForSelector('.stagecard')
@@ -236,7 +264,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.evaluate(async (t) => { await fetch(`/api/buyer-links/${t.id}/revoke`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${t.auth}` }, body: '{}' }) }, token)   // tidy up: the snapshot link is cancelled
   await ctx.close()
 
-  const bad = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const bad = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
   const p3 = await bad.newPage()
   await p3.goto(`${WEB}/buyer`)
   await p3.waitForSelector('[role=alert]')
@@ -246,7 +274,8 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 
 // ---------------------------------------------------------------- a photo ready to send (nothing is sent)
 {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const ctx = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  await chooseLanguage(ctx, 'en')
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.click('button:has-text("Supervisor")')
@@ -275,7 +304,8 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 
 // ---------------------------------------------------------------- a reason and a Tamil note, ready to send (nothing is sent)
 {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const ctx = await newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  await chooseLanguage(ctx, 'en')   // the menu switch below then picks Tamil, as before
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.click('button:has-text("Supervisor")')
@@ -285,7 +315,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.waitForSelector('.stage')
   await page.click('.stage >> nth=0 >> a:has-text("Update")')
   await page.waitForSelector('input.input--big')
-  await page.click('button[aria-label=Menu]')
+  await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')   // Tamil
   await page.click('.reason >> nth=2')
   await page.fill('textarea', 'இன்று மூன்று இயந்திரங்கள் வேலை செய்யவில்லை')
@@ -296,7 +326,7 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 
 // ---------------------------------------------------------------- setup (views only: nothing is saved)
 {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const ctx = await newContext({ viewport: { width: 1280, height: 900 } })
   const page = await ctx.newPage()
   await page.goto(`${WEB}/login`)
   await page.fill('input[type=email]', MERCH.email)
@@ -323,6 +353,27 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
 
 await browser.close()
 
+// every shot worked: swap the new set in (copy, not rename: the temporary folder may be on another drive).
+// The set being replaced is KEPT first, with its index, in previous/<date-time>/. Nothing is deleted without a copy.
+fs.mkdirSync(OUT, { recursive: true })
+const replaced = fs.readdirSync(OUT).filter((f) => f.endsWith('.png'))
+let keptDir: string | null = null
+if (replaced.length) {
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', '-').replace(':', '')   // 2026-11-08-0145
+  const keep = path.join(OUT, 'previous', stamp)
+  keptDir = keep
+  fs.mkdirSync(keep, { recursive: true })
+  const index = path.join(OUT, 'README.md')
+  for (const f of [...replaced, ...(fs.existsSync(index) ? ['README.md'] : [])]) fs.copyFileSync(path.join(OUT, f), path.join(keep, f))
+  // The index links to ../1.0, which is one folder further up from here: keep the copy's link working (the docs check fails on a broken one).
+  const keptIndex = path.join(keep, 'README.md')
+  if (fs.existsSync(keptIndex)) fs.writeFileSync(keptIndex, fs.readFileSync(keptIndex, 'utf8').split('](../1.0/').join('](../../../1.0/'))
+  for (const f of replaced) if (fs.existsSync(path.join(keep, f))) fs.rmSync(path.join(OUT, f))   // only after its copy is there
+  console.log(`kept the previous ${replaced.length} pictures in uiux/2.0/previous/${stamp}/`)
+}
+for (const f of fs.readdirSync(STAGE)) fs.copyFileSync(path.join(STAGE, f), path.join(OUT, f))
+fs.rmSync(STAGE, { recursive: true, force: true })
+
 // ---------------------------------------------------------------- the index
 const groups: [string, Shot['device']][] = [['Desktop', 'desktop'], ['Phone', 'phone']]
 const when = new Date().toISOString().slice(0, 10)
@@ -333,8 +384,10 @@ Pictures of every screen as it looks now, taken from the running app on demo dat
 \`\`\`bash
 npm run dev:api                  # terminal 1
 npm run dev -w @isocode/web      # terminal 2
-npm run snapshots                # terminal 3: rewrites this folder
+npm run snapshots                # terminal 3: writes this folder; the previous set is kept in previous/
 \`\`\`
+
+This is the **2.0** set (the UI/UX 2.0 work, plan in \`audit/POA-UIUX.md\`). The frozen **1.0** set, from before that work, is in [../1.0/README.md](../1.0/README.md).
 
 Last taken: ${when}. ${shots.length} pictures.
 
@@ -346,4 +399,12 @@ for (const [heading, device] of groups) {
   }
 }
 fs.writeFileSync(path.join(OUT, 'README.md'), md)
-console.log(`\n${shots.length} snapshots and an index written to uiux/`)
+console.log(`\n${shots.length} snapshots and an index written to uiux/2.0/`)
+
+// What changed since the set that was just kept? Nothing is deleted; this only reads the two folders and writes CHANGES.md beside the new one.
+if (keptDir) {
+  const rows = diffSets(keptDir, OUT)
+  fs.writeFileSync(path.join(OUT, 'CHANGES.md'), changesMarkdown(rows, `uiux/2.0/previous/${path.basename(keptDir)}`, 'uiux/2.0'))
+  const moved = rows.filter((r) => r.status !== 'same').length
+  console.log(moved === 0 ? 'no picture changed since the previous set (CHANGES.md)' : `${moved} of ${rows.length} pictures changed since the previous set: see uiux/2.0/CHANGES.md`)
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountState, dayKind, moveRow, templateProblem, tenDigits, weakPin, type StageRow } from '../src/setup/setupLogic'
+import { accountState, clearDayBody, dayKind, latestRequest, moveRow, purgeDays, templateProblem, tenDigits, weakPin, type StageRow } from '../src/setup/setupLogic'
 
 let id = 0
 const row = (stage: string, days: string, unitId = 'u1'): StageRow => ({ id: ++id, stage, days, unitId })
@@ -58,5 +58,27 @@ describe('plain words for people and days', () => {
     expect(tenDigits('+91 98100-22334')).toBe('9810022334')
     expect(tenDigits('12345')).toBeNull()
     expect(tenDigits('abcdefghij')).toBeNull()
+  })
+})
+
+describe('housekeeping days', () => {
+  it.each([['7', 7], ['0', 0], [' 30 ', 30], ['3650', 3650]])('accepts %j', (raw, n) => expect(purgeDays(raw)).toBe(n))
+  // An empty field must never become 0, which would clear every rejected photo at once.
+  it.each([[''], ['  '], ['1e2'], ['0x10'], ['7.0'], ['-1'], ['3651'], ['abc']])('refuses %j', (raw) => expect(purgeDays(raw)).toBeNull())
+})
+
+describe('closed days for one unit at a time', () => {
+  it('"Back to normal" names the unit the row belongs to, not the unit now selected', () => {
+    expect(clearDayBody({ unitId: 'unit-a', date: '2026-12-30' })).toEqual({ unitId: 'unit-a', date: '2026-12-30' })
+  })
+  it('only the newest list request may fill the table: a late answer for the old unit is ignored', () => {
+    const latest = latestRequest()
+    const forA = latest.start()
+    const forB = latest.start()
+    expect(forB()).toBe(true)
+    expect(forA()).toBe(false)
+    const reloadB = latest.start()
+    expect(forB()).toBe(false)
+    expect(reloadB()).toBe(true)
   })
 })

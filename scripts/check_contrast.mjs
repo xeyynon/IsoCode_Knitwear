@@ -35,6 +35,14 @@ const PAIRS = [
   ['status-amber-text', 'status-amber-tint', 4.5, 'amber badge text'],
   ['status-green', 'surface', 3, 'green icon'],
   ['status-grey', 'surface', 4.5, 'grey badge text'],
+  ['status-grey', 'status-red-tint', 4.5, 'grey flag text in a red row or stage card'],
+  ['status-grey', 'status-amber-tint', 4.5, 'grey text if an amber surface is ever tinted'],
+  ['muted', 'status-red-tint', 4.5, 'sub text in a red row or stage card'],
+  // A control that cannot be used yet is exempt from the contrast rule, but a washed-out one reads as broken: keep it readable.
+  ['disabled-ink', 'disabled-bg', 4.5, 'text on a disabled button'],
+  ['on-accent', 'accent', 4.5, 'text on a primary button and the selected tab'],
+  ['on-ink', 'ink', 4.5, 'text on a selected chip, a selected reason and a count'],
+  ['on-accent', 'status-red', 3, 'the ! inside the red triangle (a mark)'],
 ]
 
 let bad = 0

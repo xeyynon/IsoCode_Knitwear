@@ -1,6 +1,7 @@
 // The one point of contact with the backend. It owns the address, the sign-in header and
 // what a 401 means, so no screen can forget any of them.
-import { decodeClaims, isExpired, signInMessage, storeKind, type Claims, type Role, type SignInFailure } from './sessionRules'
+import { applySignInLanguage } from '../i18n'
+import { classifyFetchError, decodeClaims, isExpired, isGatewayFailure, signInMessage, storeKind, type Claims, type Role, type SignInFailure } from './sessionRules'
 
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
 const KEY = 'orders.token'
@@ -58,11 +59,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers },
     })
   } catch (e) {
-    if ((e as Error).name === 'AbortError') throw e
+    // The caller cancelling its own request is theirs to handle; anything else thrown here is the connection.
+    if (classifyFetchError(e, !!init.signal?.aborted) === 'cancelled') throw e
     throw new ApiError(0, 'unreachable', signInMessage('unreachable'))
   }
   if (res.status === 401) clearToken()
   const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null
+  // A proxy or gateway page is the connection failing, not the app answering. The real status is kept (the sync queue reads it).
+  if (!res.ok && isGatewayFailure(res.status, !!body?.error?.code)) throw new ApiError(res.status, 'unreachable', signInMessage('unreachable'))
   if (!res.ok) throw new ApiError(res.status, body?.error?.code ?? 'error', body?.error?.message ?? 'Something went wrong. Please try again.')
   return body as T
 }
@@ -74,7 +78,7 @@ export async function apiBlob(path: string, headerToken?: string): Promise<Blob>
   try { res = await fetch(`${API_BASE}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }) }
   catch { throw new ApiError(0, 'unreachable', signInMessage('unreachable')) }
   if (res.status === 401 && !headerToken) clearToken()
-  if (!res.ok) throw new ApiError(res.status, 'error', 'That picture could not be loaded.')
+  if (!res.ok) throw new ApiError(res.status, isGatewayFailure(res.status, false) ? 'unreachable' : 'error', 'That picture could not be loaded.')
   return res.blob()
 }
 
@@ -88,7 +92,10 @@ const KIND_BY_CODE: Record<string, SignInFailure> = {
 export async function signIn(body: { email: string; password: string } | { phone: string; pin: string }): Promise<SignInResult> {
   try {
     const r = await apiFetch<{ token: string; role: Role }>('/api/auth/login', { method: 'POST', body: JSON.stringify(body) })
+    applySignInLanguage(r.role)   // before the screen changes, so a supervisor's first screen is already in Tamil
     setToken(r.token, r.role)
+    // getToken drops a token this device's clock already calls expired; say so instead of doing nothing.
+    if (!getClaims()) return { ok: false, kind: 'clock', message: signInMessage('clock') }
     return { ok: true, role: r.role }
   } catch (e) {
     if (e instanceof ApiError) {

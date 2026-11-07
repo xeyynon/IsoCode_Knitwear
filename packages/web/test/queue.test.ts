@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createQueueController } from '../src/queue/controller'
 import { BATCH_SIZE, classifyError, memoryStore, syncQueue } from '../src/queue/sync'
 import type { BatchItemResult, QueuedEvent, SendBatch } from '../src/queue/types'
+import { syncChipStatus } from '../src/ui/syncStatus'
 
 let seq = 0
 const item = (over: Partial<QueuedEvent> = {}): QueuedEvent => ({
@@ -200,6 +201,33 @@ describe('the controller', () => {
     expect(s.rejected[0]!.reason).toMatch(/No such stage/)
     await t.ctl.discard(s.rejected[0]!.clientUuid)
     expect(t.ctl.getState().rejected).toHaveLength(0)
+  })
+
+  it('says what became of one update: waiting, sent, or refused by the server (never "sent" for a refusal)', async () => {
+    const off = make(false)
+    const waiting = await off.ctl.enqueue(e)
+    expect(off.ctl.statusOf(waiting.clientUuid)).toBe('pending')
+
+    const ok = make(true)
+    const sent = await ok.ctl.enqueue(e)
+    await ok.ctl.syncNow()
+    expect(ok.ctl.statusOf(sent.clientUuid)).toBe('sent')
+
+    const no = make(true, fakeServer({ reject: () => 'This stage is not in your unit.' }))
+    const refused = await no.ctl.enqueue(e)
+    await no.ctl.syncNow()
+    expect(no.ctl.getState().pending).toBe(0)
+    expect(no.ctl.statusOf(refused.clientUuid)).toBe('rejected')
+    expect(no.ctl.statusOf('never-queued')).toBeNull()
+  })
+
+  it('the chip says "All sent" only when nothing is waiting AND nothing was refused', () => {
+    const t = (k: string) => (k === 'sync.allSent' ? 'All sent' : k)
+    const base = { pending: 0, foreign: 0, rejected: [] as QueuedEvent[], foreignRejected: 0, syncing: false, online: true, error: null, lastSyncedAt: 1, durable: true }
+    expect(syncChipStatus(base, t)).toEqual({ text: 'All sent', tone: 'ok' })
+    const refused = syncChipStatus({ ...base, rejected: [item({ status: 'rejected', reason: 'No' })] }, t)
+    expect(refused.text).not.toBe('All sent')
+    expect(refused.tone).toBe('problem')
   })
 
   it('totals what is waiting for one stage and day, so "today so far" includes unsent pieces', async () => {

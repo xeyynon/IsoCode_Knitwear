@@ -49,6 +49,34 @@ describe('who may send an update', () => {
     expect(uploaded).toEqual([])
     expect(store.items[0]!.photo).toBeInstanceOf(Blob)
   })
+
+  it('a sign-in that changes while a sync is running stops it: nothing goes out under the next person, and the updates stay waiting', async () => {
+    const store = memoryStore(); let who: string | null = 'A'; const sentAs: (string | null)[] = []
+    await store.add(item({ clientUuid: 'a1', owner: 'A', photo: new Blob([new Uint8Array(2000)]), photoUuid: 'pa' }))
+    await store.add(item({ clientUuid: 'a2', owner: 'A' }))
+    const send: SendBatch = async (b) => { sentAs.push(who); return { results: b.map((e): BatchItemResult => ({ clientUuid: e.clientUuid, result: who === 'A' ? 'accepted' : 'rejected', message: 'No such stage for your unit' })) } }
+    // A signs out and B signs in while A's photo is uploading
+    const out = await syncQueue(store, send, async () => { who = null; who = 'B'; return { id: 'p1' } }, 'A', () => who)
+    expect(sentAs).toEqual([])
+    expect(out).toMatchObject({ sent: 0, rejected: 0, remaining: 2, error: 'auth' })
+    expect(store.items.map((e) => e.status)).toEqual(['pending', 'pending'])
+    // when A signs back in, they go
+    who = 'A'
+    await syncQueue(store, send, async () => ({ id: 'p1' }), 'A', () => who)
+    expect(sentAs).toEqual(['A'])
+    expect(store.items).toHaveLength(0)
+  })
+
+  it('the controller checks who is signed in before each request, not only when the sync starts', async () => {
+    const store = memoryStore(true); let who: string | null = 'A'; const sentAs: (string | null)[] = []
+    const send: SendBatch = async (b) => { sentAs.push(who); return { results: b.map((e): BatchItemResult => ({ clientUuid: e.clientUuid, result: 'accepted' })) } }
+    const ctl = createQueueController({ store, isOnline: () => true, send, uploadPhoto: async () => { who = 'B'; return { id: 'p1' } }, getOwner: () => who })
+    await store.add(item({ clientUuid: 'a1', owner: 'A', photo: new Blob([new Uint8Array(2000)]), photoUuid: 'pa' }))
+    await ctl.syncNow()
+    expect(sentAs).toEqual([])
+    expect(store.items[0]).toMatchObject({ owner: 'A', status: 'pending' })
+    expect(ctl.getState()).toMatchObject({ pending: 0, foreign: 1, rejected: [], error: null })
+  })
 })
 
 describe('the queue on a shared phone', () => {
@@ -77,6 +105,20 @@ describe('the queue on a shared phone', () => {
     expect(t.ctl.getState()).toMatchObject({ pending: 1, foreign: 2 })
   })
 
+  it("lists only the signed-in person's refused updates; another person's are only counted, and cannot be removed", async () => {
+    const t = make()
+    await t.store.add(item({ clientUuid: 'ra', owner: 'A', status: 'rejected', reason: 'No such stage for your unit' }))
+    await t.ctl.refresh()
+    expect(t.ctl.getState().rejected.map((r) => r.clientUuid)).toEqual(['ra'])
+    t.as('B'); await t.ctl.refresh()
+    expect(t.ctl.getState()).toMatchObject({ rejected: [], foreignRejected: 1 })
+    await t.ctl.discard('ra')
+    expect(t.store.items.map((i) => i.clientUuid)).toEqual(['ra'])  // still there for A
+    t.as('A'); await t.ctl.refresh()
+    expect(t.ctl.getState()).toMatchObject({ foreignRejected: 0 })
+    expect(t.ctl.getState().rejected.map((r) => r.clientUuid)).toEqual(['ra'])
+  })
+
   it("\"today so far\" counts only the signed-in person's waiting pieces", async () => {
     const t = make()
     await t.ctl.enqueue({ ...e, qty: 70 })
@@ -96,6 +138,18 @@ describe('the queue on a shared phone', () => {
     expect(t.s.seen).toEqual(['u1'])
     expect(online.getState()).toMatchObject({ pending: 0, foreign: 1 })
     expect(t.store.items.map((i) => i.owner)).toEqual(['B'])
+  })
+
+  it('an update saved just as the sign-in expires still belongs to its author, not to whoever signs in next', async () => {
+    const t = make()
+    await t.ctl.refresh()                                          // A's screen is open
+    t.as(null); await t.ctl.enqueue(e)                             // the token expired: the send itself finds no sign-in
+    expect(t.store.items.map((i) => i.owner)).toEqual(['A'])
+    t.as('B')
+    const online = t.goOnline()
+    await online.refresh(); await online.syncNow()
+    expect(t.s.seen).toEqual([])
+    expect(online.getState()).toMatchObject({ pending: 0, foreign: 1 })
   })
 })
 

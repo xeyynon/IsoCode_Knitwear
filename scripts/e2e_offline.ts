@@ -9,7 +9,8 @@ import { startDemoApi } from '../packages/server/src/demo.js'
 import { CREDS, ID } from '../packages/server/test/helpers.js'
 
 const WEB = 'http://localhost:4173'
-const API_PORT = 8787
+// E2E_API_PORT lets this run beside a dev API that already holds 8787 (a second session may be using it).
+const API_PORT = Number(process.env.E2E_API_PORT ?? 8787)
 const results: { name: string; ok: boolean; detail?: string }[] = []
 const check = (name: string, ok: boolean, detail?: string) => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`) }
 
@@ -76,6 +77,8 @@ try {
 
   const browser = await chromium.launch({ channel: process.env.E2E_BROWSER ?? 'msedge', headless: true })   // E2E_BROWSER=chrome elsewhere
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  // The checks below read English words; a supervisor with no stored language now gets Tamil, so say English first.
+  await ctx.addInitScript(() => { try { window.localStorage.setItem('orders.lang', 'en') } catch { /* private window */ } })
   const page = await ctx.newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -88,7 +91,7 @@ try {
   await page.click('button:has-text("Sign in") >> nth=-1')
   await page.waitForSelector('.stage')
   await page.evaluate(() => navigator.serviceWorker.ready)
-  const cached = await page.evaluate(async () => { const c = await caches.open('app-shell-v2'); return (await c.keys()).length })
+  const cached = await page.evaluate(async () => { let n = 0; for (const k of await caches.keys()) n += (await (await caches.open(k)).keys()).length; return n })
   check('the service worker stored the app (page + every script and stylesheet)', cached >= 9, `${cached} files`)
   const unit1Stages = await page.locator('.stage').count()
   const listText = (await page.textContent('main')) ?? ''

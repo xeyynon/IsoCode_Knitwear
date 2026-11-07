@@ -1,4 +1,4 @@
-import type { QueueStore, QueuedEvent, SendBatch, SyncError, SyncOutcome, UploadPhoto } from './types'
+import type { DroppedPhoto, QueueStore, QueuedEvent, SendBatch, SyncError, SyncOutcome, UploadPhoto } from './types'
 
 export const BATCH_SIZE = 200   // the server accepts 1 to 200 per request
 
@@ -23,21 +23,31 @@ export function classifyError(e: unknown): SyncError {
  * A photo is a first step: it is uploaded (keyed by its own id, so a retry cannot make a second),
  * the update then carries the photo's id, and the local copy is freed. If the server REFUSES a
  * photo for good (not a JPEG, too large), the photo is dropped with a note and the pieces are
- * still sent: a count must never be lost because of a picture.
+ * still sent: a count must never be lost because of a picture. The outcome lists those updates
+ * (`droppedPhotos`) so the screen can say the photo did not go.
  */
 /** Updates written under another person's sign-in are NOT ours to send: the server would refuse them as not that unit's. Updates with no author (from before this was tracked) go with whoever is signed in. */
 export const isMine = (e: QueuedEvent, owner: string | null | undefined): boolean => !e.owner || !owner || e.owner === owner
 
-export async function syncQueue(store: QueueStore, send: SendBatch, upload?: UploadPhoto, owner?: string | null): Promise<SyncOutcome> {
+/**
+ * `whoNow` reads who is signed in at this moment. Each request picks up the token current when it
+ * is made, so if the sign-in changes mid-sync (A signs out, B signs in during a slow upload) the
+ * sync stops before the next request: A's updates must never go out under B's token.
+ */
+export async function syncQueue(store: QueueStore, send: SendBatch, upload?: UploadPhoto, owner?: string | null, whoNow?: () => string | null): Promise<SyncOutcome> {
   const mine = async () => (await store.list()).filter((e) => e.status === 'pending' && isMine(e, owner)).sort((a, b) => a.createdAt - b.createdAt)
+  const switched = () => !!whoNow && whoNow() !== (owner ?? null)
   let pending = await mine()
   let sent = 0
   let rejected = 0
   let error: SyncError = null
+  const dropped: DroppedPhoto[] = []
+  const outcome = (remaining: number): SyncOutcome => ({ sent, rejected, remaining, error, ...(dropped.length ? { droppedPhotos: dropped } : {}) })
 
   if (upload) {
     for (const item of pending) {
       if (error || !item.photo || item.photoId) continue
+      if (switched()) { error = 'auth'; break }
       try {
         const { id } = await upload({ photoUuid: item.photoUuid ?? item.clientUuid, orderId: item.orderId, stage: item.stage, date: item.date, blob: item.photo })
         await store.update(item.clientUuid, { photoId: id, photo: undefined })
@@ -50,11 +60,12 @@ export async function syncQueue(store: QueueStore, send: SendBatch, upload?: Upl
       }
     }
     pending = await mine()
-    if (error) return { sent, rejected, remaining: pending.length, error }
+    if (error) return outcome(pending.length)
   }
 
   for (let i = 0; i < pending.length && !error; i += BATCH_SIZE) {
     const batch = pending.slice(i, i + BATCH_SIZE)
+    if (switched()) { error = 'auth'; break }
     let results
     try {
       ;({ results } = await send(batch.map(({ clientUuid, orderId, stage, date, qty, photoId, note }) => ({ clientUuid, orderId, stage, date, qty, ...(photoId ? { photoId } : {}), ...(note ? { note } : {}) }))))
@@ -74,13 +85,14 @@ export async function syncQueue(store: QueueStore, send: SendBatch, upload?: Upl
       } else {
         sent++
         done.push(item.clientUuid)
+        // The note leaves with the item, so hand it back: the supervisor must learn the photo did not go.
+        if (item.photoNote) dropped.push({ clientUuid: item.clientUuid, orderId: item.orderId, stage: item.stage, date: item.date, qty: item.qty, note: item.photoNote })
       }
     }
     await store.remove(done)
   }
 
-  const remaining = (await mine()).length
-  return { sent, rejected, remaining, error }
+  return outcome((await mine()).length)
 }
 
 /** A store that keeps everything in an array. Used by tests, and as a last resort when IndexedDB is unavailable. */

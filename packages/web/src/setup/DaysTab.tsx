@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
+import { DateWords } from '../ui/atoms/DateWords'
+import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate } from '../board/boardLogic'
 import { isRealDate } from '../orders/orderForm'
-import { dayKind } from './setupLogic'
+import { LoadFailed } from '../ui/LoadFailed'
+import { clearDayBody, dayKind, latestRequest } from './setupLogic'
 
 interface Unit { id: string; name: string }
 interface Day { unitId: string; date: string; working: boolean; note: string | null }
@@ -17,12 +20,19 @@ export function DaysTab() {
   const [working, setWorking] = useState(false)
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [loadFail, setLoadFail] = useState<LoadFailure | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  useEffect(() => { apiFetch<{ units: Unit[] }>('/api/units').then((r) => { setUnits(r.units); if (r.units[0]) setUnitId(r.units[0].id) }).catch((e) => setError(msg(e))) }, [])
+  const loadUnits = useCallback(() => {
+    apiFetch<{ units: Unit[] }>('/api/units').then((r) => { setUnits(r.units); setUnitId((cur) => cur || r.units[0]?.id || ''); setLoadFail(null) })
+      .catch((e) => setLoadFail(describeFailure(e, 'Could not load the units.')))
+  }, [])
+  useEffect(loadUnits, [loadUnits])
+  const latest = useRef(latestRequest())
   const load = useCallback(async () => {
+    const current = latest.current.start()
     if (!unitId) return
-    try { setDays((await apiFetch<{ days: Day[] }>(`/api/calendar?unitId=${unitId}`)).days); setError(null) } catch (e) { setError(msg(e)) }
+    try { const r = await apiFetch<{ days: Day[] }>(`/api/calendar?unitId=${unitId}`); if (!current()) return; setDays(r.days); setError(null); setLoadFail(null) } catch (e) { if (current()) setLoadFail(describeFailure(e, 'Could not load the closed days.')) }
   }, [unitId])
   useEffect(() => { setDays(null); void load() }, [load])
 
@@ -36,7 +46,7 @@ export function DaysTab() {
     } catch (err) { setError(msg(err)) }
   }
   async function clear(d: Day) {
-    try { await apiFetch('/api/calendar/clear', { method: 'POST', body: JSON.stringify({ unitId, date: d.date }) }); setNotice(`${shortDate(d.date)} is back to the normal week.`); await load() } catch (err) { setError(msg(err)) }
+    try { await apiFetch('/api/calendar/clear', { method: 'POST', body: JSON.stringify(clearDayBody(d)) }); setNotice(`${shortDate(d.date)} is back to the normal week.`); await load() } catch (err) { setError(msg(err)) }
   }
 
   return (
@@ -44,13 +54,14 @@ export function DaysTab() {
       <h2>Closed days</h2>
       <p className="sub">Sundays are closed by default. Add holidays (Deepavali, a power shutdown) or an extra day worked. Each unit has its own calendar, so a subcontractor can close on different days.</p>
       {error && <p className="banner" role="alert">{error}</p>}
+      {loadFail && <LoadFailed unreachable={loadFail.unreachable} message={loadFail.message} onRetry={() => (units.length ? void load() : loadUnits())} />}
       {notice && <p className="notice-box" role="status">{notice}</p>}
       <label className="field"><span>Unit</span>
         <select className="input" value={unitId} onChange={(e) => setUnitId(e.target.value)}>{units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
 
       <form className="card change" onSubmit={save} noValidate>
         <div className="grid3">
-          <label className="field"><span>Date</span><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <label className="field"><span>Date</span><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /><DateWords iso={date} /></label>
           <label className="field"><span>That day is</span>
             <select className="input" value={working ? 'yes' : 'no'} onChange={(e) => setWorking(e.target.value === 'yes')}>
               <option value="no">Closed</option><option value="yes">Worked (an extra day)</option></select></label>
