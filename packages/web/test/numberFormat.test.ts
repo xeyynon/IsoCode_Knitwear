@@ -29,7 +29,11 @@ describe('every screen uses it', () => {
     for (const f of files) expect(read(`../src/${f}`), f).not.toContain("toLocaleString('en-IN')")
   })
   it('the supervisor screens show piece counts through it', () => {
-    expect(read('../src/pages/Today.tsx')).toContain('pieces(s.qty)')
-    expect(read('../src/pages/Update.tsx')).toContain('pieces(left)')
+    // Phase 8A moved the figures into the cards the two pages are built from; the pages hand them plain numbers.
+    expect(read('../src/ui/organisms/StageCard.tsx')).toContain('pieces(qty)')
+    expect(read('../src/ui/organisms/StageCard.tsx')).toContain('pieces(done)')
+    expect(read('../src/ui/organisms/UpdateHero.tsx')).toContain('pieces(left)')
+    expect(read('../src/ui/organisms/UpdateHero.tsx')).toContain('pieces(todaySoFar)')
+    for (const f of ['StageCard', 'UpdateHero', 'TodayHero']) expect(read(`../src/ui/organisms/${f}.tsx`), f).not.toContain("toLocaleString('en-IN')")
   })
 })
