@@ -108,7 +108,9 @@ describe('an applied migration is never edited', () => {
   })
 
   it('refuses a database that has the tables but no history, instead of failing half way through 001', async () => {
-    const built = await migratedDb()
+    // PGlite on purpose (pgliteSession wraps a PGlite), so not migratedDb(), which is a real server under TEST_DATABASE_URL.
+    const built = new PGlite()
+    for (const f of fs.readdirSync(MIGRATIONS_DIR).sort()) await built.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8'))
     try { await expect(runMigrations(pgliteSession(built))).rejects.toThrow(/already has the application tables but no migration history/) } finally { await built.close() }
   })
 })
