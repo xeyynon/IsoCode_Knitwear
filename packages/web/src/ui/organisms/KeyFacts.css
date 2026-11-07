@@ -3,4 +3,5 @@
 .keyfacts dt { color: var(--muted); font-size: 0.875rem; }
 .keyfacts dd { margin: 0; }
 .keyfacts dd.mono { font-size: 1.25rem; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 999px) { .keyfacts__tile--wide { display: none; } }
 .keyfacts__hint { color: var(--muted); font-size: 0.875rem; }

@@ -277,3 +277,30 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 - Tests: `emptyStates.test.ts` (4), `syncNotice.test.tsx` (7); written first (4 and 3 red). Web tests 688 passed; typecheck clean.
 - **Not done in this phase:** 4.1 (Undo for "Don't show" needs a new server route: backend session; see below).
 - **Not checked:** the ring on a real phone; a screen reader reading the changed chip (it was already a polite live region); whether supervisors understand the Tamil sentence.
+
+## 8B Merchandiser desktop: the board and the order page as a dashboard (8 Nov 2026, branch `ui2-merchandiser`)
+
+The user's answer to "I don't see a major shift from 1.0 to 2.0" was a new look and layout for both roles; this is the merchandiser desktop stream (the supervisor phone and the mock-ups are other streams). Ideas taken from the user's reference page (kindofui): the Dashboard entry (summary numbers first, as tiles) and the Bento entry (rounded cells of different sizes in one grid), kept inside the hard rules.
+
+**Board, 1280 px (the phone keeps its chips and its density: first card still 407 of 844 px):**
+- The status chips become **five tiles** (`ui/organisms/StatusTiles`): All, Late risk, At risk, No update, On track. Each has the status icon, the word and the tint (red and amber tinted, grey and green plain, so it reads in greyscale: checked), a large count, and, only where real, the pieces still short ("700 pcs short"; "920 pcs short in total" on All). A tile is a pressable button (`aria-pressed`, a heavy ink ring when on, the status in the address). Measured: each tile's number equals the rows shown after pressing it (6, 1, 1, 2, 2); Space on a focused tile works.
+- Search, sort, unit and ship week are the table's own toolbar (one rounded card with the table under it); the buyer choice sits above the tiles with the update time, Refresh and New order, because it changes their numbers.
+- A cleaner table: more air, a larger PO, a header band, the ship date with "in 16 days" under it (from the server's own day), the gap in bold.
+- Number note: `shortByStatus()` adds up only real shortfalls under the same buyer choice as `counts()`; nothing is invented, no API field added (3.4 still waits for the backend).
+
+**Order page, 1280 px (a bento, `ui/organisms/OrderBento`):** the order card with four large tiles (a new "Projected finish" tile from the server's own projection, with "2 days after plan"), the timeline and the stage cards **side by side**, the two actions side by side, then the history and the notes side by side. Page height 1282 px to 900 px (30% shorter, nothing to scroll to at 1280 x 900). The timeline (which scrolls sideways under about 740 px) fits its cell at this width (measured: no scroll). On a phone it is the page it was: one column, three tiles in one row (the new tile is wide-only), 16 px between the two action cards (checked: the first version of the bento took that gap away on a phone, found in the picture and fixed with a test).
+
+- Tests first, all red then green: `dashboardBoard.test.ts` (10), `statusTiles.test.tsx` (8), `orderBento.test.tsx` (8). Mutation-checked: removing the pressed-tile ring made its guard fail, restoring it passed.
+- Checks on this tree: `npm run verify` 1516 tests passed (16 skipped), `npm run a11y` 0 serious or critical on 48 screens, `npm run ux` 50 of 50 screen-widths clean, `E2E_API_PORT=8802 npm run e2e` 22 of 22, typecheck clean.
+- Pictures: `audit/redesign-merchandiser/` (before and after of the board and the order page at 1280 and 390 px, and the tile row in greyscale).
+- **Not checked:** the other merchandiser screens (Review, Setup, New order: unchanged); an order with several stages (the timeline then scrolls sideways inside its cell, as designed) or a long period; a screen reader on the tiles; Tamil (merchandiser screens are English); the 1000 to 1100 px width band by eye (only 1280 and 390 were looked at); a real touch device (a tablet landscape at 1024 px would get the tiles but is untested). `scripts/snapshots.ts` now clicks `.statustile--red, .chip--red`; it was not re-run.
+
+### 8B follow-up: no tinted cards (user feedback, 8 Nov 2026)
+
+The user said the tinted and coloured fills "feel so much of AI generation" (the pink Sewing stage card, the tinted Late risk and At risk tiles with coloured borders). Changed:
+- **Status tiles:** a plain white surface with a plain soft border for every status; the status is the icon and the word in its colour; the count is ink; the pressed tile keeps its heavy ink ring.
+- **Stage cards** (`.stagecard--red`) and the **board table rows** (`.row--red`, and its hover rule): no fill; the status is the badge (icon, word, colour) in the header or the first column.
+- The status tint tokens stay in `tokens.css` and are used only by the small badge pill.
+- **Guard:** `noStatusTints.test.ts` reads every stylesheet touched by this stream and fails if anything but a `.badge` takes a status tint as a background, or anything but a badge or an invalid field takes a status colour as a border or outline, or a tile, stage card or board row has a rule of its own for a status fill. **Broken on purpose twice** (a tinted `.stagecard--red`, then a tinted `.row--red td`): it failed both times; restored. `statusTiles.test.tsx` was changed from asserting the tints to asserting a neutral surface, the colour on the word and icon only, and an ink count.
+- Checks on this tree: `npm run verify` 1520 tests passed (16 skipped), `npm run a11y` 0 serious or critical on 48 screens, `npm run ux` 50 of 50 clean, `E2E_API_PORT=8802 npm run e2e` 22 of 22. Pictures retaken in `audit/redesign-merchandiser/` (board and order at 1280 and 390, the tile row in greyscale: still reads by icon and word).
+- **Not checked, and still open:** other screens keep their tinted elements where they use them (the Review, Buyer and Setup screens, the note and notice boxes): this change covers the board, the order page's stage cards and the tiles only.
