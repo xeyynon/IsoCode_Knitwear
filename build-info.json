@@ -6,43 +6,43 @@
       "n": 1006,
       "date": "2026-11-03",
       "title": "Set up the pilot: people, holidays, templates, and a lost phone in one click",
-      "summary": "A merchandiser can now add supervisors and merchandisers (easy PINs like 1234 are refused), reset a PIN, sign someone out on every phone at once, or stop an account, and it takes effect on the very next request. Units, closed days for each "
+      "summary": "A merchandiser can now add supervisors and merchandisers (easy PINs like 1234 are refused), reset a PIN, sign someone out on every phone at once, or stop an account, and it takes effect on the very next request. Units, closed days for each unit (Deepavali, a shutdown, an extra day worked) and the stage lists used to schedule orders can all be set up from a Setup screen. An approved photo can be withdrawn from the screen, and the files of old rejected photos can be cleared. If two supervisors share a phone, one person's waiting updates are never sent under the other's sign-in, and the screen says so."
     },
     {
       "n": 1005,
       "date": "2026-11-03",
       "title": "Say why a stage is slow: a reason and a note, in Tamil or English",
-      "summary": "A supervisor can now add to a daily update a reason (one tap from a short list: not enough workers, workers on leave, machine problem, material late, no power, fixing quality, something else) and a few typed words in Tamil or English. They "
+      "summary": "A supervisor can now add to a daily update a reason (one tap from a short list: not enough workers, workers on leave, machine problem, material late, no power, fixing quality, something else) and a few typed words in Tamil or English. They travel with the update, even with no signal, and arrive exactly once. A merchandiser reviews each note in the review queue, adds the English meaning of a Tamil note and checks the reason; notes also appear on the order's page. Notes are internal and never shown to buyers. An update can now only attach a photo that really belongs to that order."
     },
     {
       "n": 1004,
       "date": "2026-11-03",
       "title": "A photo with the daily update, and a steadier daily rate",
-      "summary": "A supervisor can add a photo to a daily update. The phone shrinks it first (a large camera picture becomes roughly 150 KB) and sends it with the update, even after a lost signal or a lost reply, without ever making a duplicate. A merchandis"
+      "summary": "A supervisor can add a photo to a daily update. The phone shrinks it first (a large camera picture becomes roughly 150 KB) and sends it with the update, even after a lost signal or a lost reply, without ever making a duplicate. A merchandiser approves or rejects it in the review queue, and a buyer sees only approved photos of their own orders. Separately, the daily rate is now worked out from completed days, so a small update sent in the morning no longer drags a late-risk order's rate down and raises a false warning."
     },
     {
       "n": 1003,
       "date": "2026-11-03",
       "title": "Nothing reaches a buyer until you confirm it, and a buyer sees only their own orders",
-      "summary": "Warnings about at-risk stages now wait in a review queue. A merchandiser reads the wording a buyer would see (kept free of internal figures), can reword it, then confirms it or hides it; changing a stage's colour needs a fresh look. Merchan"
+      "summary": "Warnings about at-risk stages now wait in a review queue. A merchandiser reads the wording a buyer would see (kept free of internal figures), can reword it, then confirms it or hides it; changing a stage's colour needs a fresh look. Merchandisers can make a private link for one buyer contact, set how long it works, and cancel it. The buyer opens it with no sign-in and sees only their own orders, planned dates and confirmed warnings, read-only. A link opens nothing else, and a missing, unknown, cancelled or expired link all give the same message."
     },
     {
       "n": 1002,
       "date": "2026-11-03",
       "title": "Set up an order and see exactly why it has its colour",
-      "summary": "Merchandisers can create an order from a form and see, before creating it, the date each stage must finish, worked backwards from the ex-factory date. Opening an order from the board shows each stage with the planned finish date beside the "
+      "summary": "Merchandisers can create an order from a form and see, before creating it, the date each stage must finish, worked backwards from the ex-factory date. Opening an order from the board shows each stage with the planned finish date beside the date it will really finish at the current rate, how far apart they are, the progress and the working behind the colour. The ex-factory date can be changed there; a reason is required and every change is kept in a history showing who, when, what and why."
     },
     {
       "n": 1001,
       "date": "2026-11-03",
       "title": "Supervisor daily update that works with no signal",
-      "summary": "Supervisors now see their own orders and stages in My orders today, tap one, type the pieces made and send. The update is saved on the phone first and sent when there is signal, with a chip showing All sent or how many are waiting. The app "
+      "summary": "Supervisors now see their own orders and stages in My orders today, tap one, type the pieces made and send. The update is saved on the phone first and sent when there is signal, with a chip showing All sent or how many are waiting. The app itself opens with no signal and shows the last saved list. Updates survive closing and reopening the app, a failed send can always be retried safely without counting twice, and an update the server refuses is kept with the reason instead of vanishing. Warnings appear if the phone cannot keep updates safely or storage is almost full."
     },
     {
       "n": 1000,
       "date": "2026-11-03",
       "title": "Sign in and the order board",
-      "summary": "Merchandisers can sign in and see every order on one board, worst first, with the working behind each colour (for example: need 467 a day, making 350 a day, 700 pieces short by 11 Nov). Filter by status or buyer; the filters stay in the add"
+      "summary": "Merchandisers can sign in and see every order on one board, worst first, with the working behind each colour (for example: need 467 a day, making 350 a day, 700 pieces short by 11 Nov). Filter by status or buyer; the filters stay in the address. Supervisors can sign in with a phone number and PIN, and the Tamil status words are shown. A public status page shows whether the system is working."
     }
   ]
 }
