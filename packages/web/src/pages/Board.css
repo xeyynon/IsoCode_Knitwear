@@ -15,7 +15,6 @@ table.board.board--wide { border-color: var(--border-soft); border-radius: 0 0 v
 .board--wide th { background: var(--page); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-soft); font-weight: 600; }
 .board--wide td { padding: var(--space-4); }
 .board--wide tbody tr:hover td { background: var(--page); }
-.board--wide .row--red:hover td { background: var(--status-red-tint); }   /* a red row stays red under the mouse */
 .board--wide .po-link { font-size: 1.0625rem; }
 .board--wide .row td:first-child { width: 9.5rem; }
 .board--wide td[data-label='Buyer'] { width: 9rem; }

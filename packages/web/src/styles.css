@@ -97,7 +97,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .board { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .board th { text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .board td { padding: 10px 12px; vertical-align: top; border-bottom: 1px solid var(--border-soft); }
-.row--red td { background: var(--status-red-tint); }       /* only red rows are tinted */
+/* A row is not tinted: the status is the badge (icon, word, colour), and a filled row reads as generated (UI/UX 2.0 feedback). */
 .why { margin-top: 2px; }
 .po { min-width: 0; }
 .flag { color: var(--status-grey); font-style: italic; }
@@ -227,7 +227,7 @@ html[lang='ta'] .btn { line-height: 1.6; padding-top: 6px; padding-bottom: 6px; 
 
 .stagelist { display: grid; gap: 12px; margin: 0 0 20px; }
 .stagecard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-.stagecard--red { background: var(--status-red-tint); }
+/* A stage card is a plain card: the status is its badge, not a fill. */
 .stagecard__top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .stagecard__top > b { font-size: 18px; }
 .page .stagecard__top > h2 { font-size: 18px; font-weight: 700; margin: 0; }   /* beats ".page--form h2" */

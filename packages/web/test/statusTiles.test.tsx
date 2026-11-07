@@ -48,10 +48,15 @@ describe('StatusTiles', () => {
 })
 
 describe('StatusTiles.css', () => {
-  it('uses the status tokens for tints and words, and tokens only otherwise', () => {
-    expect(css).toMatch(/--status-red-tint/)
-    expect(css).toMatch(/--status-amber-tint/)
+  it('puts the status colour on the word and the icon only, and uses tokens only', () => {
+    expect(css).toMatch(/statustile--red \.statustile__head\s*\{\s*color:\s*var\(--status-red-text\)/)
+    expect(css).toMatch(/statustile--amber \.statustile__head\s*\{\s*color:\s*var\(--status-amber-text\)/)
+    expect(css).not.toMatch(/-tint/)
     expect(css).not.toMatch(/#[0-9A-Fa-f]{3,8}\b/)
+  })
+  it('is a neutral white surface with a plain border, and the count is ink', () => {
+    expect(/\.statustile\s*\{[^}]*\}/.exec(css)?.[0] ?? '').toMatch(/background:\s*var\(--surface\)[\s\S]*border:\s*1px solid var\(--border-soft\)/)
+    expect(/\.statustile__count\s*\{[^}]*\}/.exec(css)?.[0] ?? '').not.toMatch(/color/)   // inherits the tile's ink
   })
   it('marks the pressed tile with more than colour (a heavier ink ring)', () => {
     expect(css).toMatch(/aria-pressed='true'\][^{]*\{[^}]*(outline|border)[^}]*var\(--ink\)/)
