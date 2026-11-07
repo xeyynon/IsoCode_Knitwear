@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
+import { describeFailure, type LoadFailure } from '../api/sessionRules'
+import { useLang } from '../i18n'
+import { useConfirm } from '../ui/ConfirmDialog'
+import { LoadFailed } from '../ui/LoadFailed'
 import { moveRow, templateProblem, type StageRow } from './setupLogic'
 
 interface Unit { id: string; name: string }
@@ -10,20 +14,23 @@ let next = 1000
 const blank = (unitId: string): StageRow => ({ id: ++next, stage: '', days: '', unitId })
 
 export function TemplatesTab() {
+  const { t: tr } = useLang()   // `t` is the template in this file
+  const { confirm, dialog } = useConfirm()
   const [units, setUnits] = useState<Unit[]>([])
   const [list, setList] = useState<Template[] | null>(null)
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [name, setName] = useState('')
   const [rows, setRows] = useState<StageRow[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [loadFail, setLoadFail] = useState<LoadFailure | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const [u, t] = await Promise.all([apiFetch<{ units: Unit[] }>('/api/units'), apiFetch<{ templates: Template[] }>('/api/templates')])
-      setUnits(u.units); setList(t.templates); setError(null)
-    } catch (e) { setError(msg(e)) }
+      setUnits(u.units); setList(t.templates); setError(null); setLoadFail(null)
+    } catch (e) { setLoadFail(describeFailure(e, 'Could not load the templates.')) }
   }, [])
   useEffect(() => { void load() }, [load])
 
@@ -48,16 +55,18 @@ export function TemplatesTab() {
     setBusy(false)
   }
   async function remove(t: Template) {
-    if (!window.confirm(`Delete the template "${t.name}"? Orders already made from it are not affected.`)) return
+    if (!(await confirm({ title: tr('confirm.deleteTemplateTitle', { name: t.name }), body: tr('confirm.deleteTemplateBody'), confirmLabel: tr('confirm.deleteTemplateYes'), cancelLabel: tr('confirm.cancel'), destructive: true }))) return
     try { await apiFetch(`/api/templates/${t.id}/delete`, { method: 'POST', body: '{}' }); setNotice(`Deleted "${t.name}".`); await load() } catch (err) { setError(msg(err)) }
   }
 
   return (
     <>
+      {dialog}
       <h2>TNA templates</h2>
       <p className="sub">A template lists the stages of a product in the order they happen. For each stage, say how many working days before ex-factory it must finish, and which unit does it. Order setup works the dates out backwards from the ex-factory date.</p>
       {error && <p className="banner" role="alert">{error}</p>}
       {notice && <p className="notice-box" role="status">{notice}</p>}
+      {loadFail && <LoadFailed unreachable={loadFail.unreachable} message={loadFail.message} onRetry={() => void load()} />}
 
       {!editing && (
         <>

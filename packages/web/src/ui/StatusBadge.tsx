@@ -13,8 +13,9 @@ function Icon({ status }: { status: Status }) {
       return (
         <svg {...common}>
           <path d="M8 1.5 15 14H1z" fill="currentColor" />
-          <path d="M8 6v4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="8" cy="12" r=".9" fill="#fff" />
+          {/* the "!" is drawn in the colour of text on a filled control, from the token (a presentation attribute cannot hold var()) */}
+          <path d="M8 6v4" style={{ stroke: 'var(--on-accent)' }} strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="8" cy="12" r=".9" style={{ fill: 'var(--on-accent)' }} />
         </svg>
       )
     case 'amber': // outlined clock

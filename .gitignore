@@ -29,3 +29,7 @@ Thumbs.db
 # internal docs and the client build plan stay on this machine (budget, rates, pilot plans)
 /md/
 /company-a-build-plan.md
+
+# browser-driving tool output (accessibility snapshots, console logs) and TypeScript build info
+.playwright-mcp/
+*.tsbuildinfo

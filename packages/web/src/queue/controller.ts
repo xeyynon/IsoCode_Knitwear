@@ -2,13 +2,16 @@
 // the screen. No React and no browser globals are used directly (they are passed in), so the
 // whole thing runs under test.
 import { isMine, syncQueue } from './sync'
-import type { NewEvent, QueuedEvent, QueueStore, SendBatch, SyncError, UploadPhoto } from './types'
+import type { DroppedPhoto, NewEvent, QueuedEvent, QueueStore, SendBatch, SyncError, UploadPhoto } from './types'
 
 export interface QueueState {
   pending: number
   /** Waiting under ANOTHER person's sign-in on this phone: they send when that person signs in. */
   foreign: number
+  /** Refused updates of the signed-in person only: another person's are never listed or removable here. */
   rejected: QueuedEvent[]
+  /** Refused updates of ANOTHER person's sign-in on this phone: shown only as a count. */
+  foreignRejected: number
   syncing: boolean
   online: boolean
   /** Why the last sync stopped early, or null. */
@@ -39,9 +42,14 @@ export function createQueueController(deps: ControllerDeps) {
 
   let items: QueuedEvent[] = []
   let sentLog: SentRecord[] = []
+  // Updates that went without their photo (the server refused it): shown until the supervisor dismisses them.
+  let droppedLog: DroppedPhoto[] = []
   let inFlight: Promise<void> | null = null
-  const owner = () => deps.getOwner?.() ?? null
-  let state: QueueState = { pending: 0, foreign: 0, rejected: [], syncing: false, online: isOnline(), error: null, lastSyncedAt: null, durable: deps.store.durable }
+  // The last sign-in seen. A sign-in that expires just as Send is tapped reads as nobody; the
+  // update is still its author's, never left ownerless for whoever signs in next.
+  let lastOwner: string | null = null
+  const owner = () => { const w = deps.getOwner?.() ?? null; if (w) lastOwner = w; return w }
+  let state: QueueState = { pending: 0, foreign: 0, rejected: [], foreignRejected: 0, syncing: false, online: isOnline(), error: null, lastSyncedAt: null, durable: deps.store.durable }
   const listeners = new Set<() => void>()
 
   const publish = (patch: Partial<QueueState>) => {
@@ -50,10 +58,12 @@ export function createQueueController(deps: ControllerDeps) {
   }
   const refresh = async () => {
     items = await deps.store.list()
+    const me = owner()
     publish({
-      pending: items.filter((e) => e.status === 'pending' && isMine(e, owner())).length,
-      foreign: items.filter((e) => e.status === 'pending' && !isMine(e, owner())).length,
-      rejected: items.filter((e) => e.status === 'rejected'),
+      pending: items.filter((e) => e.status === 'pending' && isMine(e, me)).length,
+      foreign: items.filter((e) => e.status === 'pending' && !isMine(e, me)).length,
+      rejected: items.filter((e) => e.status === 'rejected' && isMine(e, me)),
+      foreignRejected: items.filter((e) => e.status === 'rejected' && !isMine(e, me)).length,
       online: isOnline(),
     })
   }
@@ -62,7 +72,7 @@ export function createQueueController(deps: ControllerDeps) {
   async function enqueue(e: NewEvent): Promise<QueuedEvent> {
     const { photo, ...rest } = e
     const clientUuid = uuid()
-    const who = owner()
+    const who = owner() ?? lastOwner
     const item: QueuedEvent = { ...rest, clientUuid, createdAt: now(), status: 'pending', attempts: 0, ...(who ? { owner: who } : {}), ...(photo ? { photo, photoUuid: uuid() } : {}) }
     await deps.store.add(item)
     await refresh()
@@ -73,12 +83,14 @@ export function createQueueController(deps: ControllerDeps) {
   /** One sync at a time. A call while one is running joins it instead of starting a second. */
   function syncNow(): Promise<void> {
     if (inFlight) return inFlight
+    let again = false
     inFlight = (async () => {
       await refresh()
       if (!state.pending) { publish({ error: null }); return }
       if (!isOnline()) { publish({ online: false }); return }
       publish({ syncing: true, online: true })
       try {
+        const who = owner()
         const out = await syncQueue(deps.store, async (batch) => {
           const r = await deps.send(batch)
           const t = now()
@@ -89,18 +101,26 @@ export function createQueueController(deps: ControllerDeps) {
           }
           sentLog = sentLog.slice(-200)
           return r
-        }, deps.uploadPhoto, owner())
+        }, deps.uploadPhoto, who, deps.getOwner ? owner : undefined)
+        if (out.droppedPhotos) droppedLog = [...droppedLog, ...out.droppedPhotos].slice(-20)
         await refresh()
-        publish({ syncing: false, error: out.error, lastSyncedAt: out.error ? state.lastSyncedAt : now() })
+        // Someone else signed in mid-sync: the sync stopped with the first person's updates still
+        // waiting. That is not a problem to show; start again for whoever is signed in now. (Only
+        // signed out: the 'auth' stop stands, and the next sign-in starts a sync.)
+        again = owner() !== who && owner() !== null
+        publish({ syncing: false, error: again ? null : out.error, lastSyncedAt: out.error ? state.lastSyncedAt : now() })
       } catch {
         await refresh()
         publish({ syncing: false, error: 'server' })
       }
-    })().finally(() => { inFlight = null })
+    })().finally(() => { inFlight = null; if (again) void syncNow() })
     return inFlight
   }
 
+  /** Only the author (or anyone, for an update with no recorded author) may remove a refused update. */
   async function discard(clientUuid: string) {
+    const it = items.find((e) => e.clientUuid === clientUuid)
+    if (it && !isMine(it, owner())) return
     await deps.store.remove([clientUuid])
     await refresh()
   }
@@ -113,8 +133,20 @@ export function createQueueController(deps: ControllerDeps) {
   const sentSince = (orderId: string, stage: string, date: string, sinceMs: number): number =>
     sentLog.filter((e) => e.orderId === orderId && e.stage === stage && e.date === date && e.sentAt >= sinceMs).reduce((s, e) => s + e.qty, 0)
 
+  /** What became of one update: still waiting, refused by the server, confirmed sent, or unknown (discarded). */
+  const statusOf = (clientUuid: string): 'pending' | 'rejected' | 'sent' | null => {
+    const it = items.find((e) => e.clientUuid === clientUuid)
+    if (it) return it.status
+    return sentLog.some((e) => e.clientUuid === clientUuid) ? 'sent' : null
+  }
+
+  /** Why this update's photo was left out when its pieces were sent, or null. */
+  const photoNoteOf = (clientUuid: string): string | null => droppedLog.find((d) => d.clientUuid === clientUuid)?.note ?? null
+  const droppedPhotos = (): DroppedPhoto[] => droppedLog
+  const clearDroppedPhotos = () => { droppedLog = []; publish({}) }
+
   return {
-    enqueue, syncNow, discard, refresh, waitingQty, sentSince,
+    enqueue, syncNow, discard, refresh, waitingQty, sentSince, statusOf, photoNoteOf, droppedPhotos, clearDroppedPhotos,
     getState: () => state,
     subscribe: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } },
     setOnline: (online: boolean) => publish({ online }),

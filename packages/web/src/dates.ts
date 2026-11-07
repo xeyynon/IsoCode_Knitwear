@@ -14,5 +14,8 @@ export function parsePieces(raw: string): number | null {
   return n >= 1 && n <= 1_000_000 ? n : null
 }
 
+/** Something was typed but it is not a whole number: the field keeps the text and says so. */
+export const notWholeNumber = (raw: string): boolean => raw.trim() !== '' && parsePieces(raw) === null
+
 /** Pieces still to make after what is already recorded, never negative. */
 export const remainingPieces = (qty: number, produced: number): number => Math.max(0, qty - produced)

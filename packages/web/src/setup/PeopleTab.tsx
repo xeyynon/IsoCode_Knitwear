@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
+import { describeFailure, type LoadFailure } from '../api/sessionRules'
+import { useLang } from '../i18n'
+import { useConfirm } from '../ui/ConfirmDialog'
+import { LoadFailed } from '../ui/LoadFailed'
 import { accountState, tenDigits, weakPin } from './setupLogic'
 
 interface Account { id: string; role: 'merchandiser' | 'supervisor'; label: string | null; email: string | null; phoneEnd: string | null; unitName: string | null; disabled: boolean; locked: boolean }
@@ -8,12 +12,16 @@ interface Unit { id: string; name: string; type: 'own' | 'subcontractor' }
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : 'That did not work. Please try again.')
 
 export function PeopleTab({ meId }: { meId: string | undefined }) {
+  const { t } = useLang()
+  const { confirm, dialog } = useConfirm()
   const [accounts, setAccounts] = useState<Account[] | null>(null)
   const [units, setUnits] = useState<Unit[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [loadFail, setLoadFail] = useState<LoadFailure | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pinFor, setPinFor] = useState<string | null>(null)
   const [newPin, setNewPin] = useState('')
+  const [pinError, setPinError] = useState<string | null>(null)
 
   const [sup, setSup] = useState({ label: '', phone: '', pin: '', unitId: '' })
   const [mer, setMer] = useState({ label: '', email: '', password: '' })
@@ -23,14 +31,25 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
   const load = useCallback(async () => {
     try {
       const [a, u] = await Promise.all([apiFetch<{ accounts: Account[] }>('/api/accounts'), apiFetch<{ units: Unit[] }>('/api/units')])
-      setAccounts(a.accounts); setUnits(u.units); setError(null)
-    } catch (e) { setError(msg(e)) }
+      setAccounts(a.accounts); setUnits(u.units); setError(null); setLoadFail(null)
+    } catch (e) { setLoadFail(describeFailure(e, 'Could not load the people list.')) }
   }, [])
   useEffect(() => { void load() }, [load])
 
-  async function act(label: string, fn: () => Promise<unknown>) {
+  // A failure shows in the banner unless the caller has a place beside its own field.
+  async function act(label: string, fn: () => Promise<unknown>, showError: (m: string) => void = setError) {
     setNotice(null); setError(null)
-    try { await fn(); setNotice(label); await load() } catch (e) { setError(msg(e)) }
+    try { await fn(); setNotice(label); await load() } catch (e) { showError(msg(e)) }
+  }
+
+  async function signOutEverywhere(a: Account) {
+    const ok = await confirm({ title: t('confirm.signOutTitle', { name: a.label ?? 'this person' }), body: t('confirm.signOutBody'), confirmLabel: t('confirm.signOutYes'), cancelLabel: t('confirm.cancel'), destructive: true })
+    if (ok) await act('Signed out on every phone. They can sign in again.', () => apiFetch(`/api/accounts/${a.id}/sign-out`, { method: 'POST', body: '{}' }))
+  }
+  async function toggleDisabled(a: Account) {
+    // Allowing someone again needs no question; stopping them does.
+    if (!a.disabled && !(await confirm({ title: t('confirm.stopTitle', { name: a.label ?? 'this account' }), body: t('confirm.stopBody'), confirmLabel: t('confirm.stopYes'), cancelLabel: t('confirm.cancel'), destructive: true }))) return
+    await act(a.disabled ? 'Allowed again.' : 'Stopped. They are signed out.', () => apiFetch(`/api/accounts/${a.id}/disabled`, { method: 'POST', body: JSON.stringify({ disabled: !a.disabled }) }))
   }
 
   async function addSupervisor(e: React.FormEvent) {
@@ -58,11 +77,13 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
 
   return (
     <>
+      {dialog}
       {error && <p className="banner" role="alert">{error}</p>}
       {notice && <p className="notice-box" role="status">{notice}</p>}
+      {loadFail && <LoadFailed unreachable={loadFail.unreachable} message={loadFail.message} onRetry={() => void load()} />}
 
       <h2>People who can sign in</h2>
-      {!accounts && !error && <p className="sub">Loading…</p>}
+      {!accounts && !error && !loadFail && <p className="sub">Loading…</p>}
       {accounts && (
         <table className="plan people">
           <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Sign-in</th><th scope="col">Unit</th><th scope="col">State</th><th scope="col"><span className="visually-hidden">Actions</span></th></tr></thead>
@@ -71,23 +92,24 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
             const self = a.id === meId
             return (
               <tr key={a.id}>
-                <td data-label="Name">{a.label ?? '-'}{self ? ' (you)' : ''}</td>
-                <td data-label="Role">{a.role === 'supervisor' ? 'Supervisor' : 'Merchandiser'}</td>
+                <td data-label="Name">{a.label || '(no name)'}{self ? ' (you)' : ''}</td>
+                <td data-label="Role" className="people__nowrap">{a.role === 'supervisor' ? 'Supervisor' : 'Merchandiser'}</td>
                 <td data-label="Sign-in" className="mono">{a.email ?? `phone ending ${a.phoneEnd}`}</td>
-                <td data-label="Unit">{a.unitName ?? '-'}</td>
-                <td data-label="State">{st.text}</td>
-                <td className="people__actions">
-                  {a.role === 'supervisor' && <button className="btn btn--small" onClick={() => { setPinFor(pinFor === a.id ? null : a.id); setNewPin('') }}>Reset PIN</button>}
-                  <button className="btn btn--small" onClick={() => { if (window.confirm(`Sign ${a.label ?? 'this person'} out on every phone?`)) void act('Signed out on every phone. They can sign in again.', () => apiFetch(`/api/accounts/${a.id}/sign-out`, { method: 'POST', body: '{}' })) }}>Sign out everywhere</button>
-                  {!self && <button className="btn btn--small" onClick={() => { if (a.disabled || window.confirm(`Stop ${a.label ?? 'this account'}? They are signed out at once and cannot sign in until you allow it again.`)) void act(a.disabled ? 'Allowed again.' : 'Stopped. They are signed out.', () => apiFetch(`/api/accounts/${a.id}/disabled`, { method: 'POST', body: JSON.stringify({ disabled: !a.disabled }) })) }}>{a.disabled ? 'Allow again' : 'Stop account'}</button>}
+                <td data-label="Unit" className="people__nowrap">{a.unitName ?? '-'}</td>
+                <td data-label="State" className="people__nowrap">{st.text}</td>
+                <td><div className="people__actions">
+                  {a.role === 'supervisor' && <button id={`reset-${a.id}`} className="btn btn--small" onClick={() => { setPinFor(pinFor === a.id ? null : a.id); setNewPin(''); setPinError(null) }}>Reset PIN</button>}
+                  <button className="btn btn--small" onClick={() => void signOutEverywhere(a)}>Sign out everywhere</button>
+                  {!self && <button className="btn btn--small" onClick={() => void toggleDisabled(a)}>{a.disabled ? 'Allow again' : 'Stop account'}</button>}
                   {pinFor === a.id && (
-                    <form className="inline" onSubmit={(e) => { e.preventDefault(); const w = weakPin(newPin); if (w) return setError(w); void act('PIN changed. They are signed out everywhere and any lock is cleared.', async () => { await apiFetch(`/api/accounts/${a.id}/pin`, { method: 'POST', body: JSON.stringify({ pin: newPin }) }); setPinFor(null); setNewPin('') }) }}>
+                    <form className="inline" onSubmit={(e) => { e.preventDefault(); setPinError(null); const w = weakPin(newPin); if (w) return setPinError(w); void act('PIN changed. They are signed out everywhere and any lock is cleared.', async () => { await apiFetch(`/api/accounts/${a.id}/pin`, { method: 'POST', body: JSON.stringify({ pin: newPin }) }); setPinFor(null); setNewPin(''); document.getElementById(`reset-${a.id}`)?.focus() }, setPinError) }}>
                       <label className="visually-hidden" htmlFor={`pin-${a.id}`}>New 4-digit PIN</label>
-                      <input id={`pin-${a.id}`} className="input mono" inputMode="numeric" maxLength={4} placeholder="New PIN" value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} />
+                      <input id={`pin-${a.id}`} className="input mono" inputMode="numeric" maxLength={4} placeholder="New PIN" value={newPin} aria-invalid={pinError ? true : undefined} aria-describedby={pinError ? `pin-err-${a.id}` : undefined} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} />
                       <button className="btn btn--primary btn--small">Save PIN</button>
+                      {pinError && <p className="error" id={`pin-err-${a.id}`} role="alert">{pinError}</p>}
                     </form>
                   )}
-                </td>
+                </div></td>
               </tr>
             )
           })}</tbody>

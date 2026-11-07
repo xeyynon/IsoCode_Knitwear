@@ -6,8 +6,14 @@
  * - /assets/*: cache first (the file names carry a hash, so a stored file is never stale)
  * - the API and other sites: not handled here
  *
- * A new version waits until every tab is closed (no skipWaiting): swapping files under a
- * screen that is still open would break its lazy chunks.
+ * A new version waits (no automatic skipWaiting): swapping files under a screen that is still
+ * open would break its lazy chunks. It takes over when every tab is closed, or when the person
+ * presses Reload on the app's "new version is ready" banner, which posts {type: 'SKIP_WAITING'}
+ * (src/ui/swUpdateStore.ts); the page then reloads once.
+ *
+ * The build (vite.config.ts) rewrites CACHE with a hash of the build's files, so every release
+ * ships different bytes: the browser installs it, precaches the new screens, and activate
+ * deletes the previous release's cache.
  */
 const CACHE = 'app-shell-v2'
 
@@ -29,6 +35,11 @@ self.addEventListener('activate', (event) => {
     for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k)
     await self.clients.claim()
   })())
+})
+
+// Only the banner's Reload button sends this; nothing else ever skips the wait.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {
