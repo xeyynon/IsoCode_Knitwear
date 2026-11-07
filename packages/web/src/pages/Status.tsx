@@ -45,7 +45,7 @@ export default function Status() {
       {body && <p className="sub">{checkedText(body.checkedAt)}</p>}
       {BUILD_LABEL && <p className="sub">{BUILD_LABEL}</p>}
       {/* Not a dead end: the app opens on the right place for whoever is signed in, or on the sign-in. */}
-      <p><Link to="/">← Back to the app</Link></p>
+      <p><Link className="btn" to="/">← Back to the app</Link></p>
     </main>
   )
 }

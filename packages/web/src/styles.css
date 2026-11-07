@@ -217,8 +217,8 @@ html[lang='ta'] .btn { line-height: 1.6; padding-top: 6px; padding-bottom: 6px; 
 
 .summary__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .summary h1 { margin: 0; font-size: 26px; }
-.summary__nums { display: flex; gap: 24px; flex-wrap: wrap; margin: 8px 0; font-size: 18px; }
-.summary__nums b { font-size: 22px; }
+/* Cards that follow each other keep a gap (audit 02 finding 7: Add an update and Change the date used to touch). */
+.card + .card { margin-top: var(--space-4); }
 
 .stagelist { display: grid; gap: 12px; margin: 0 0 20px; }
 .stagecard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }

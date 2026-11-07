@@ -10,6 +10,8 @@ import { LOW_CONFIDENCE } from '../orders/visitEntry'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
 import { DateWords } from '../ui/atoms/DateWords'
+import { KeyFacts } from '../ui/organisms/KeyFacts'
+import { dateInWords } from '../dateWords'
 import { reasonById, usableReasons, type Reason } from '../notes/reasons'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
@@ -95,10 +97,11 @@ export default function OrderDetail() {
                 <StatusBadge status={d.order.status} />
               </div>
               <p className="sub">{d.order.buyerName} · {d.order.style} · {d.order.colour}</p>
-              <p className="summary__nums mono">
-                <span>Quantity <b>{pieces(d.order.qty)}</b></span>
-                <span>Ex-factory <b>{shortDate(d.order.exFactory)}</b></span>
-              </p>
+              <KeyFacts facts={[
+                { label: 'Quantity', value: pieces(d.order.qty), hint: 'pieces' },
+                { label: 'Ex-factory', value: shortDate(d.order.exFactory), hint: dateInWords(d.order.exFactory) || undefined },
+                ...(d.stages.length > 0 ? [{ label: 'Stages done', value: `${d.stages.filter((s) => s.complete).length} of ${d.stages.length}` }] : []),
+              ]} />
               <p className="sub mono">{Object.entries(d.order.sizes).map(([s, q]) => `${s} ${pieces(q)}`).join(' · ')}</p>
               {d.history[0] && (
                 <p className="sub">Last date change: {when(d.history[0].at)} by {d.history[0].by ?? 'a person not recorded'}. <a className="link" href="#history">See the history</a></p>
@@ -145,7 +148,7 @@ export default function OrderDetail() {
                   <label className="field"><span>Reason (kept in the history)</span>
                     <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></label>
                   {changeError && <p className="error" role="alert">{changeError}</p>}
-                  <button className="btn btn--primary" disabled={busy}>{busy ? 'Changing…' : 'Change date'}</button>
+                  <button className="btn" disabled={busy}>{busy ? 'Changing…' : 'Change date'}</button>
                 </form>
               </details>
               {moved && <p className="notice-box" role="status">{moved}</p>}

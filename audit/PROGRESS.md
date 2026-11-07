@@ -241,3 +241,12 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 - Tests: `numberFormat.test.ts` (5), `dateWords.test.tsx` (8). Both written first and seen failing (the wiring checks were red until the screens were changed). Web tests 658 passed; typecheck clean.
 - **Measured** in Edge at 390 px with touch emulation: nothing drawn for an empty field; "Thursday, 12 Nov 2026" in the muted ink (316 px wide, no horizontal overflow).
 - **Not checked:** the Tamil supervisor screens with the grouped numbers on a real phone (Latin digits with Indian grouping are used on purpose, as the board already did; supervisors should say if they would rather see Tamil digits); a screen reader on the date fields.
+
+## 3.6 Order detail: KeyFacts tiles, gaps, one primary (8 Nov 2026, InBul14)
+
+- **KeyFacts** (first organism, `ui/organisms/KeyFacts`): Quantity ("4,550 pieces"), Ex-factory ("20 Nov", with "Friday, 20 Nov 2026" under it) and Stages done ("0 of 1", only when the order has stages) replace the inline numbers. A description list (a screen reader hears each label with its value); no value is coloured, so the tiles read the same in greyscale and status stays the badge's job alone.
+- **Finding 7:** cards that follow each other now have 16 px between them (`.card + .card`; measured 16 px between Add an update and Change the ex-factory date, it was 0), and "Change date" is an outlined button, so "Add update" is the one filled button on the page.
+- Tests: `keyFacts.test.tsx` (6), written first (3 red on the page, then green). Web tests 666 passed; typecheck clean.
+- **Measured** in Edge at 390 px with touch emulation and at 1280 px: no horizontal overflow; at 390 px the three tiles sit in one row (the summary card is about 120 px shorter than with the old inline numbers and the first version of the tiles, which wrapped to two rows).
+- **Not checked:** an order with several stages or with sizes listed (the demo order has one stage and no sizes line); Tamil does not apply (merchandiser screen); a screen reader.
+- **Fix to 3.8 found by `npm run ux` on this slice:** the status page's "← Back to the app" was a bare text link, 22 px high (under the 48 px touch size at every phone width). It is now a button (`btn`); the audit reads 50 of 50 screen-widths clean, 0 controls under the tap size.
