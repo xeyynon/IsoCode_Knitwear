@@ -1,7 +1,7 @@
 /* TodayHero (ui/organisms/TodayHero.tsx): a white card with a border, ink text, tokens only. */
-.todayhero { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-l); background: var(--surface); border: 1px solid var(--border); color: var(--ink); margin-bottom: var(--space-4); }
+.todayhero { display: grid; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-l); background: var(--accent-soft); border: 1px solid var(--border-soft); color: var(--ink); margin-bottom: var(--space-4); }
 .todayhero__main { display: flex; align-items: center; gap: var(--space-4); }
-.todayhero .ring { color: var(--ink); }
+.todayhero .ring { color: var(--accent); }
 .todayhero .ring__track { stroke: var(--border-soft); }
 .todayhero__n { font-size: 1.875rem; font-weight: 700; }
 .todayhero__of { font-size: 0.9375rem; }

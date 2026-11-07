@@ -1,8 +1,8 @@
 /* UpdateHero (ui/organisms/UpdateHero.tsx): a white card with a border, ink text, tokens only. Kept short so the number field stays high on the screen
    when the keyboard is open. */
-.updatehero { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-l); background: var(--surface); border: 1px solid var(--border); color: var(--ink); margin-bottom: var(--space-2); }
+.updatehero { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-l); background: var(--accent-soft); border: 1px solid var(--border-soft); color: var(--ink); margin-bottom: var(--space-2); }
 .updatehero__top { display: flex; align-items: center; gap: var(--space-4); }
-.updatehero .ring { color: var(--ink); }
+.updatehero .ring { color: var(--accent); }
 .updatehero .ring__track { stroke: var(--border-soft); }
 .updatehero__pct { font-size: 1rem; font-weight: 700; }
 .updatehero__who { min-width: 0; }

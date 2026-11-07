@@ -147,7 +147,8 @@ describe('the look', () => {
   // of the hero), borders are the neutral border tokens, and a status colour lives ONLY on the small icon and the word (StatusBadge).
   // No card, tile, row or header takes a status background, a coloured border or a stripe down one edge.
   describe('neutral surfaces: a stage card is never tinted by status', () => {
-    const NEUTRAL_BG = /^(var\(--(surface|page|ink|border-soft)\)|transparent|none)$/
+    // The theme's own colours are allowed (a soft violet wash, the action colour for a progress fill or a pill); a STATUS colour or tint never is (checked just above).
+    const NEUTRAL_BG = /^(var\(--(surface|page|ink|accent|accent-soft|border-soft)\)|transparent|none)$/
     const sheets = ['organisms/StageCard', 'organisms/TodayHero', 'organisms/UpdateHero', 'atoms/ProgressRing', 'atoms/PieceBar', 'atoms/Skeleton']
     const rules = (text: string) => [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1]!.trim(), body: m[2]! }))
     // the stage rules in the shared stylesheet that Today's card still leans on

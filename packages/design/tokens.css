@@ -3,11 +3,12 @@
    are reserved for status. Contrast pairs are checked by scripts/check_contrast.mjs. */
 :root {
   --ink: #1F2328;
-  --muted: #57606A;
-  --border: #8C959F;
-  --page: #F7F7F5;
+  --muted: #5A5670;
+  --border: #8A85A0;
+  --page: #F6F5F9;
   --surface: #FFFFFF;
-  --accent: #3346A8;
+  --accent: #6E5BB1;        /* Pantone Violet (sampled from pantone-colours.com); the one action colour */
+  --accent-soft: #EEEBF7;   /* a soft wash of it: hero cards and selected surfaces. Never a status colour */
   --status-red: #C24400;
   --status-red-tint: #FBEBE3;
   --status-red-text: #A23F00;
@@ -42,7 +43,7 @@
      fails on any literal colour outside this file). */
   --on-accent: #FFFFFF;                    /* text on --accent (a primary button, the selected tab) */
   --on-ink: #FFFFFF;                       /* text on --ink (a selected chip or reason, a count) */
-  --border-soft: rgb(140 149 159 / .35);   /* row dividers and an empty bar: --border at 35% */
+  --border-soft: rgb(138 133 160 / .35);   /* row dividers and an empty bar: --border at 35% */
   --scrim: rgb(31 35 40 / .5);             /* behind a dialog */
   --scrim-strong: rgb(31 35 40 / .6);      /* behind the full-size photo */
 
