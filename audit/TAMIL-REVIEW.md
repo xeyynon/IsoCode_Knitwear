@@ -9,5 +9,6 @@ How to review: show the screen (or the line below) to three supervisors; ask wha
 | `today.progress` | My orders today, a line under the sync chip | `{n} of {m} updated today` | `இன்று {m} இல் {n} பதிவு செய்யப்பட்டது` | The number order: "m இல் n" reads "n out of m". Is "பதிவு செய்யப்பட்டது" (was recorded) the word supervisors use for entering the day's count? | |
 | `today.countsFor` | The same line, after a dot | `Counts go to {date}` | `{date} தேதிக்கான எண்ணிக்கை` | Does "எண்ணிக்கை" (count) read as the pieces they type? Does it make clear the count goes to that date, not the phone's date? | |
 | `update.next` | After a send, a button above Send | `Next: {po} · {stage}` | `அடுத்தது: {po} · {stage}` | "அடுத்தது" (the next one): is it clear this opens the next stage that has no update today? | |
+| `today.nothingNext` | My orders today, under "Nothing to update right now" when the list is empty | `New orders appear here when your merchandiser sets them up.` | `புதிய ஆர்டர்களை மெர்ச்சண்டைசர் சேர்த்ததும் அவை இங்கே தெரியும்.` | Is it clear whose job it is to add orders, and that the supervisor does nothing? Is "மெர்ச்சண்டைசர்" what the floor says? | |
 
 Existing Tamil that the first audit already flagged for review (words to ask about first): "கெடு" for Due, "இதுவரை" for so far, "பதிவு செய்" for Update.

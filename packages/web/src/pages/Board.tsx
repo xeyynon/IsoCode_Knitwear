@@ -244,7 +244,7 @@ export default function Board() {
             <p className="visually-hidden" role="status">{q.trim() && filtered.length > 0 ? `${filtered.length} ${filtered.length === 1 ? 'order matches' : 'orders match'}.` : ''}</p>
 
             {rows.length === 0 ? (
-              <div className="card"><p>No orders yet. Orders you set up will appear here.</p></div>
+              <div className="card"><p>No orders yet. Orders you set up will appear here.</p><p><Link className="btn" to="/orders/new">Set up the first order</Link></p></div>
             ) : filtered.length === 0 ? (
               <div className="card">
                 {/* Only the sentence is a live region: a button inside one is read out with it. */}

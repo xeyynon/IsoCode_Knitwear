@@ -99,7 +99,7 @@ export default function Today() {
         {st.stages === null && st.error && (
           <LoadFailed unreachable={st.error.unreachable} message={stagesErrorText(st.error, lang)} onRetry={() => void st.reload()} workSafe />
         )}
-        {st.stages && open.length === 0 && <div className="card"><p>{t('today.nothing')}</p></div>}
+        {st.stages && open.length === 0 && <div className="card"><p>{t('today.nothing')}</p><p className="sub">{t('today.nothingNext')}</p></div>}
         {progress && (
           <p className="sub today__progress">
             <b>{t('today.progress', { n: progress.updated, m: progress.total })}</b>

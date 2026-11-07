@@ -268,3 +268,12 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 - **Not given a skeleton:** the board and other screens (not measured over 1 s yet: only the supervisor's first sign-in was timed), a later visit (about 1 s, with real data already stored).
 - Tests: `bootShell.test.ts` (5), `skeleton.test.tsx` (4); written first (4 and 1 red). Web tests 677 passed; typecheck clean.
 - **Not checked:** a real low-end phone on a real network; a compressed host (the real number is smaller); the merchandiser's screens (their loading was not timed).
+
+## 4.3 and 4.4 Empty states, and the sync chip is noticed (8 Nov 2026, InBul16)
+
+- **4.3 Today with nothing to update** keeps its first sentence and adds "New orders appear here when your merchandiser sets them up." (`today.nothingNext`, draft Tamil, unreviewed, added to `audit/TAMIL-REVIEW.md`). It uses the word the sign-in screen already has for the merchandiser, and avoids a Tamil word for "unit", which the app does not have. The empty state cannot tell "nothing assigned" from "all done"; the wording is true for both.
+- **4.3 Board with no orders** says what will appear and now gives the way to make the first one ("Set up the first order", an outlined button, not a second primary). The filtered-empty board already had its own message and "show every ..." buttons and is unchanged.
+- **4.4 Sync chip:** when its tone changes (waiting to sent, sent to a problem, problem to sent) it is marked for 1.6 s: a ring in the action colour that thins away; under reduced motion a still 2 px outline instead (no motion). Not on first sight, and not while a count just goes down inside "waiting". Never green. Checked in Edge with touch emulation: offline gives `sync--wait sync--noticed`, back online "All sent" with the animation `sync-notice` (reduced motion: no animation, outline solid), and the mark is gone 2 s later.
+- Tests: `emptyStates.test.ts` (4), `syncNotice.test.tsx` (7); written first (4 and 3 red). Web tests 688 passed; typecheck clean.
+- **Not done in this phase:** 4.1 (Undo for "Don't show" needs a new server route: backend session; see below).
+- **Not checked:** the ring on a real phone; a screen reader reading the changed chip (it was already a polite live region); whether supervisors understand the Tamil sentence.

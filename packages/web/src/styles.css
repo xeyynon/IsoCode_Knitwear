@@ -155,6 +155,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .sync__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
 .sync--ok .sync__dot { background: var(--accent); }
 .sync--problem { border-color: var(--ink); }
+/* A change of state is marked for a moment (slice 4.4): a ring in the action colour that thins away. Sync is not order status: never green. */
+.sync--noticed { animation: sync-notice 1600ms ease-out; }
+@keyframes sync-notice { from { box-shadow: 0 0 0 5px var(--accent); } to { box-shadow: 0 0 0 0 var(--accent); } }
+@media (prefers-reduced-motion: reduce) { .sync--noticed { animation: none; outline: 2px solid var(--accent); outline-offset: 2px; } }
 .sync--problem .sync__dot { background: var(--ink); }
 .banner { background: var(--surface); border: 2px solid var(--ink); border-radius: 8px; padding: 12px 14px; margin: 0 0 12px; }
 .notice { color: var(--muted); margin: 0 0 12px; }
