@@ -20,12 +20,12 @@
     "a11y": "tsx scripts/a11y.ts"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.14",
-    "@types/node": "^20.14.0",
-    "axe-core": "^4.10.2",
+    "@electric-sql/pglite": "^0.5.15",
+    "@types/node": "^26.6.6",
+    "axe-core": "^4.14.0",
     "playwright-core": "^1.64.1",
     "tsx": "^4.23.15",
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }
