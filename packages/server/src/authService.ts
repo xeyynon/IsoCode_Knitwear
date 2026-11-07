@@ -47,6 +47,8 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
     lookup = { sql: `role = 'supervisor' and phone = $1`, key: phone, secret: input.pin }
   }
   const field = 'email' in input ? 'password_hash' : 'pin_hash'
+  // No account can have a zero character in its email or password, and the database cannot store one: answer as for any wrong detail.
+  if (lookup.key.includes(String.fromCharCode(0)) || lookup.secret.includes(String.fromCharCode(0))) { verifySecret(lookup.secret, DUMMY_HASH); throw INVALID() }
 
   // Throwing inside db.tx rolls the transaction back, which would undo the failed-attempt
   // counter. So decide inside, throw outside.
@@ -59,11 +61,14 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
     if (!found || found.disabled) { verifySecret(lookup.secret, DUMMY_HASH); return { kind: 'invalid' as const } }
     if (found.locked) return { kind: 'locked' as const }
     if (!verifySecret(lookup.secret, found[field])) {
-      const attempts = found.failed_attempts + 1
+      // Count in the database, not from the row read above: wrong PINs sent at the same moment
+      // would otherwise each write the same "count + 1", and the lock would never come.
+      // A lock that has run out starts the count again, so the account gets five fresh tries.
       await tx.query(
-        `update account set failed_attempts = $2::int,
-                locked_until = case when $2::int >= $3::int then $4::timestamptz + make_interval(mins => $5::int) else locked_until end
-          where id = $1`, [found.id, attempts, MAX_FAILED_ATTEMPTS, now.toISOString(), LOCK_MINUTES])
+        `update account set failed_attempts = case when locked_until <= $3::timestamptz then 1 else failed_attempts + 1 end,
+                locked_until = case when locked_until <= $3::timestamptz then null
+                                    when failed_attempts + 1 >= $2::int then $3::timestamptz + make_interval(mins => $4::int) else locked_until end
+          where id = $1`, [found.id, MAX_FAILED_ATTEMPTS, now.toISOString(), LOCK_MINUTES])
       return { kind: 'invalid' as const }
     }
     await tx.query(`update account set failed_attempts = 0, locked_until = null where id = $1`, [found.id])

@@ -19,6 +19,8 @@ export interface EngineData {
   orders: OrderRow[]
   stagesBy: Map<string, Stage[]>
   eventsBy: Map<string, UpdateEvent[]>
+  /** The clientUuids of the updates a merchandiser entered on a visit. The engine is not told; see confidence.ts. */
+  onBehalf: Set<string>
   calendars: Record<string, UnitCalendar>
   settings: Settings
 }
@@ -47,16 +49,19 @@ export async function loadEngineData(tx: Tx, orderId?: string): Promise<EngineDa
     tx.query<{ id: string; po: string; buyer_id: string; buyer_name: string; style: string; colour: string; sizes: Record<string, number>; qty: number; ex_factory: string }>(
       `select o.id::text as id, o.po, o.buyer_id::text as buyer_id, b.name as buyer_name, o.style, o.colour, o.sizes, o.qty,
               o.ex_factory::text as ex_factory
-         from orders o join buyer b on b.id = o.buyer_id ${one ? 'where o.id = $1' : ''}`, arg),
+         from orders o join buyer b on b.id = o.buyer_id ${one ? 'where o.id = $1' : ''}
+        order by o.ex_factory, o.po, o.style, o.colour, o.id`, arg),
     tx.query<{ order_id: string; stage: string; unit_id: string; planned_end: string; sequence: number; qty: number; planned_rate: number | null }>(
       `select order_id::text as order_id, stage, unit_id::text as unit_id, planned_end::text as planned_end,
               sequence, qty, planned_rate::float8 as planned_rate
-         from milestone ${one ? 'where order_id = $1' : ''}`, arg),
-    tx.query<{ client_uuid: string; order_id: string; stage: string; date: string; qty: number }>(
-      `select client_uuid::text as client_uuid, order_id::text as order_id, stage, date::text as date, qty
-         from update_event ${one ? 'where order_id = $1' : ''}`, arg),
+         from milestone ${one ? 'where order_id = $1' : ''}
+        order by order_id, sequence, stage, id`, arg),
+    tx.query<{ client_uuid: string; order_id: string; stage: string; date: string; qty: number; on_behalf: boolean }>(
+      `select client_uuid::text as client_uuid, order_id::text as order_id, stage, date::text as date, qty, on_behalf
+         from update_event ${one ? 'where order_id = $1' : ''}
+        order by order_id, date, client_uuid`, arg),
     tx.query<{ unit_id: string; date: string; working: boolean }>(
-      `select unit_id::text as unit_id, date::text as date, working from calendar_day`),
+      `select unit_id::text as unit_id, date::text as date, working from calendar_day order by unit_id, date`),
     loadSettings(tx),
   ])
 
@@ -73,7 +78,9 @@ export async function loadEngineData(tx: Tx, orderId?: string): Promise<EngineDa
     stagesBy.set(m.order_id, list)
   }
   const eventsBy = new Map<string, UpdateEvent[]>()
+  const onBehalf = new Set<string>()
   for (const e of events) {
+    if (e.on_behalf) onBehalf.add(e.client_uuid)
     const list = eventsBy.get(e.order_id) ?? []
     list.push({ clientUuid: e.client_uuid, stage: e.stage, date: e.date, qty: e.qty })
     eventsBy.set(e.order_id, list)
@@ -81,6 +88,6 @@ export async function loadEngineData(tx: Tx, orderId?: string): Promise<EngineDa
 
   return {
     orders: orders.map((o) => ({ id: o.id, po: o.po, buyerId: o.buyer_id, buyerName: o.buyer_name, style: o.style, colour: o.colour, sizes: o.sizes ?? {}, qty: o.qty, exFactory: o.ex_factory })),
-    stagesBy, eventsBy, calendars, settings,
+    stagesBy, eventsBy, onBehalf, calendars, settings,
   }
 }

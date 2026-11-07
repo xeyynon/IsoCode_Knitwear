@@ -63,7 +63,6 @@ describe('sending an update with a note', () => {
 
   describe('refuses a bad note and writes NOTHING (no update, no note)', () => {
     it.each([
-      ['a reason that is not on the list', { category: 'made-up' }],
       ['a reason that is not text', { category: 5 }],
       ['text that is not a string', { text: 42 }],
       ['text over 500 characters', { text: 'x'.repeat(501) }],
@@ -76,6 +75,13 @@ describe('sending an update with a note', () => {
     it('exactly 500 characters is fine', async () => {
       expect((await send({ note: { text: 'x'.repeat(500) } })).statusCode).toBe(200)
     })
+  })
+
+  it('a reason no longer on the list (a phone with an old copy) keeps the pieces and the words, filed as "other" for review', async () => {
+    const res = await send({ qty: 7, note: { text: TAMIL, category: 'removed-reason' } })
+    expect(res.statusCode).toBe(200)
+    expect((await pg.query<any>('select note_id from update_event where qty = 7')).rows).toHaveLength(1)
+    expect((await notes())[0]).toMatchObject({ text_ta: TAMIL, category: 'other', confirmed_by: null })
   })
 
   it('an English note is never overwritten by a reviewer: the original stays as written', async () => {
@@ -102,7 +108,7 @@ describe('sending an update with a note', () => {
 
   it('in a batch, one bad note is refused and the rest are accepted', async () => {
     const mk = (note: object) => ({ clientUuid: crypto.randomUUID(), orderId: ID.orderRed, stage: 'sewing', date: '2026-11-04', qty: 10, note })
-    const res = await app.inject({ method: 'POST', url: '/api/events/batch', headers: await sup(), payload: { events: [mk({ category: 'power' }), mk({ category: 'nope' }), mk({ text: 'ok' })] } })
+    const res = await app.inject({ method: 'POST', url: '/api/events/batch', headers: await sup(), payload: { events: [mk({ category: 'power' }), mk({ category: 5 }), mk({ text: 'ok' })] } })
     expect(res.json().results.map((r: any) => r.result)).toEqual(['accepted', 'rejected', 'accepted'])
     expect(await count('note')).toBe(2)
   })
@@ -242,10 +248,15 @@ describe('the small rules', () => {
     expect(cleanNote('  a\u0000b  c ')).toBe('ab c')
     expect(cleanNote('​')).toBe('​')                    // ordinary zero-width characters are left alone
   })
-  it('parses a note: nothing for empty, an error for a bad reason', () => {
+  it('parses a note: nothing for empty, an error for a malformed reason', () => {
     expect(parseNote(undefined, reasons)).toBeNull()
     expect(parseNote({ text: ' ' }, reasons)).toBeNull()
     expect(parseNote({ category: 'power' }, reasons)).toEqual({ text: null, category: 'power', language: null })
-    expect(() => parseNote({ category: 'nope' }, reasons)).toThrow(/Choose a reason/)
+    expect(() => parseNote({ category: 5 }, reasons)).toThrow(/Choose a reason/)
+  })
+  it('a reason that has left the list becomes "other" if the list has it, else is dropped; the count is never refused for it', () => {
+    expect(parseNote({ category: 'nope' }, [...reasons, { id: 'other', en: 'Something else' }])).toEqual({ text: null, category: 'other', language: null })
+    expect(parseNote({ category: 'nope' }, reasons)).toBeNull()
+    expect(parseNote({ text: 'late', category: 'nope' }, reasons)).toEqual({ text: 'late', category: null, language: 'en' })
   })
 })

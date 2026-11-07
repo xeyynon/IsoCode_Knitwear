@@ -87,6 +87,12 @@ describe('GET /api/orders/:id', () => {
     expect(d.history).toEqual([])
   })
 
+  it('carries the reason list from settings, so its notes are labelled in the server wording', async () => {
+    const list = [{ id: 'yarn', en: 'Yarn delayed at dye house' }, { id: 'other', en: 'Anything else' }]
+    await pg.query(`update settings set value = $1::jsonb where key = 'reason_categories'`, [JSON.stringify(list)])
+    expect((await detail(ID.orderRed)).reasons).toEqual(list)
+  })
+
   it('a new order with no updates is grey and says so, not green', async () => {
     const d = await detail(ID.orderNew)
     expect(d.order.status).toBe('grey')
@@ -134,6 +140,42 @@ describe('GET /api/orders/:id', () => {
     expect((await get(`/api/orders/${ID.orderRed}`, await sup())).statusCode).toBe(403)
     expect((await get(`/api/orders/${ID.orderRed}`)).headers['cache-control']).toBe('no-store')
   })
+  describe('the closed days behind the horizontal timeline', () => {
+    const closeDay = (unitId: string, date: string, working: boolean, note: string | null) =>
+      pg.query('insert into calendar_day (unit_id, date, working, note) values ($1, $2, $3, $4)', [unitId, date, working, note])
+
+    it('names the unit of each stage and gives the period from the first update to the later of ex-factory and the projected finish', async () => {
+      const d = await detail(ID.orderRed)
+      expect(d.stages[0].unitId).toBe(ID.unit1)
+      expect(d.calendar).toMatchObject({ from: '2026-10-29', to: '2026-11-20' })          // first update 29 Oct; ex-factory 20 Nov
+      expect(d.calendar.units.map((u: any) => [u.unitId, u.unitName])).toEqual([[ID.unit1, 'Unit 1']])
+    })
+    it('lists Sundays by default, with the word Sunday as the reason', async () => {
+      const closed = (await detail(ID.orderRed)).calendar.units[0].closed
+      expect(closed).toEqual([{ date: '2026-11-01', reason: 'Sunday' }, { date: '2026-11-08', reason: 'Sunday' }, { date: '2026-11-15', reason: 'Sunday' }])
+    })
+    it('a holiday carries the merchandiser\'s note, a worked Sunday is not closed, and another unit\'s closure is not shown', async () => {
+      await closeDay(ID.unit1, '2026-11-09', false, 'Deepavali')
+      await closeDay(ID.unit1, '2026-11-15', true, 'Extra day')
+      await closeDay(ID.unit2, '2026-11-10', false, 'Power shutdown')
+      await closeDay(ID.unit1, '2026-11-12', false, null)
+      await closeDay(ID.unit1, '2026-12-25', false, 'Outside the period')
+      const closed = (await detail(ID.orderRed)).calendar.units[0].closed
+      expect(closed).toEqual([
+        { date: '2026-11-01', reason: 'Sunday' }, { date: '2026-11-08', reason: 'Sunday' }, { date: '2026-11-09', reason: 'Deepavali' }, { date: '2026-11-12', reason: 'Closed' }])
+    })
+    it('a stage in another unit brings that unit\'s calendar', async () => {
+      await closeDay(ID.unit2, '2026-11-10', false, 'Power shutdown')
+      const d = await detail(ID.orderGreen)
+      expect(d.calendar.units.map((u: any) => u.unitName)).toEqual(['Unit 2'])
+      expect(d.calendar.units[0].closed).toContainEqual({ date: '2026-11-10', reason: 'Power shutdown' })
+    })
+    it('with no update yet the period starts today, and ends at the later of ex-factory and the stage dates', async () => {
+      const d = await detail(ID.orderNew)
+      expect(d.calendar).toMatchObject({ from: '2026-11-04', to: '2026-11-25' })
+    })
+  })
+
   it('the detail and the board always agree on the colour', async () => {
     const board = (await get('/api/board')).json().rows
     for (const row of board) expect((await detail(row.orderId)).order.status).toBe(row.status)

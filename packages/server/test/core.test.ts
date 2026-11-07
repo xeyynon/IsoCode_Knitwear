@@ -46,6 +46,33 @@ describe('the board', () => {
     expect(empty.reasons).toEqual(['no stages set up'])
   })
 
+  it('says which units own an order and how far along its stages are', async () => {
+    // A finished cutting stage on unit 2 ahead of the red order's sewing stage on unit 1.
+    await pg.exec(`insert into milestone (order_id, buyer_id, stage, unit_id, planned_end, sequence, qty)
+                   values ('${ID.orderRed}', '${ID.buyerB}', 'cutting', '${ID.unit2}', '2026-11-05', 0, 100);
+                   insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty)
+                   values (gen_random_uuid(), '${ID.orderRed}', '${ID.buyerB}', 'cutting', '${ID.unit2}', '2026-11-03', 100)`)
+    const rows = await board()
+    const red = rows.find((r) => r.po === 'B-PO-88240')!
+    expect(red.units).toEqual([{ id: ID.unit1, name: 'Unit 1' }, { id: ID.unit2, name: 'Unit 2' }])
+    expect([red.stagesDone, red.stagesTotal, red.currentStage]).toEqual([1, 2, 'sewing'])
+    const fresh = rows.find((r) => r.po === 'B-PO-88213')!
+    expect(fresh.units).toEqual([{ id: ID.unit1, name: 'Unit 1' }])
+    expect([fresh.stagesDone, fresh.stagesTotal, fresh.currentStage]).toEqual([0, 1, 'sewing'])
+  })
+
+  it('an order with every stage finished has no current stage; one with none set up has no units', async () => {
+    await pg.exec(`insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty)
+                   values (gen_random_uuid(), '${ID.orderGreen}', '${ID.buyerC}', 'sewing', '${ID.unit2}', '2026-11-03', 5300);
+                   insert into orders (buyer_id, po, style, colour, qty, ex_factory)
+                   values ('${ID.buyerC}', 'C-EMPTY', 's', 'c', 10, '2026-12-01')`)
+    const rows = await board()
+    const done = rows.find((r) => r.po === 'C-PO-0488')!
+    expect([done.stagesDone, done.stagesTotal, done.currentStage]).toEqual([1, 1, null])
+    const empty = rows.find((r) => r.po === 'C-EMPTY')!
+    expect([empty.units, empty.stagesDone, empty.stagesTotal, empty.currentStage]).toEqual([[], 0, 0, null])
+  })
+
   it('respects a closed day in the unit calendar', async () => {
     await pg.exec(`insert into calendar_day (unit_id, date, working, note) values ('${ID.unit1}', '2026-11-09', false, 'Deepavali')`)
     const red = (await board()).find((r) => r.po === 'B-PO-88240')!

@@ -80,19 +80,33 @@ export interface BuyerView { buyer: { name: string }; orders: BuyerOrder[] }
  */
 export async function getBuyerView(tx: Tx, ctx: Ctx): Promise<BuyerView> {
   if (ctx.role !== 'buyer' || !ctx.buyerId) throw forbidden()
-  const buyer = (await tx.query<{ name: string }>('select name from buyer where id = $1', [ctx.buyerId]))[0]
-  if (!buyer) throw notFound()
+  return readBuyerView(tx, ctx.buyerId)
+}
+
+/**
+ * The same view for a merchandiser who is looking at one buyer's file (the Excel export). Staff are not
+ * scoped to a buyer by the database, so the buyer comes from the address and the query filters by it.
+ */
+export async function getBuyerViewFor(tx: Tx, ctx: Ctx, buyerId: string): Promise<BuyerView> {
+  if (!isStaff(ctx)) throw forbidden()
+  if (!UUID.test(String(buyerId))) throw badRequest('Invalid request')
+  return readBuyerView(tx, buyerId)
+}
+
+async function readBuyerView(tx: Tx, buyerId: string): Promise<BuyerView> {
+  const buyer = (await tx.query<{ name: string }>('select name from buyer where id = $1', [buyerId]))[0]
+  if (!buyer) throw notFound('No such buyer')
   const orders = await tx.query<{ id: string; po: string; style: string; colour: string; qty: number; ex_factory: string }>(
-    'select id::text as id, po, style, colour, qty, ex_factory::text as ex_factory from orders where buyer_id = $1 order by ex_factory, po', [ctx.buyerId])
+    'select id::text as id, po, style, colour, qty, ex_factory::text as ex_factory from orders where buyer_id = $1 order by ex_factory, po, style, colour, id', [buyerId])
   const ms = await tx.query<{ order_id: string; stage: string; planned_end: string }>(
-    'select order_id::text as order_id, stage, planned_end::text as planned_end from milestone where buyer_id = $1 order by sequence', [ctx.buyerId])
+    'select order_id::text as order_id, stage, planned_end::text as planned_end from milestone where buyer_id = $1 order by order_id, sequence, stage, id', [buyerId])
   const photos = await tx.query<{ order_id: string; id: string; stage: string; taken_on: string }>(
     `select order_id::text as order_id, id::text as id, stage, taken_on::text as taken_on from photo
-      where buyer_id = $1 and approved_by is not null and rejected_at is null order by taken_on, created_at`, [ctx.buyerId])
+      where buyer_id = $1 and approved_by is not null and rejected_at is null and purged_at is null order by taken_on, created_at, id`, [buyerId])
   const warns = await tx.query<{ order_id: string; stage: string; status: 'amber' | 'red'; buyer_text: string; since: string }>(
     `select order_id::text as order_id, stage, status, buyer_text,
             to_char(confirmed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as since
-       from warning where buyer_id = $1 and confirmed_by is not null and dismissed_at is null and resolved_at is null order by confirmed_at`, [ctx.buyerId])
+       from warning where buyer_id = $1 and confirmed_by is not null and dismissed_at is null and resolved_at is null order by confirmed_at, id`, [buyerId])
   return {
     buyer: { name: buyer.name },
     orders: orders.map((o) => ({

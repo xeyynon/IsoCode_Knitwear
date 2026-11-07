@@ -64,4 +64,61 @@ jobs:
         env:
           VITE_API_BASE: https://api.example.invalid   # a placeholder: the build only needs the variable to exist
 
-# Still to add: Playwright offline-sync tests, and a real Postgres service container for the database tests.
+  # The same server tests as `test`, but on a real Postgres 16 instead of PGlite (Postgres in WebAssembly):
+  # a second connection, a connection pool, a role that logs in (app_user) and true concurrent
+  # transactions. TEST_DATABASE_URL switches packages/server/test/helpers.ts to the production pg driver;
+  # each test file gets its own throwaway database on this server, so files can run in parallel.
+  test-postgres:
+    name: Database tests on Postgres 16
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Server tests on Postgres 16 (migrations, services, API, row-level security)
+        run: npm run test:pg
+
+      # db/tests/rls.test.sql is plain Postgres. It is meant to run after the migrations, as a table
+      # owner that is NOT a superuser (a superuser bypasses even FORCE ROW LEVEL SECURITY and would prove
+      # nothing), and it needs to act as app_user, so the owner is made a member of that role.
+      # The migrations are applied by the real runner (npm run migrate); psql is used only to create the role and database,
+      # to grant the membership, and to run rls.test.sql.
+      - name: Row-level security SQL as a non-superuser owner, with psql
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || { sudo apt-get update && sudo apt-get install -y postgresql-client; }
+          psql --version
+          export PGUSER=postgres PGPASSWORD=postgres
+          psql -v ON_ERROR_STOP=1 -d postgres <<'SQL'
+          create role rls_owner nosuperuser createrole login password 'rls_owner';
+          create database rls_ci owner rls_owner;
+          SQL
+          export PGUSER=rls_owner PGPASSWORD=rls_owner
+          # The real migration runner (npm run migrate), connected as the same non-superuser owner the psql loop used: each
+          # migration in its own transaction, recorded in schema_migrations, so this step also exercises what production runs.
+          DATABASE_URL=postgres://rls_owner:rls_owner@localhost:5432/rls_ci npm run migrate
+          PGUSER=postgres PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -d rls_ci -c 'grant app_user to rls_owner'
+          psql -v ON_ERROR_STOP=1 -d rls_ci -c 'select rolsuper, rolbypassrls from pg_roles where rolname = current_user'
+          psql -v ON_ERROR_STOP=1 -d rls_ci -f packages/server/db/tests/rls.test.sql
+
+# Still to add: Playwright offline-sync tests.
