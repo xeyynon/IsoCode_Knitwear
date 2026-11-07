@@ -1,0 +1,17 @@
+/* NavTabs (ui/molecules/NavTabs.tsx): the merchandiser's places as tabs in the app bar. Tokens only. */
+.navtabs { display: flex; align-items: stretch; gap: var(--space-1); }
+.navtab {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  min-height: var(--tap-min); padding: 0 var(--space-3);
+  color: var(--muted); font-weight: 500; text-decoration: none; white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+.navtab:hover { color: var(--ink); background: var(--page); border-radius: var(--radius-s) var(--radius-s) 0 0; }
+/* the current place: heavier text, an underline and the action colour, so colour is never the only sign */
+.navtab[aria-current='page'] { color: var(--accent); font-weight: 700; border-bottom-color: var(--accent); }
+.navtab .count { margin-left: 0; }
+/* a phone: the tabs take a row of their own under the title, sharing the width */
+@media (max-width: 720px) {
+  .navtabs { order: 4; flex: 1 0 100%; }
+  .navtab { flex: 1 1 0; justify-content: center; }
+}

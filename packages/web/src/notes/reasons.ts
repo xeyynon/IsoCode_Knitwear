@@ -19,6 +19,9 @@ export const MAX_NOTE = 500
 /** The label in the reader's language, falling back to English rather than showing a blank. */
 export const reasonLabel = (r: Reason, lang: 'en' | 'ta'): string => (lang === 'ta' && r.ta ? r.ta : r.en)
 
+/** One tap picks a reason; tapping the chosen one again clears it (a radio cannot un-check itself, so the tap decides). */
+export const toggleReason = (current: string | null, tapped: string): string | null => (current === tapped ? null : tapped)
+
 /** The words for an id. An id the list does not know (an old note, a changed list) shows as itself, never as nothing. */
 export function reasonById(reasons: Reason[], id: string | null | undefined): Reason | null {
   if (!id) return null

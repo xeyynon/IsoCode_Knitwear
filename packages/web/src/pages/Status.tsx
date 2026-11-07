@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { API_BASE } from '../api/session'
 import { Loading } from '../ui/Loading'
+import { BUILD_LABEL } from '../release/buildInfo'
 
 interface Check { name: string; state: 'up' | 'down'; ms?: number }
 interface StatusBody { ok: boolean; checkedAt: string; checks: Check[] }
@@ -40,6 +41,7 @@ export default function Status() {
         </ul>
       )}
       {body && <p className="sub">Checked {new Date(body.checkedAt).toLocaleTimeString()}</p>}
+      {BUILD_LABEL && <p className="sub">{BUILD_LABEL}</p>}
     </main>
   )
 }

@@ -2,8 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Pinch-zoom stays allowed (no user-scalable=no). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Pinch-zoom stays allowed (no user-scalable=no). interactive-widget=resizes-content makes Android Chrome (108+) shrink the page
+         when the keyboard opens, so a bar pinned to the bottom of the screen (ui/molecules/ActionBar) sits above the keyboard. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+    <!-- Light only: floor screens are read in bright light, and a phone browser's "dark mode for websites" must not recolour the status colours. -->
+    <meta name="color-scheme" content="light" />
+    <!-- The app has its own language switch. Without this a phone whose language is English offers to translate the Tamil page, and a machine translation of our status words is not something anyone has checked. -->
+    <meta name="google" content="notranslate" />
     <meta name="theme-color" content="#F7F7F5" />
     <link rel="icon" href="data:," />
     <title>Order tracking</title>

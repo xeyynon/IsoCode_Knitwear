@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   LIST_PREVIEW, applyFilters, buyersOf, counts, parseFilters, preview, shortDate, withFilter, type BoardRow, type Status,
 } from '../src/board/boardLogic'
 import { decodeClaims, homeFor, isExpired, signInMessage, storeKind } from '../src/api/sessionRules'
+import { getClaims, signIn, signOut } from '../src/api/session'
 import { isChunkError, shouldReload } from '../src/ui/chunkReload'
-import { translate } from '../src/i18n'
+import { savedText, translate } from '../src/i18n'
 
 const row = (over: Partial<BoardRow> = {}): BoardRow => ({
   orderId: crypto.randomUUID(), po: 'P', buyerId: 'b1', buyerName: 'Buyer B', style: 's', colour: 'c', exFactory: '2026-11-20',
@@ -92,6 +93,18 @@ describe('status words', () => {
   })
 })
 
+describe('saved message', () => {
+  it('says "1 piece", never "1 pieces"', () => {
+    expect(savedText('en', 1, false, false)).toBe('Saved 1 piece.')
+    expect(savedText('en', 350, true, true)).toBe('Saved 350 pieces with a photo and a note.')
+    expect(savedText('en', 0, false, false)).toBe('Saved 0 pieces.')
+  })
+  it('a Tamil supervisor reads it in Tamil', () => {
+    expect(savedText('ta', 1, false, false)).not.toMatch(/Saved|piece/)
+    expect(savedText('ta', 5, true, false)).toContain('5')
+  })
+})
+
 describe('session rules', () => {
   const token = (c: object) => `${Buffer.from(JSON.stringify(c)).toString('base64url')}.sig`
   it('reads the role and expiry from a token', () => {
@@ -113,11 +126,30 @@ describe('session rules', () => {
     expect(homeFor('supervisor')).toBe('/today')
   })
   it('sign-in messages are plain and never contain an address', () => {
-    for (const k of ['rejected', 'locked', 'rate_limited', 'unreachable', 'invalid'] as const) {
+    for (const k of ['rejected', 'locked', 'rate_limited', 'unreachable', 'invalid', 'clock'] as const) {
       expect(signInMessage(k)).not.toMatch(/https?:|localhost|:\d{4}/)
     }
     expect(signInMessage('unreachable')).toMatch(/Cannot reach the server/)
     expect(signInMessage('locked', 'Too many wrong attempts. Try again in 15 minutes.')).toMatch(/15 minutes/)
+  })
+  // A token already past its expiry by this device's clock used to be dropped on read while
+  // signIn still said ok, so the login screen did nothing and showed nothing.
+  it('a token that is already expired by the device clock fails sign-in with a plain clock message', async () => {
+    const exp = Date.UTC(2026, 10, 4, 16, 30) / 1000
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ token: token({ role: 'merchandiser', exp }), role: 'merchandiser' }), { status: 200 }))
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(exp * 1000 + 60_000)
+      const r = await signIn({ email: 'm@example.test', password: 'x' })
+      expect(r.ok).toBe(false)
+      if (!r.ok) { expect(r.kind).toBe('clock'); expect(r.message).toMatch(/date or time/i) }
+      expect(getClaims()).toBeNull()
+      vi.setSystemTime(exp * 1000 - 60_000)
+      expect((await signIn({ email: 'm@example.test', password: 'x' })).ok).toBe(true)
+      expect(getClaims()?.role).toBe('merchandiser')
+    } finally {
+      signOut(); vi.useRealTimers(); vi.unstubAllGlobals()
+    }
   })
 })
 
@@ -135,7 +167,7 @@ describe('reloading after a deploy', () => {
   })
 })
 
-import { istDate, parsePieces, remainingPieces } from '../src/dates'
+import { istDate, notWholeNumber, parsePieces, remainingPieces } from '../src/dates'
 import { storageWarning, LOW_SPACE_BYTES } from '../src/queue/storageStatus'
 
 describe('the supervisor number field', () => {
@@ -147,6 +179,15 @@ describe('the supervisor number field', () => {
   })
   it.each([[''], ['0'], ['000'], ['abc'], ['-5'], ['12345678'], ['1000001']])('refuses %j', (raw) => {
     expect(parsePieces(raw)).toBeNull()
+  })
+  it('keeps what was typed and says so when it is not a whole number, rather than sending 125 for "12.5"', () => {
+    for (const typed of ['12.5', '-5', '1.5', '12,5x']) {
+      expect(parsePieces(typed)).toBeNull()
+      expect(notWholeNumber(typed)).toBe(true)
+    }
+    expect(notWholeNumber('')).toBe(false)        // an empty field is not a mistake yet
+    expect(notWholeNumber('1,200')).toBe(false)
+    expect(notWholeNumber('350')).toBe(false)
   })
   it('never shows a negative number of pieces left', () => {
     expect(remainingPieces(1000, 400)).toBe(600)

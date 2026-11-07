@@ -1,5 +1,6 @@
-import { useLang } from '../i18n'
+import { plural, useLang } from '../i18n'
 import type { QueueController, QueueState } from '../queue/controller'
+import { syncChipStatus } from './syncStatus'
 
 /**
  * "3 waiting" / "All sent": the supervisor's proof that their work is safe. It never says
@@ -7,18 +8,11 @@ import type { QueueController, QueueState } from '../queue/controller'
  * Neutral colours only: red, amber and green are reserved for order status.
  */
 export function SyncChip({ state, ctl }: { state: QueueState; ctl: QueueController }) {
-  const { t } = useLang()
-  const { pending, rejected, syncing, online, error, foreign } = state
-
-  let text: string
-  let tone: 'ok' | 'wait' | 'problem' = 'wait'
-  if (error === 'auth' && pending > 0) { text = `Sign in again to send ${pending} waiting`; tone = 'problem' }
-  else if (!online && pending > 0) text = `${t('sync.offline')} · ${pending} ${t('sync.waiting')}`
-  else if (!online) text = t('sync.offline')
-  else if (syncing) text = `Sending… ${pending} ${t('sync.waiting')}`
-  else if (pending > 0 && error) { text = `${pending} ${t('sync.waiting')} · could not send`; tone = 'problem' }
-  else if (pending > 0) text = `${pending} ${t('sync.waiting')}`
-  else { text = t('sync.allSent'); tone = 'ok' }
+  const { t, lang } = useLang()
+  const { pending, rejected, syncing, online, foreign, foreignRejected } = state
+  const { text, tone } = syncChipStatus(state, t)
+  // The main chip already names the refused updates when nothing else is going on.
+  const refusedShown = online && !syncing && pending === 0
 
   return (
     <div className="syncbar">
@@ -27,10 +21,11 @@ export function SyncChip({ state, ctl }: { state: QueueState; ctl: QueueControll
         {text}
       </span>
       {pending > 0 && online && !syncing && (
-        <button className="btn btn--small" onClick={() => void ctl.syncNow()}>Try now</button>
+        <button className="btn btn--small" onClick={() => void ctl.syncNow()}>{t('sync.tryNow')}</button>
       )}
-      {foreign > 0 && <span className="sync sync--problem">{foreign} from another sign-in wait{foreign === 1 ? 's' : ''} for that person</span>}
-      {rejected.length > 0 && <span className="sync sync--problem">{rejected.length} need{rejected.length === 1 ? 's' : ''} attention</span>}
+      {foreign > 0 && <span className="sync sync--problem">{plural(lang, foreign, 'sync.foreignOne', 'sync.foreignOther')}</span>}
+      {foreignRejected > 0 && <span className="sync sync--problem">{t('sync.foreignRejected', { n: foreignRejected })}</span>}
+      {rejected.length > 0 && !refusedShown && <span className="sync sync--problem">{plural(lang, rejected.length, 'sync.attentionOne', 'sync.attentionOther')}</span>}
     </div>
   )
 }

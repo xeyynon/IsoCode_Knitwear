@@ -55,6 +55,22 @@ export function accountState(a: { disabled: boolean; locked: boolean }): { text:
 
 export const dayKind = (working: boolean): string => (working ? 'Worked (extra day)' : 'Closed')
 
+/** What "Back to normal" sends: the row's own unit, never the unit selected now (the list may be another unit's). */
+export const clearDayBody = (d: { unitId: string; date: string }): { unitId: string; date: string } => ({ unitId: d.unitId, date: d.date })
+
+/** Each start() returns a check that stays true only until the next start(): a late answer to an older request is dropped. */
+export function latestRequest(): { start(): () => boolean } {
+  let seq = 0
+  return { start() { const mine = ++seq; return () => mine === seq } }
+}
+
+/** Days for clearing rejected photos, 0 to 3650, or null. Digits only: an empty field is refused, never read as 0 (which clears them all). */
+export function purgeDays(raw: string): number | null {
+  if (!/^\d{1,4}$/.test(raw.trim())) return null
+  const n = Number(raw)
+  return n <= 3650 ? n : null
+}
+
 /** A 10-digit number as typed (spaces, +91, dashes allowed), or null. */
 export function tenDigits(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
