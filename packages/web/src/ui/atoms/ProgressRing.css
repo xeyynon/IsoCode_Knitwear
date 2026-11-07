@@ -1,0 +1,7 @@
+/* ProgressRing (ui/atoms/ProgressRing.tsx). Tokens only. The ring takes the colour of its text (--accent by default; a dark card sets its own). */
+.ring { position: relative; flex: none; color: var(--accent); }
+.ring svg { display: block; }
+.ring__track { stroke: var(--border-soft); }
+.ring__fill { stroke: currentColor; transition: stroke-dashoffset 700ms ease-out; }
+.ring__center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1.1; color: inherit; }
+@media (prefers-reduced-motion: reduce) { .ring__fill { transition: none; } }

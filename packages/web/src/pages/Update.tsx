@@ -15,6 +15,7 @@ import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { ActionBar } from '../ui/molecules/ActionBar'
+import { UpdateHero } from '../ui/organisms/UpdateHero'
 import { SyncChip } from '../ui/SyncChip'
 import { setUnsentInput } from '../ui/unsentInput'
 
@@ -128,22 +129,22 @@ function UpdateStage() {
     <>
       <AppBar title={stageName ? stageLabel(lang, stageName).replace(/^./, (c) => c.toUpperCase()) : t('sup.title')} plainTitle={!!stage} />
       <main className="page page--narrow">
-        <Link className="link back" to="/today">← {t('sup.title')}</Link>
-        {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
+        {/* One row: the way back and the sync chip. Two rows pushed the number field behind the bar when the keyboard is up (phase 8A). */}
+        <div className="update__bar">
+          <Link className="link back back--arrow" to="/today"><span aria-hidden="true">←</span> <span className="back__text">{t('sup.title')}</span></Link>
+          {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
+        </div>
 
         {!st.stages && !st.error && <Loading label={t('common.loading')} />}
         {st.error && !st.stages && <LoadFailed unreachable={st.error.unreachable} message={stagesErrorText(st.error, lang)} onRetry={() => void st.reload()} workSafe />}
         {st.stages && !stage && <div className="card"><p>{t('update.notInList')}</p></div>}
 
         {stage && (
-          <form className="card update" onSubmit={(e) => { e.preventDefault(); void send() }}>
-            <h1 className="mono">{stage.po}</h1>
-            <p className="sub">{stage.style} · {stage.colour} · {t('update.due', { date: dayMonth(lang, stage.plannedEnd) })}</p>
-            <p className="update__nums mono">
-              <span>{t('update.todaySoFar')} <b>{pieces(todayTotal)}</b></span>
-              <span>{t('update.left')} <b>{pieces(left)}</b></span>
-            </p>
+          <form className="update" onSubmit={(e) => { e.preventDefault(); void send() }}>
+            <UpdateHero po={stage.po} meta={`${stage.style} · ${stage.colour} · ${t('update.due', { date: dayMonth(lang, stage.plannedEnd) })}`}
+              done={done} qty={stage.qty} todaySoFar={todayTotal} left={left} labels={{ todaySoFar: t('update.todaySoFar'), left: t('update.left') }} />
 
+            <div className="card update__body">
             <label className="field">
               <span>{t('sup.pieces')}</span>
               <input ref={input} className={`input input--big mono${confirming ? ' input--asking' : ''}`} inputMode="numeric" pattern="[0-9]*" autoComplete="off"
@@ -210,6 +211,7 @@ function UpdateStage() {
                 {confirming ? t('update.sendAnyway', { qty: qty ?? '' }) : t('sup.send')}
               </button>
             </ActionBar>
+            </div>
           </form>
         )}
       </main>

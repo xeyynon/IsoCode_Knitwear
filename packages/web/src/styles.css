@@ -177,19 +177,18 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .stages { display: grid; gap: 12px; }
 .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
 .stage--skeleton { display: grid; gap: var(--space-3); border-color: var(--border-soft); }
-.stage__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.stage__po { font-size: 20px; }
-.stage__name { text-transform: capitalize; font-size: 18px; margin: 4px 0 8px; }
-.stage__nums { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); margin-bottom: 12px; }
-.stage__nums b { color: var(--ink); }
 .stage__go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .finished { margin-top: 16px; color: var(--muted); }
 .back { display: inline-block; margin-bottom: 12px; }
+.update__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; margin-bottom: var(--space-2); }
+.update__bar .back, .update__bar .syncbar { margin-bottom: 0; }
+/* On a phone the way back is a round arrow (48 px); its words stay for a screen reader and for scripts, and the sync chip fits beside it in Tamil. */
+@media (max-width: 479px) {
+  .back--arrow { flex: none; width: var(--tap-min); min-height: var(--tap-min); padding: 0; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; font-size: 22px; background: var(--surface); }
+  .back--arrow .back__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 
-.update h1 { font-size: 24px; margin-bottom: 0; }
-.update__nums { display: flex; gap: 20px; margin: 8px 0 16px; font-size: 18px; }
-.update__nums b { font-size: 22px; }
-.input--big { min-height: var(--tap-primary); font-size: 28px; text-align: center; }
+.input--big { min-height: var(--tap-primary); font-size: 36px; font-weight: 700; line-height: 1.2; text-align: center; border-width: 2px; }   /* the figure typed is the point of the screen (phase 8A) */
 /* The supervisor's sign-in fields are the first thing used each day: 56 px. Two classes so no later rule can lower it. */
 .input.input--tall { min-height: var(--tap-primary); }
 .btn--big { font-size: 20px; }
