@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
+import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate } from '../board/boardLogic'
+import { pieces } from '../numberFormat'
+import { DateWords } from '../ui/atoms/DateWords'
 import { isRealDate, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
 import { AppBar } from '../ui/AppBar'
+import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 
 interface Options {
@@ -22,7 +26,7 @@ let nextRow = 100
 export default function OrderSetup() {
   const nav = useNavigate()
   const [opts, setOpts] = useState<Options | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<LoadFailure | null>(null)
   const [form, setForm] = useState<OrderForm>({
     buyerId: '', po: '', style: '', colour: '', exFactory: '', templateId: '',
     rows: SIZE_PRESETS.map((size, i) => ({ id: i + 1, size, qty: '' })),
@@ -33,10 +37,18 @@ export default function OrderSetup() {
   const [busy, setBusy] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const errorsRef = useRef<HTMLDivElement>(null)
+  const [failedTries, setFailedTries] = useState(0)
 
+  // The banner only exists after the first failed Create, so move focus once it has rendered.
   useEffect(() => {
-    apiFetch<Options>('/api/orders/options').then(setOpts).catch((e) => setLoadError(e instanceof ApiError ? e.message : 'Could not load the form.'))
+    if (failedTries > 0) errorsRef.current?.focus()
+  }, [failedTries])
+
+  const loadOptions = useCallback(() => {
+    setLoadError(null)
+    apiFetch<Options>('/api/orders/options').then(setOpts).catch((e) => setLoadError(describeFailure(e, 'Could not load the form.')))
   }, [])
+  useEffect(loadOptions, [loadOptions])
 
   // Show the dates the order would get as soon as there is a template and a real date, BEFORE creating it.
   useEffect(() => {
@@ -59,7 +71,7 @@ export default function OrderSetup() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setServerError(null)
-    if (Object.keys(errors).length || blocked) { setShowErrors(true); errorsRef.current?.focus(); return }
+    if (Object.keys(errors).length || blocked) { setShowErrors(true); setFailedTries((n) => n + 1); return }
     setBusy(true)
     try {
       const r = await apiFetch<{ orderId: string }>('/api/orders', {
@@ -82,7 +94,7 @@ export default function OrderSetup() {
       <main className="page page--form">
         <Link className="link back" to="/board">← Order board</Link>
         {!opts && !loadError && <Loading label="Loading" />}
-        {loadError && <div className="card" role="alert"><p>{loadError}</p></div>}
+        {loadError && <LoadFailed unreachable={loadError.unreachable} message={loadError.message} onRetry={loadOptions} />}
 
         {opts && (
           <form className="form" onSubmit={submit} noValidate>
@@ -128,7 +140,7 @@ export default function OrderSetup() {
               </div>
               <div className="sizes__foot">
                 <button type="button" className="btn btn--small" onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>Add a size</button>
-                <span className="mono" aria-live="polite">Total <b>{sizes.total.toLocaleString('en-IN')}</b> pieces</span>
+                <span className="mono" aria-live="polite">Total <b>{sizes.total > 0 ? pieces(sizes.total) : '–'}</b>{sizes.total > 0 ? ' pieces' : ''}</span>
               </div>
               {err('sizes')}
             </section>
@@ -137,7 +149,7 @@ export default function OrderSetup() {
               <h2>Dates</h2>
               <div className="grid2">
                 <label className="field"><span>Ex-factory date</span>
-                  <input className="input" type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} />{err('exFactory')}</label>
+                  <input className="input" type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} /><DateWords iso={form.exFactory} />{err('exFactory')}</label>
                 <label className="field"><span>TNA template</span>
                   <select className="input" value={form.templateId} onChange={(e) => set('templateId', e.target.value)} aria-invalid={showErrors && !!errors.templateId}>
                     <option value="">Choose a template</option>

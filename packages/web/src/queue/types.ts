@@ -55,4 +55,9 @@ export interface SyncOutcome {
   rejected: number      // refused for good: kept, flagged for a person
   remaining: number     // still pending
   error: SyncError
+  /** Updates the server accepted WITHOUT their photo, because it refused the photo for good. Only present when there are some. */
+  droppedPhotos?: DroppedPhoto[]
 }
+
+/** A photo left out of an update that was sent: the supervisor must be told, not shown "sent with a photo". */
+export interface DroppedPhoto { clientUuid: string; orderId: string; stage: string; date: string; qty: number; note: string }

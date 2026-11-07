@@ -4,6 +4,8 @@ import { getClaims, snapshot, subscribe } from './api/session'
 import { homeFor, type Role } from './api/sessionRules'
 import { ChunkErrorBoundary } from './ui/ChunkErrorBoundary'
 import { Loading } from './ui/Loading'
+import Shortcuts from './ui/Shortcuts'
+import { UpdateBanner } from './ui/UpdateBanner'
 
 // One chunk per screen, so a supervisor's phone never downloads the board.
 const Login = lazy(() => import('./pages/Login'))
@@ -51,6 +53,8 @@ export default function App() {
           <Route path="*" element={<Home />} />
         </Routes>
       </Suspense>
+      <UpdateBanner />
+      <Shortcuts />
     </ChunkErrorBoundary>
   )
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createQueueController } from '../src/queue/controller'
 import { memoryStore, syncQueue } from '../src/queue/sync'
-import { fitWithin, sizeText } from '../src/photo/resize'
+import { checkPrepared, fitWithin, MIN_PHOTO_BYTES, sizeText } from '../src/photo/resize'
 import type { BatchItemResult, QueuedEvent, SendBatch, UploadPhoto } from '../src/queue/types'
 
 let seq = 0
@@ -102,6 +102,22 @@ describe('sending an update that has a photo', () => {
     expect(store.items[0]!.photo).toBeUndefined()
   })
 
+  it('says which updates went without their refused photo, and why, so the phone can show it', async () => {
+    const store = memoryStore(); const srv = fakeServer()
+    await store.add(withPhoto({ clientUuid: 'a', qty: 350 }))
+    const out = await syncQueue(store, srv.send, async () => { throw httpError(400, 'That file is not a JPEG photo') })
+    expect(out.droppedPhotos).toEqual([{ clientUuid: 'a', orderId: 'o1', stage: 'sewing', date: '2026-11-04', qty: 350, note: 'That file is not a JPEG photo' }])
+  })
+
+  it('a photo refused in one sync is still reported when its pieces go out in a later one', async () => {
+    const store = memoryStore(); const srv = fakeServer()
+    await store.add(withPhoto({ clientUuid: 'a' }))
+    const first = await syncQueue(store, async () => { throw httpError(0) }, async () => { throw httpError(400, 'Too small') })
+    expect(first.droppedPhotos).toBeUndefined()                         // not sent yet: the note stays on the item
+    const second = await syncQueue(store, srv.send, srv.upload)
+    expect(second.droppedPhotos?.map((d) => [d.clientUuid, d.note])).toEqual([['a', 'Too small']])
+  })
+
   it('EXACTLY ONCE for photos too, under random failures including a lost reply to the upload itself', async () => {
     const store = memoryStore(); const srv = fakeServer()
     const N = 40
@@ -153,6 +169,18 @@ describe('the controller with photos', () => {
     expect(srv.photos.size).toBe(1)
     expect(srv.events.size).toBe(1)
   })
+
+  it('remembers a photo the server refused, so the screen can say so instead of "sent with a photo"', async () => {
+    const srv = fakeServer(); const store = memoryStore(true); let n = 0
+    const ctl = createQueueController({ store, uuid: () => `u${++n}`, isOnline: () => true, send: srv.send, uploadPhoto: async () => { throw httpError(400, 'That file is not a JPEG photo') } })
+    const it1 = await ctl.enqueue({ orderId: 'o1', stage: 'sewing', date: '2026-11-04', qty: 80, photo: blob() })
+    await ctl.syncNow()
+    expect(ctl.statusOf(it1.clientUuid)).toBe('sent')                   // the pieces arrived
+    expect(ctl.photoNoteOf(it1.clientUuid)).toBe('That file is not a JPEG photo')
+    expect(ctl.droppedPhotos()).toMatchObject([{ clientUuid: it1.clientUuid, qty: 80, note: 'That file is not a JPEG photo' }])
+    ctl.clearDroppedPhotos()
+    expect(ctl.droppedPhotos()).toEqual([])
+  })
 })
 
 describe('preparing a photo', () => {
@@ -169,6 +197,12 @@ describe('preparing a photo', () => {
     expect(() => fitWithin(0, 100)).toThrow()
     expect(() => fitWithin(NaN, 100)).toThrow()
     expect(fitWithin(10000, 1)).toEqual({ width: 1280, height: 1 })
+  })
+  it('refuses a prepared picture under 1 KB up front: the server would only refuse it later', () => {
+    expect(() => checkPrepared(null)).toThrow(/could not prepare/)
+    expect(() => checkPrepared(new Blob([new Uint8Array(500)], { type: 'image/jpeg' }))).toThrow(/too small/)
+    const ok = new Blob([new Uint8Array(MIN_PHOTO_BYTES)], { type: 'image/jpeg' })
+    expect(checkPrepared(ok)).toBe(ok)
   })
   it('says the size in plain units', () => {
     expect(sizeText(900)).toBe('1 KB')
