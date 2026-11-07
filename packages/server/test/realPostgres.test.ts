@@ -90,9 +90,10 @@ real('real Postgres: migrations and row-level security as a plain table owner', 
   it('every migration applies as a non-superuser owner, and the tables are owned by that role', async () => {
     const pg = await migratedRealDb({ asOwner: true })
     try {
-      expect((await pg.query(`select 1 from settings where key = 'reason_categories'`)).rows).toHaveLength(1)
-      const owners = await pg.query<{ super: boolean }>(`select r.rolsuper as super from pg_class c join pg_roles r on r.oid = c.relowner where c.relname = 'orders'`)
-      expect(owners.rows).toEqual([{ super: false }])
+      // As a plain owner FORCE RLS binds this session too, so a bare `select` from settings sees no rows; read the catalog instead.
+      const owners = await pg.query<{ super: boolean; forced: boolean }>(`select r.rolsuper as super, c.relforcerowsecurity as forced from pg_class c join pg_roles r on r.oid = c.relowner where c.relname = 'orders'`)
+      expect(owners.rows).toEqual([{ super: false, forced: true }])
+      expect((await pg.query(`select to_regclass('public.account_audit')::text as t`)).rows).toEqual([{ t: 'account_audit' }])
     } finally { await pg.close() }
   })
 
