@@ -18,6 +18,7 @@ coverage/
 data/
 recordings/
 uploads/
+media/
 
 # OS and editor
 .DS_Store

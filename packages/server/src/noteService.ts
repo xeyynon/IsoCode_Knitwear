@@ -26,6 +26,8 @@ export interface ParsedNote { text: string | null; category: string | null; lang
 /**
  * Check a note that came with an update. Both parts are optional, but an empty note is no note at all.
  * The reason must be one on the fixed list: free-typed reasons cannot be counted or compared.
+ * A reason that has since left the list (a phone holding an old copy) is filed as 'other' for the reviewer,
+ * or dropped if the list has no 'other': the count must never be refused because of a note.
  */
 export function parseNote(input: NoteInput | undefined, reasons: Reason[]): ParsedNote | null {
   if (input === undefined || input === null) return null
@@ -35,8 +37,9 @@ export function parseNote(input: NoteInput | undefined, reasons: Reason[]): Pars
   if (text.length > MAX_NOTE_CHARS) throw badRequest(`Keep the note under ${MAX_NOTE_CHARS} characters`)
   let category: string | null = null
   if (input.category !== undefined && input.category !== null && input.category !== '') {
-    if (typeof input.category !== 'string' || !reasons.some((r) => r.id === input.category)) throw badRequest('Choose a reason from the list')
-    category = input.category
+    if (typeof input.category !== 'string') throw badRequest('Choose a reason from the list')
+    if (reasons.some((r) => r.id === input.category)) category = input.category
+    else if (reasons.some((r) => r.id === 'other')) category = 'other'
   }
   if (!text && !category) return null
   return { text: text || null, category, language: text ? detectLanguage(text) : null }
@@ -45,13 +48,13 @@ export function parseNote(input: NoteInput | undefined, reasons: Reason[]): Pars
 export interface NoteContext { orderId: string; buyerId: string; unitId: string; stage: string; date: string }
 
 /** Insert a note and return its id. The original text goes in its own language's column; the other waits for a person. */
-export async function insertNote(tx: Tx, n: ParsedNote, c: NoteContext): Promise<string> {
+export async function insertNote(tx: Tx, n: ParsedNote, c: NoteContext, by: 'supervisor' | 'merchandiser' = 'supervisor'): Promise<string> {
   const id = randomUUID()
   await tx.query(
     `insert into note (id, order_id, buyer_id, stage, unit_id, taken_on, language, text_ta, text_en, category, category_by)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [id, c.orderId, c.buyerId, c.stage, c.unitId, c.date, n.language, n.language === 'ta' ? n.text : null, n.language === 'en' ? n.text : null,
-     n.category, n.category ? 'supervisor' : null])
+     n.category, n.category ? by : null])
   return id
 }
 

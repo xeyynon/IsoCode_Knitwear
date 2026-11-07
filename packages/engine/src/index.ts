@@ -121,9 +121,14 @@ export function projectOrder(
       const from = prevEnd !== null && compareDates(prevEnd, today) > 0 ? prevEnd : today
       projectedEnd = nthWorkingDayAfter(cal, from, Math.ceil(remaining / made))
     }
-    prevEnd = projectedEnd
+    // A stage with no projection must not reset the chain: carry the latest known end past it.
+    if (projectedEnd !== null && (prevEnd === null || compareDates(projectedEnd, prevEnd) > 0)) prevEnd = projectedEnd
 
-    const shortBy = complete ? 0 : made === null ? null : Math.max(0, Math.round(remaining - made * daysLeft))
+    // Compare exactly, round only to display: a shortfall under half a piece must not round to 0 and
+    // read as "on pace" (BUG-056). Anything genuinely short shows as at least 1. The epsilon only
+    // absorbs floating-point noise in an average, it is not a tolerance.
+    const exactShort = complete ? 0 : made === null ? null : remaining - made * daysLeft
+    const shortBy = exactShort === null ? null : exactShort > 1e-9 ? Math.max(1, Math.round(exactShort)) : 0
     const buffer =
       projectedEnd === null ? null
         : compareDates(projectedEnd, order.exFactory) > 0 ? 0
@@ -148,16 +153,25 @@ export function projectOrder(
   results.forEach((r, i) => {
     if (r.complete) { r.reasons.push('complete'); return }
     const hasData = r.produced > 0 || r.made !== null
-    if (!hasData) { r.status = 'grey'; r.reasons.push('no update yet'); return }
+    // A passed milestone with pieces left is late with or without data (DEC-018: a new order set
+    // up with stages already due shows late), so only a stage still in time can be "no update yet".
+    if (!hasData && r.needed !== null) { r.status = 'grey'; r.reasons.push('no update yet'); return }
 
     const red: string[] = []
-    if (r.needed === null) red.push('milestone passed with pieces remaining')
+    // No working days left also covers the milestone day itself, which is still being worked:
+    // red either way, but only call it "passed" once the date is behind us.
+    if (r.needed === null) {
+      red.push(compareDates(ordered[i]!.milestone, today) === 0
+        ? MILESTONE_TODAY : 'milestone passed with pieces remaining')
+    }
     else if (r.made !== null && r.made < settings.redBelow * r.needed) red.push('making less than 90% of needed')
     if (r.made !== null && r.made <= 0) red.push('no output')
     // Deliberate deviation from the written spec (see md/run_rate_engine.md, "Spec conflict"):
     // slipping past the stage milestone is NOT red by itself, or the amber band
     // (making 90-100% of needed) could never be reached. Red is "past ex-factory".
-    if (i <= lastPastIdx) red.push('a later stage is pushed past ex-factory')
+    // Name the right cause (BUG-057): this stage's own projection, or only a later stage's.
+    if (pastEx[i]) red.push(PAST_EX_SELF)
+    else if (i < lastPastIdx) red.push(PAST_EX_LATER)
     if (red.length) { r.status = 'red'; r.reasons.push(...red); return }
 
     const amber: string[] = []
@@ -165,8 +179,12 @@ export function projectOrder(
     if (r.bufferDays !== null && r.bufferDays < settings.bufferDays) amber.push('buffer before ex-factory under 2 working days')
     if (amber.length) { r.status = 'amber'; r.reasons.push(...amber); return }
 
-    // Green needs fresh data: a good rate that has gone quiet is grey, never green.
-    if (r.noRecentUpdate) { r.status = 'grey'; r.reasons.push('no update on the last working day') } else r.status = 'green'
+    // Green needs real, fresh data. A planned rate is a plan, not a reading, so a stage with no update
+    // at all is grey however good the plan looks (BUG-055); a good rate that has gone quiet is grey too.
+    // Red and amber from a plan are kept (DEC-010): they are warnings, and a warning is safe to show.
+    if (r.produced === 0) { r.status = 'grey'; r.reasons.push('no update yet') }
+    else if (r.noRecentUpdate) { r.status = 'grey'; r.reasons.push('no update on the last working day') }
+    else r.status = 'green'
   })
 
   const status = results.reduce<Status>((acc, r) => worst(acc, r.status), 'green')
@@ -182,6 +200,10 @@ export function projectOrder(
   return { orderId: order.id, status, stages: results, warning }
 }
 
+const MILESTONE_TODAY = 'milestone is today with pieces remaining'
+const PAST_EX_SELF = 'this stage is projected past ex-factory'
+const PAST_EX_LATER = 'a later stage is pushed past ex-factory'
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 export const formatDay = (d: IsoDate): string => {
   const [, m, day] = d.split('-').map(Number) as [number, number, number]
@@ -191,11 +213,22 @@ export const formatDay = (d: IsoDate): string => {
 /** The sentence shown under a stage: "Need 467/day · making 350/day · 700 pcs short by 11 Nov." */
 export function formatMaths(r: StageResult, milestone: IsoDate): string {
   if (r.complete) return 'Stage complete.'
-  const need = r.needed === null ? 'milestone has passed' : `Need ${Math.round(r.needed)}/day`
+  // A rate above zero never prints as 0: "Need 0/day" with pieces left reads as a placeholder.
+  const perDay = (x: number) => (x > 0 ? Math.max(1, Math.round(x)) : 0)
+  const need = r.needed !== null ? `Need ${perDay(r.needed)}/day`
+    : r.reasons.includes(MILESTONE_TODAY) ? 'milestone is due today' : 'milestone has passed'
   if (r.made === null) return `${need} · no output recorded yet.`
-  const rate = `making ${Math.round(r.made)}/day${r.madeIsEstimate ? ' (estimate)' : ''}`
-  const short = r.shortBy && r.shortBy > 0 ? ` · ${r.shortBy} pcs short by ${formatDay(milestone)}` : ' · on pace'
+  const rate = `making ${perDay(r.made)}/day${r.madeIsEstimate ? ' (estimate)' : ''}`
+  // "On pace" is a claim: it needs no shortfall AND a projected finish on or before the milestone
+  // (the stage may have enough pieces a day yet be held up by the stage before it).
+  const late = r.projectedEnd !== null && compareDates(r.projectedEnd, milestone) > 0
+  const short = r.shortBy && r.shortBy > 0
+    ? ` · ${r.shortBy} ${r.shortBy === 1 ? 'pc' : 'pcs'} short by ${formatDay(milestone)}`
+    : late ? ` · held up, projected to finish ${formatDay(r.projectedEnd!)}, after ${formatDay(milestone)}`
+    : ' · on pace'
   return `${need} · ${rate}${short}.`
 }
 
 export { backSchedule, type Schedule, type ScheduledMilestone, type TemplateStep } from './tna.js'
+
+export { addDays, compareDates, isWorking } from './dates.js'

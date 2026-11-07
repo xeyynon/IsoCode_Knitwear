@@ -1,9 +1,10 @@
 import { backSchedule, type TemplateStep } from '@isocode/engine'
 import { hashSecret } from './auth.js'
 import { normalisePhone } from './authService.js'
-import { AppError, badRequest, forbidden, notFound } from './errors.js'
+import { AppError, badRequest, forbidden, notFound, orDuplicate } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { isIsoDate } from './today.js'
+import { recordAudit } from './auditService.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const staffOnly = (ctx: Ctx) => { if (!isStaff(ctx)) throw forbidden('Only merchandisers can do this') }
@@ -42,15 +43,17 @@ export interface UnitRow { id: string; name: string; type: 'own' | 'subcontracto
 
 export async function listUnits(tx: Tx, ctx: Ctx): Promise<UnitRow[]> {
   staffOnly(ctx)
-  return tx.query<UnitRow>('select id::text as id, name, type from unit order by name')
+  return tx.query<UnitRow>('select id::text as id, name, type from unit order by name, id')
 }
 
 export async function createUnit(tx: Tx, ctx: Ctx, input: { name?: unknown; type?: unknown }): Promise<{ id: string }> {
   staffOnly(ctx)
   const name = text(input.name, 'The unit name', 80)
   if (input.type !== 'own' && input.type !== 'subcontractor') throw badRequest('Say whether the unit is your own or a subcontractor')
-  if ((await tx.query('select 1 from unit where lower(name) = lower($1)', [name])).length) throw new AppError(409, 'duplicate', 'A unit with that name already exists')
-  return (await tx.query<{ id: string }>('insert into unit (name, type) values ($1, $2) returning id::text as id', [name, input.type]))[0]!
+  const duplicate = new AppError(409, 'duplicate', 'A unit with that name already exists')
+  if ((await tx.query('select 1 from unit where lower(name) = lower($1)', [name])).length) throw duplicate
+  // The check above can lose a race with another request; the unique index (014) then refuses the insert and the answer is the same.
+  return (await orDuplicate(() => tx.query<{ id: string }>('insert into unit (name, type) values ($1, $2) returning id::text as id', [name, input.type]), duplicate))[0]!
 }
 
 // ---------------------------------------------------------------- people
@@ -66,11 +69,11 @@ export async function listAccounts(tx: Tx, ctx: Ctx, now: Date): Promise<Account
   const rows = await tx.query<{ id: string; role: 'merchandiser' | 'supervisor'; label: string | null; email: string | null; phone: string | null; unit_id: string | null; unit_name: string | null; disabled: boolean; locked: boolean }>(
     `select a.id::text as id, a.role, a.label, a.email, a.phone, a.unit_id::text as unit_id, u.name as unit_name,
             a.disabled_at is not null as disabled, coalesce(a.locked_until > $1::timestamptz, false) as locked
-       from account a left join unit u on u.id = a.unit_id order by a.role, a.label nulls last, a.email nulls last, a.phone`, [now.toISOString()])
+       from account a left join unit u on u.id = a.unit_id order by a.role, a.label nulls last, a.email nulls last, a.phone, a.id`, [now.toISOString()])
   return rows.map((r) => ({ id: r.id, role: r.role, label: r.label, email: r.email, phoneEnd: r.phone ? r.phone.slice(-4) : null, unitId: r.unit_id, unitName: r.unit_name, disabled: r.disabled, locked: r.locked }))
 }
 
-export async function createSupervisor(tx: Tx, ctx: Ctx, input: { phone?: unknown; pin?: unknown; unitId?: unknown; label?: unknown }): Promise<{ id: string }> {
+export async function createSupervisor(tx: Tx, ctx: Ctx, input: { phone?: unknown; pin?: unknown; unitId?: unknown; label?: unknown }, actorId: string): Promise<{ id: string }> {
   staffOnly(ctx)
   const phone = typeof input.phone === 'string' ? normalisePhone(input.phone) : null
   if (!phone) throw badRequest('Enter a 10-digit phone number')
@@ -79,14 +82,18 @@ export async function createSupervisor(tx: Tx, ctx: Ctx, input: { phone?: unknow
   if (weak) throw badRequest(weak)
   const unitId = uuid(input.unitId, 'the unit this supervisor works in')
   const label = text(input.label, 'The name', 80)
-  if (!(await tx.query('select 1 from unit where id = $1', [unitId])).length) throw notFound('No such unit')
-  if ((await tx.query('select 1 from account where phone = $1', [phone])).length) throw new AppError(409, 'duplicate', 'That phone number already has an account')
-  return (await tx.query<{ id: string }>(
+  const unit = (await tx.query<{ name: string }>('select name from unit where id = $1', [unitId]))[0]
+  if (!unit) throw notFound('No such unit')
+  const duplicate = new AppError(409, 'duplicate', 'That phone number already has an account')
+  if ((await tx.query('select 1 from account where phone = $1', [phone])).length) throw duplicate
+  const made = (await orDuplicate(() => tx.query<{ id: string }>(
     `insert into account (role, phone, pin_hash, unit_id, label) values ('supervisor', $1, $2, $3, $4) returning id::text as id`,
-    [phone, hashSecret(pin), unitId, label]))[0]!
+    [phone, hashSecret(pin), unitId, label]), duplicate))[0]!
+  await recordAudit(tx, actorId, made.id, 'supervisor_added', { unitId, unitName: unit.name, phoneEnd: phone.slice(-4) })
+  return made
 }
 
-export async function createMerchandiser(tx: Tx, ctx: Ctx, input: { email?: unknown; password?: unknown; label?: unknown }): Promise<{ id: string }> {
+export async function createMerchandiser(tx: Tx, ctx: Ctx, input: { email?: unknown; password?: unknown; label?: unknown }, actorId: string): Promise<{ id: string }> {
   staffOnly(ctx)
   const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : ''
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) throw badRequest('Enter a valid email address')
@@ -94,14 +101,17 @@ export async function createMerchandiser(tx: Tx, ctx: Ctx, input: { email?: unkn
   const weak = weakPassword(pw, email)
   if (weak) throw badRequest(weak)
   const label = text(input.label, 'The name', 80)
-  if ((await tx.query('select 1 from account where lower(email) = $1', [email])).length) throw new AppError(409, 'duplicate', 'That email already has an account')
-  return (await tx.query<{ id: string }>(
+  const duplicate = new AppError(409, 'duplicate', 'That email already has an account')
+  if ((await tx.query('select 1 from account where lower(email) = $1', [email])).length) throw duplicate
+  const made = (await orDuplicate(() => tx.query<{ id: string }>(
     `insert into account (role, email, password_hash, label) values ('merchandiser', $1, $2, $3) returning id::text as id`,
-    [email, hashSecret(pw), label]))[0]!
+    [email, hashSecret(pw), label]), duplicate))[0]!
+  await recordAudit(tx, actorId, made.id, 'merchandiser_added')
+  return made
 }
 
 /** A new PIN, which also unlocks the account and signs the person out of every phone. */
-export async function resetPin(tx: Tx, ctx: Ctx, id: string, pin: unknown): Promise<void> {
+export async function resetPin(tx: Tx, ctx: Ctx, id: string, pin: unknown, actorId: string): Promise<void> {
   staffOnly(ctx)
   uuid(id, 'a person')
   const p = typeof pin === 'string' ? pin : ''
@@ -110,14 +120,16 @@ export async function resetPin(tx: Tx, ctx: Ctx, id: string, pin: unknown): Prom
   const done = await tx.query(
     `update account set pin_hash = $2, failed_attempts = 0, locked_until = null, token_version = token_version + 1 where id = $1 and role = 'supervisor' returning id`, [id, hashSecret(p)])
   if (!done.length) throw notFound('No such supervisor')
+  await recordAudit(tx, actorId, id, 'pin_reset')
 }
 
 /** Sign someone out on every phone at once (a lost phone, a leaver). They can sign in again unless disabled. */
-export async function signOutEverywhere(tx: Tx, ctx: Ctx, id: string): Promise<void> {
+export async function signOutEverywhere(tx: Tx, ctx: Ctx, id: string, actorId: string): Promise<void> {
   staffOnly(ctx)
   uuid(id, 'a person')
   const done = await tx.query('update account set token_version = token_version + 1 where id = $1 returning id', [id])
   if (!done.length) throw notFound('No such person')
+  await recordAudit(tx, actorId, id, 'signed_out_everywhere')
 }
 
 /** Stop an account for good (or allow it again). A merchandiser cannot disable themselves: that could lock everyone out. */
@@ -125,10 +137,11 @@ export async function setDisabled(tx: Tx, ctx: Ctx, byUserId: string, id: string
   staffOnly(ctx)
   uuid(id, 'a person')
   if (typeof disabled !== 'boolean') throw badRequest('Say whether to stop or allow the account')
-  if (id === byUserId) throw badRequest('You cannot stop your own account')
+  if (id.toLowerCase() === byUserId.toLowerCase()) throw badRequest('You cannot stop your own account')
   const done = await tx.query(
     `update account set disabled_at = case when $2 then coalesce(disabled_at, now()) else null end, token_version = token_version + 1 where id = $1 returning id`, [id, disabled])
   if (!done.length) throw notFound('No such person')
+  await recordAudit(tx, byUserId, id, disabled ? 'account_stopped' : 'account_allowed')
 }
 
 // ---------------------------------------------------------------- closed days (holidays, closures)
@@ -173,7 +186,7 @@ export interface TemplateRow { id: string; name: string; stages: (TemplateStage 
 export async function listTemplates(tx: Tx, ctx: Ctx): Promise<TemplateRow[]> {
   staffOnly(ctx)
   const units = new Map((await tx.query<{ id: string; name: string }>('select id::text as id, name from unit')).map((u) => [u.id, u.name]))
-  const rows = await tx.query<{ id: string; name: string; offsets: unknown }>('select id::text as id, name, offsets from tna_template order by name')
+  const rows = await tx.query<{ id: string; name: string; offsets: unknown }>('select id::text as id, name, offsets from tna_template order by name, id')
   return rows.map((t) => ({
     id: t.id, name: t.name,
     stages: (Array.isArray(t.offsets) ? t.offsets as { stage: string; sequence: number; working_days_before: number; unit_id: string }[] : [])
@@ -203,15 +216,16 @@ export async function saveTemplate(tx: Tx, ctx: Ctx, input: { id?: unknown; name
   const known = new Set((await tx.query<{ id: string }>('select id::text as id from unit')).map((u) => u.id))
   for (const s of steps) if (!known.has(s.unitId)) throw notFound(`No such unit for "${s.stage}"`)
 
+  const duplicate = new AppError(409, 'duplicate', 'A template with that name already exists')
   const offsets = JSON.stringify(engine.map((s) => ({ stage: s.stage, sequence: s.sequence, working_days_before: s.workingDaysBefore, unit_id: s.unitId })))
   if (input.id !== undefined && input.id !== null) {
     const id = uuid(input.id, 'a template')
-    const done = await tx.query('update tna_template set name = $2, offsets = $3::jsonb where id = $1 returning id', [id, name, offsets])
+    const done = await orDuplicate(() => tx.query('update tna_template set name = $2, offsets = $3::jsonb where id = $1 returning id', [id, name, offsets]), duplicate)
     if (!done.length) throw notFound('No such template')
     return { id }
   }
-  if ((await tx.query('select 1 from tna_template where lower(name) = lower($1)', [name])).length) throw new AppError(409, 'duplicate', 'A template with that name already exists')
-  return (await tx.query<{ id: string }>('insert into tna_template (name, offsets) values ($1, $2::jsonb) returning id::text as id', [name, offsets]))[0]!
+  if ((await tx.query('select 1 from tna_template where lower(name) = lower($1)', [name])).length) throw duplicate
+  return (await orDuplicate(() => tx.query<{ id: string }>('insert into tna_template (name, offsets) values ($1, $2::jsonb) returning id::text as id', [name, offsets]), duplicate))[0]!
 }
 
 export async function deleteTemplate(tx: Tx, ctx: Ctx, id: string): Promise<void> {

@@ -25,6 +25,7 @@ const order = (over: object = {}) => ({
 const create = async (over: object = {}, headers?: Record<string, string>) =>
   app.inject({ method: 'POST', url: '/api/orders', headers: headers ?? await merch(), payload: order(over) })
 const ymd = (ms: { stage: string; plannedEnd: string }[]) => Object.fromEntries(ms.map((m) => [m.stage, m.plannedEnd]))
+const TWO_UNITS = '00000000-0000-0000-0000-0000000000f3'
 
 describe('creating an order from a TNA template', () => {
   it('back-schedules every stage from ex-factory, skipping Sundays', async () => {
@@ -95,6 +96,15 @@ describe('creating an order from a TNA template', () => {
       expect(res.statusCode).toBe(400)
       expect(res.json().error.message).toMatch(/cannot be used.*"sewing" would finish/)
     })
+    it('a closure in another unit is not blamed on good offsets: the order is created, the later stage held to the earlier one', async () => {
+      await pg.query(`insert into tna_template (id, name, offsets) values ($1, 'Two units', $2::jsonb)`, [TWO_UNITS, JSON.stringify([
+        { stage: 'knitting', sequence: 1, working_days_before: 6, unit_id: ID.unit1 },
+        { stage: 'linking', sequence: 2, working_days_before: 5, unit_id: ID.unit2 }])])
+      await pg.exec(`insert into calendar_day (unit_id, date, working, note) values ('${ID.unit2}', '2026-11-13', false, 'closure'), ('${ID.unit2}', '2026-11-14', false, 'closure')`)
+      const res = await create({ templateId: TWO_UNITS })
+      expect(res.statusCode).toBe(201)
+      expect(ymd(res.json().milestones)).toEqual({ knitting: '2026-11-13', linking: '2026-11-13' })
+    })
     it('a failed create leaves nothing behind', async () => {
       await create({ qty: 999 })
       const { rows } = await pg.query(`select 1 from orders where po = 'B-PO-90001'`)
@@ -146,6 +156,15 @@ describe('changing the ex-factory date', () => {
     expect((await pg.query(`select 1 from date_change`)).rows).toHaveLength(0)
   })
 
+  it('a reason longer than 300 characters is refused; exactly 300 is kept', async () => {
+    const id = await makeOrder()
+    const res = await change(id, { exFactory: '2026-11-27', reason: 'x'.repeat(301) })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(/300 characters/)
+    expect((await pg.query(`select 1 from date_change`)).rows).toHaveLength(0)
+    expect((await change(id, { exFactory: '2026-11-27', reason: `  ${'y'.repeat(300)}  ` })).statusCode).toBe(200)
+  })
+
   it('refuses the same date, a bad date and an unknown order', async () => {
     const id = await makeOrder()
     expect((await change(id, { exFactory: '2026-11-20', reason: 'x' })).statusCode).toBe(400)
@@ -160,6 +179,17 @@ describe('changing the ex-factory date', () => {
     expect(body.leftAlone).toEqual(['sewing'])
     const { rows } = await pg.query<{ planned_end: string }>(`select planned_end::text from milestone where order_id = $1 and stage = 'sewing'`, [id])
     expect(rows[0]?.planned_end).toBe('2026-11-14')
+  })
+
+  it('a closure in another unit never moves a later stage before an earlier one', async () => {
+    await pg.query(`insert into tna_template (id, name, offsets) values ($1, 'Two units', $2::jsonb)`, [TWO_UNITS, JSON.stringify([
+      { stage: 'knitting', sequence: 1, working_days_before: 6, unit_id: ID.unit1 },
+      { stage: 'linking', sequence: 2, working_days_before: 5, unit_id: ID.unit2 }])])
+    const id = (await create({ templateId: TWO_UNITS, exFactory: '2026-11-27' })).json().orderId as string
+    await pg.exec(`insert into calendar_day (unit_id, date, working, note) values ('${ID.unit2}', '2026-11-13', false, 'closure'), ('${ID.unit2}', '2026-11-14', false, 'closure')`)
+    expect((await change(id, { exFactory: '2026-11-20', reason: 'moved' })).statusCode).toBe(200)
+    const { rows } = await pg.query<{ stage: string; planned_end: string }>(`select stage, planned_end::text from milestone where order_id = $1 order by sequence`, [id])
+    expect(rows.map((r) => [r.stage, r.planned_end])).toEqual([['knitting', '2026-11-13'], ['linking', '2026-11-13']])
   })
 
   it('a supervisor cannot change dates', async () => {

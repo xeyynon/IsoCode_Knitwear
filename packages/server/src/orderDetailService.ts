@@ -1,12 +1,14 @@
-import { formatMaths, projectOrder, type Status } from '@isocode/engine'
+import { addDays, compareDates, formatMaths, isWorking, projectOrder, type IsoDate, type Status, type UnitCalendar } from '@isocode/engine'
 import { badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
+import { lowConfidenceStages } from './confidence.js'
 import { loadEngineData } from './engineData.js'
-import { listOrderNotes } from './noteService.js'
+import { listOrderNotes, loadReasons, type Reason } from './noteService.js'
 
 export interface StageDetail {
   stage: string
   sequence: number
+  unitId: string
   unitName: string
   qty: number
   produced: number
@@ -26,6 +28,8 @@ export interface StageDetail {
   shortBy: number | null
   bufferDays: number | null
   noRecentUpdate: boolean
+  /** The recent updates behind this stage's rate were entered by a merchandiser on a visit, not sent from the floor. */
+  lowConfidence: boolean
 }
 
 export interface HistoryEntry {
@@ -38,17 +42,58 @@ export interface HistoryEntry {
 }
 
 export interface OrderDetail {
+  /** The factory's date today (India), so a form can default to the same day the server will accept. */
+  today: string
   order: {
     id: string; po: string; buyerId: string; buyerName: string; style: string; colour: string
     sizes: Record<string, number>; qty: number; exFactory: string; status: Status
   }
   stages: StageDetail[]
+  /** The closed days of each stage's unit across the order's dates, for the horizontal timeline. */
+  calendar: TimelineCalendar
   history: HistoryEntry[]
   /** What supervisors reported, in their words, with the reason. Internal: buyers never see notes. */
   notes: Awaited<ReturnType<typeof listOrderNotes>>
+  /** The reason list from settings, to label the notes' reasons in the client's own wording. */
+  reasons: Reason[]
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+export interface ClosedDay { date: string; reason: string }
+export interface TimelineUnit { unitId: string; unitName: string; closed: ClosedDay[] }
+/** The days each unit does not work between the first date that matters and the last, for the horizontal stage timeline. */
+export interface TimelineCalendar { from: string; to: string; units: TimelineUnit[] }
+
+const MAX_SPAN_DAYS = 400
+
+/**
+ * Every day in [from, to] a unit is closed, with the reason in words: the note the merchandiser wrote,
+ * "Sunday" for the ordinary weekly closure, otherwise "Closed". A Sunday marked as worked is not closed.
+ */
+export function closedDaysIn(entries: { date: string; working: boolean; note: string | null }[], from: IsoDate, to: IsoDate): ClosedDay[] {
+  const byDate = new Map(entries.map((e) => [e.date, e]))
+  const cal: UnitCalendar = { days: Object.fromEntries(entries.map((e) => [e.date, e.working])) }
+  const out: ClosedDay[] = []
+  let d = from
+  for (let i = 0; i < MAX_SPAN_DAYS && compareDates(d, to) <= 0; i++, d = addDays(d, 1)) {
+    if (isWorking(cal, d)) continue
+    out.push({ date: d, reason: byDate.get(d)?.note?.trim() || (isWorking(undefined, d) ? 'Closed' : 'Sunday') })
+  }
+  return out
+}
+
+/** From the earliest of today, the first update and every order date, to the latest of ex-factory and every stage date. */
+export function timelineSpan(exFactory: IsoDate, today: IsoDate, firstUpdate: IsoDate | null, stageDates: (IsoDate | null)[]): { from: IsoDate; to: IsoDate } {
+  const ends = [exFactory, ...stageDates].filter((x): x is IsoDate => !!x)
+  const starts = [today, ...(firstUpdate ? [firstUpdate] : []), ...ends]
+  // Only the dates of the order end the period: today and the first update can start it but never stretch it.
+  return {
+    from: starts.reduce((a, b) => (compareDates(b, a) < 0 ? b : a)),
+    to: ends.reduce((a, b) => (compareDates(b, a) > 0 ? b : a)),
+  }
+}
 
 /**
  * One order in full: every stage with the dates the template planned beside the dates the
@@ -57,9 +102,9 @@ const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
  */
 export async function getOrderDetail(tx: Tx, ctx: Ctx, orderId: string, today: string): Promise<OrderDetail> {
   if (!isStaff(ctx)) throw forbidden('Order details are for merchandisers')
-  if (!/^[0-9a-f-]{36}$/i.test(String(orderId))) throw badRequest('Invalid order')
+  if (!UUID.test(String(orderId))) throw badRequest('Invalid order')
 
-  const { orders, stagesBy, eventsBy, calendars, settings } = await loadEngineData(tx, orderId)
+  const { orders, stagesBy, eventsBy, onBehalf, calendars, settings } = await loadEngineData(tx, orderId)
   const o = orders[0]
   if (!o) throw notFound('No such order')
   const stages = (stagesBy.get(o.id) ?? []).sort((a, b) => a.sequence - b.sequence)
@@ -68,15 +113,31 @@ export async function getOrderDetail(tx: Tx, ctx: Ctx, orderId: string, today: s
   const units = await tx.query<{ id: string; name: string }>('select id::text as id, name from unit')
   const unitName = new Map(units.map((u) => [u.id, u.name]))
 
+  const flagged = lowConfidenceStages(eventsBy.get(o.id) ?? [], onBehalf, today, settings.windowDays)
   const detail: StageDetail[] = result.stages.map((r) => {
     const st = stages.find((s) => s.stage === r.stage)!
     return {
-      stage: r.stage, sequence: st.sequence, unitName: unitName.get(st.unitId) ?? '', qty: r.qty, produced: r.produced,
+      stage: r.stage, sequence: st.sequence, unitId: st.unitId, unitName: unitName.get(st.unitId) ?? '', qty: r.qty, produced: r.produced,
       remaining: r.remaining, complete: r.complete, status: r.status, reasons: r.reasons, plannedEnd: st.milestone,
       projectedEnd: r.projectedEnd, maths: formatMaths(r, st.milestone), needed: r.needed, made: r.made,
       madeIsEstimate: r.madeIsEstimate, shortBy: r.shortBy, bufferDays: r.bufferDays, noRecentUpdate: r.noRecentUpdate,
+      lowConfidence: flagged.has(r.stage),
     }
   })
+
+  const events = eventsBy.get(o.id) ?? []
+  const firstUpdate = events.length ? events.reduce((a, e) => (compareDates(e.date, a) < 0 ? e.date : a), events[0]!.date) : null
+  const span = timelineSpan(o.exFactory, today, firstUpdate, stages.flatMap((s) => [s.milestone, detail.find((d) => d.stage === s.stage)?.projectedEnd ?? null]))
+  const dayRows = await tx.query<{ unit_id: string; date: string; working: boolean; note: string | null }>(
+    `select unit_id::text as unit_id, date::text as date, working, note from calendar_day where date >= $1 and date <= $2`, [span.from, span.to])
+  const unitIds = [...new Set(stages.map((s) => s.unitId))]
+  const calendar: TimelineCalendar = {
+    ...span,
+    units: unitIds.map((unitId) => ({
+      unitId, unitName: unitName.get(unitId) ?? '',
+      closed: closedDaysIn(dayRows.filter((r) => r.unit_id === unitId), span.from, span.to),
+    })),
+  }
 
   const rows = await tx.query<{ at: string; by: string | null; entity: string; field: string; old: string | null; new: string | null; reason: string; stage: string | null }>(
     `select to_char(d.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as at, a.email as by, d.entity, d.field,
@@ -88,12 +149,15 @@ export async function getOrderDetail(tx: Tx, ctx: Ctx, orderId: string, today: s
       order by d.at desc, d.id`, [orderId])
 
   return {
+    today,
     order: {
       id: o.id, po: o.po, buyerId: o.buyerId, buyerName: o.buyerName, style: o.style, colour: o.colour, sizes: o.sizes,
       qty: o.qty, exFactory: o.exFactory, status: stages.length ? result.status : 'grey',
     },
     stages: detail,
+    calendar,
     notes: await listOrderNotes(tx, ctx, o.id),
+    reasons: await loadReasons(tx),
     history: rows.map((r) => ({
       at: r.at, by: r.by, what: r.entity === 'orders' ? 'Ex-factory date' : `${label(r.stage ?? 'stage')} finish date`,
       from: r.old, to: r.new, reason: r.reason,

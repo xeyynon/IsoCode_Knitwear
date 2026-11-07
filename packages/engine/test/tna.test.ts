@@ -58,6 +58,13 @@ describe('backSchedule', () => {
     const s = backSchedule(EX, [step('cutting', 1, 2), step('sewing', 2, 6)], {}, TODAY)
     expect(s.problems.join(' ')).toMatch(/"sewing" would finish .* before "cutting"/)
   })
+  it('a closure in one unit does not make good offsets a template fault: the later stage is held to the earlier one', () => {
+    // Knitting 6 days back in u1 lands on 13 Nov; linking 5 days back in u2 (closed 13-14 Nov) would land on 12 Nov.
+    const cals = { u2: { days: { '2026-11-13': false, '2026-11-14': false } } }
+    const s = backSchedule(EX, [step('knitting', 1, 6), step('linking', 2, 5, 'u2')], cals, TODAY)
+    expect(s.problems).toEqual([])
+    expect(s.milestones.map((m) => [m.stage, m.plannedEnd])).toEqual([['knitting', '2026-11-13'], ['linking', '2026-11-13']])
+  })
   it.each([
     ['no stages', [] as TemplateStep[], /no stages/],
     ['a duplicate stage', [step('a', 1, 3), step('a', 2, 2)], /appears twice/],

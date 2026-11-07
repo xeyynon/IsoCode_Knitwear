@@ -5,6 +5,7 @@ import {
 import { compareDates } from '@isocode/engine/dates'
 import { forbidden } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
+import { lowConfidenceStages } from './confidence.js'
 import { loadEngineData } from './engineData.js'
 
 export interface BoardRow {
@@ -24,6 +25,14 @@ export interface BoardRow {
   /** The last working day has no update on an active stage (colour may still be red/amber). */
   noRecentUpdate: boolean
   hasWarning: boolean
+  /** The units that own any stage of the order, by name: what the board's unit filter matches. */
+  units: { id: string; name: string }[]
+  /** Stages finished out of all stages, and the first one not finished (null when all are done or none are set up). */
+  stagesDone: number
+  stagesTotal: number
+  currentStage: string | null
+  /** Unfinished stages whose recent updates a merchandiser entered on a visit: low confidence. Internal: never sent to a buyer. */
+  lowConfidenceStages: string[]
 }
 
 const SORT: Record<Status, number> = { red: 0, amber: 1, grey: 2, green: 3 }
@@ -36,16 +45,22 @@ const SORT: Record<Status, number> = { red: 0, amber: 1, grey: 2, green: 3 }
 export async function getBoard(tx: Tx, ctx: Ctx, today: string): Promise<BoardRow[]> {
   if (!isStaff(ctx)) throw forbidden('The board is for merchandisers')
 
-  const { orders, stagesBy, eventsBy, calendars, settings } = await loadEngineData(tx)
+  const { orders, stagesBy, eventsBy, onBehalf, calendars, settings } = await loadEngineData(tx)
+
+  const unitNames = new Map((await tx.query<{ id: string; name: string }>('select id::text as id, name from unit')).map((u) => [u.id, u.name]))
 
   const rows: BoardRow[] = orders.map((o) => {
     const stages = stagesBy.get(o.id) ?? []
-    const result = projectOrder({ id: o.id, exFactory: o.exFactory }, stages, eventsBy.get(o.id) ?? [], calendars, today, settings)
+    const events = eventsBy.get(o.id) ?? []
+    const result = projectOrder({ id: o.id, exFactory: o.exFactory }, stages, events, calendars, today, settings)
+    const flagged = lowConfidenceStages(events, onBehalf, today, settings.windowDays)
     // The stage that sets the colour; among equals the one furthest behind.
     const setting = result.stages
       .filter((s) => s.status === result.status && !s.complete)
       .sort((a, b) => (b.shortBy ?? 0) - (a.shortBy ?? 0))[0] as StageResult | undefined
     const milestone = stages.find((s) => s.stage === setting?.stage)?.milestone
+    // The engine returns stages in sequence order, so the first one not complete is where the order is now.
+    const unitIds = [...new Set(stages.map((s) => s.unitId))]
     return {
       orderId: o.id, po: o.po, buyerId: o.buyerId, buyerName: o.buyerName, style: o.style, colour: o.colour,
       exFactory: o.exFactory,
@@ -57,9 +72,15 @@ export async function getBoard(tx: Tx, ctx: Ctx, today: string): Promise<BoardRo
       reasons: setting?.reasons ?? (stages.length ? [] : ['no stages set up']),
       noRecentUpdate: result.stages.some((s) => s.noRecentUpdate),
       hasWarning: result.warning !== null,
+      units: unitIds.map((id) => ({ id, name: unitNames.get(id) ?? '' })).sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      stagesDone: result.stages.filter((s) => s.complete).length,
+      stagesTotal: result.stages.length,
+      currentStage: result.stages.find((s) => !s.complete)?.stage ?? null,
+      lowConfidenceStages: result.stages.filter((s) => !s.complete && flagged.has(s.stage)).map((s) => s.stage),
     }
   })
 
   return rows.sort((a, b) =>
-    SORT[a.status] - SORT[b.status] || compareDates(a.exFactory, b.exFactory) || a.po.localeCompare(b.po))
+    SORT[a.status] - SORT[b.status] || compareDates(a.exFactory, b.exFactory) || a.po.localeCompare(b.po) ||
+    a.style.localeCompare(b.style) || a.colour.localeCompare(b.colour) || (a.orderId < b.orderId ? -1 : a.orderId > b.orderId ? 1 : 0))
 }

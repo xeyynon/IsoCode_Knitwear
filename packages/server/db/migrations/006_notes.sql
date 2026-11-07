@@ -17,6 +17,10 @@ create policy reasons_read on settings for select using (
   key = 'reason_categories' and app_role() in ('supervisor', 'merchandiser', 'system'));
 
 -- The fixed list of reasons. The client edits it in week 1. The Tamil wording is UNREVIEWED: supervisors must correct it.
+-- FORCE RLS binds the table owner too, so the insert acts as 'system'. One DO block keeps the
+-- transaction-local setting and the insert together, whether psql runs in autocommit or with -1.
+do $$ begin
+perform set_config('app.role', 'system', true);
 insert into settings (key, value) values ('reason_categories', '[
   {"id": "labour",   "en": "Not enough workers",   "ta": "ஆட்கள் பற்றாக்குறை"},
   {"id": "absence",  "en": "Workers on leave",     "ta": "ஊழியர் விடுப்பு"},
@@ -26,3 +30,4 @@ insert into settings (key, value) values ('reason_categories', '[
   {"id": "quality",  "en": "Fixing quality",       "ta": "தரம் சரிசெய்தல்"},
   {"id": "other",    "en": "Something else",       "ta": "மற்றவை"}
 ]'::jsonb);
+end $$;

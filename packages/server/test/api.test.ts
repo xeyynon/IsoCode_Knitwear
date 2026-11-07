@@ -123,6 +123,15 @@ describe('signing in', () => {
     now = new Date(now.getTime() + (LOCK_MINUTES + 1) * 60_000)
     expect((await signIn({ phone: CREDS.phone, pin: CREDS.pin })).res.statusCode).toBe(200)
   })
+  it(`once a lock has run out, the account gets ${MAX_FAILED_ATTEMPTS} fresh tries`, async () => {
+    for (let i = 0; i < MAX_FAILED_ATTEMPTS; i++) await signIn({ phone: CREDS.phone, pin: '0000' })
+    now = new Date(now.getTime() + (LOCK_MINUTES + 1) * 60_000)
+    for (let i = 0; i < MAX_FAILED_ATTEMPTS - 1; i++) expect((await signIn({ phone: CREDS.phone, pin: '0000' })).res.statusCode).toBe(401)
+    expect((await signIn({ phone: CREDS.phone, pin: CREDS.pin })).res.statusCode).toBe(200)
+    // and the fifth fresh wrong try locks it again
+    for (let i = 0; i < MAX_FAILED_ATTEMPTS; i++) await signIn({ phone: CREDS.phone, pin: '0000' })
+    expect((await signIn({ phone: CREDS.phone, pin: CREDS.pin })).res.statusCode).toBe(429)
+  })
   it('a successful sign-in resets the failed-attempt count', async () => {
     for (let i = 0; i < MAX_FAILED_ATTEMPTS - 1; i++) await signIn({ phone: CREDS.phone, pin: '0000' })
     expect((await signIn({ phone: CREDS.phone, pin: CREDS.pin })).res.statusCode).toBe(200)
@@ -134,6 +143,50 @@ describe('signing in', () => {
     for (let i = 0; i < 11; i++) last = (await signIn({ email: `x${i}@example.test`, password: 'nope' })).res.statusCode
     expect(last).toBe(429)
     expect((await signIn({ email: CREDS.email, password: CREDS.password })).res.statusCode).toBe(429)
+  })
+  it('a successful sign-in does not give back failures the address has already spent', async () => {
+    for (let i = 0; i < 9; i++) expect((await signIn({ email: `x${i}@example.test`, password: 'nope' })).res.statusCode).toBe(401)
+    expect((await signIn({ email: CREDS.email, password: CREDS.password })).res.statusCode).toBe(200)
+    expect((await signIn({ email: 'y@example.test', password: 'nope' })).res.statusCode).toBe(401)
+    expect((await signIn({ email: 'z@example.test', password: 'nope' })).res.statusCode).toBe(429)
+  })
+  it('wrong PINs sent at the same moment are all counted, so the lock still comes after five', async () => {
+    // PGlite runs one transaction at a time, which hides the race. This Db models Postgres's
+    // READ COMMITTED: each statement commits on its own, and every sign-in has read the account
+    // before any of them writes it back.
+    const N = 10
+    let read = 0
+    let release!: () => void
+    const allRead = new Promise<void>((r) => { release = r })
+    const racy: Db = {
+      tx: async (ctx, fn) => {
+        let first = true
+        return fn({
+          query: async (sql, params) => {
+            const rows = await db.tx(ctx, (t) => t.query(sql, params))
+            if (first && /from account/.test(sql)) { first = false; if (++read === N) release(); await allRead }
+            return rows as never
+          },
+        })
+      },
+    }
+    const a = buildApp({ db: racy, tokenSecret: SECRET, clock: () => now })
+    const codes = await Promise.all(Array.from({ length: N }, (_, i) =>
+      a.inject({ method: 'POST', url: '/api/auth/login', payload: { phone: CREDS.phone, pin: '0000' }, remoteAddress: `10.0.0.${i + 1}` })
+        .then((r) => r.statusCode)))
+    expect(codes).toEqual(Array(N).fill(401))
+    const [acc] = (await pg.query<{ failed_attempts: number }>(`select failed_attempts from account where id = '${ID.sup1}'`)).rows
+    expect(acc!.failed_attempts).toBe(N)
+    expect((await signIn({ phone: CREDS.phone, pin: CREDS.pin })).json.error.code).toBe('locked')
+  })
+  it('a burst of wrong sign-ins from one address cannot all slip past the per-address limit', async () => {
+    const slow: Db = { tx: async (ctx, fn) => { await new Promise((r) => setTimeout(r, 30)); return db.tx(ctx, fn) } }
+    const a = buildApp({ db: slow, tokenSecret: SECRET, clock: () => now })
+    const codes = await Promise.all(Array.from({ length: 30 }, (_, i) =>
+      a.inject({ method: 'POST', url: '/api/auth/login', payload: { email: `x${i}@example.test`, password: 'nope' } })
+        .then((r) => r.statusCode)))
+    expect(codes.filter((c) => c === 401)).toHaveLength(10)
+    expect(codes.filter((c) => c === 429)).toHaveLength(20)
   })
 })
 
@@ -204,6 +257,17 @@ describe('sending updates', () => {
       expect(again.json().results.map((r: any) => r.result)).toEqual(['duplicate', 'duplicate', 'duplicate'])
       const { rows } = await pg.query<{ n: number }>(`select count(*)::int as n from update_event where date = '2026-11-04'`)
       expect(rows[0]?.n).toBe(3)
+    })
+    it('a null item is rejected on its own; the rest still go through', async () => {
+      const s = await supToken()
+      const res = await app.inject({ method: 'POST', url: '/api/events/batch', headers: auth(s), payload: { events: [evt(), null] } })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().results.map((r: any) => r.result)).toEqual(['accepted', 'rejected'])
+      expect(res.json().results[1]).toMatchObject({ code: 'bad_request' })
+    })
+    it('a null body on a single update is a 400', async () => {
+      const res = await app.inject({ method: 'POST', url: '/api/events', headers: { ...auth(await supToken()), 'content-type': 'application/json' }, payload: 'null' })
+      expect(res.statusCode).toBe(400)
     })
     it('rejects an empty or oversized batch', async () => {
       const s = await supToken()

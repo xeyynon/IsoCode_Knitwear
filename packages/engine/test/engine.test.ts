@@ -70,6 +70,19 @@ describe('status rules', () => {
     expect(r.stages[0]!.made).toBeNull()
     expect(formatMaths(r.stages[0]!, '2026-11-11')).toBe('Need 758/day · no output recorded yet.') // 4550 left over 6 working days
   })
+  it('red, not grey: milestone already passed with nothing recorded (a new order set up late)', () => {
+    const r = run([stitching({ milestone: '2026-10-20' })], [])
+    expect(r.stages[0]!.status).toBe('red')
+    expect(r.stages[0]!.reasons).toEqual(['milestone passed with pieces remaining'])
+    expect(r.status).toBe('red')
+    expect(formatMaths(r.stages[0]!, '2026-10-20')).toBe('milestone has passed · no output recorded yet.')
+  })
+  it('never prints "Need 0/day" while pieces remain (a small order weeks out)', () => {
+    const r = run([stitching({ qty: 5, milestone: '2026-12-10' })], []) // needed 0.16/day
+    expect(formatMaths(r.stages[0]!, '2026-12-10')).toBe('Need 1/day · no output recorded yet.')
+    const near = run([stitching({ qty: 1752 })], days('stitching', FIVE, 350)) // 2 left over 6 days
+    expect(formatMaths(near.stages[0]!, '2026-11-11')).toBe('Need 1/day · making 350/day · on pace.')
+  })
   it('grey: a good rate that has gone quiet is not green', () => {
     const r = run([stitching({ qty: 4300 })], days('stitching', ['2026-10-27', '2026-10-28', '2026-10-29'], 500))
     expect(r.stages[0]!.noRecentUpdate).toBe(true)
@@ -122,6 +135,14 @@ describe('estimates, ramp-up and edge cases', () => {
     expect(s.status).toBe('red')
     expect(formatMaths(s, '2026-11-01')).toContain('milestone has passed')
   })
+  it('milestone today with pieces remaining is red but says "due today", not "passed"', () => {
+    const s = run([stitching({ milestone: TODAY })], days('stitching', FIVE, 350)).stages[0]!
+    expect(s.daysLeft).toBe(0)
+    expect(s.needed).toBeNull()
+    expect(s.status).toBe('red')
+    expect(s.reasons).toEqual(['milestone is today with pieces remaining'])
+    expect(formatMaths(s, TODAY)).toBe('milestone is due today · making 350/day · 2800 pcs short by 4 Nov.')
+  })
   it('a duplicate client_uuid is counted once', () => {
     const e = ev('stitching', '2026-11-03', 350, 'same')
     const s = run([stitching()], [e, { ...e }]).stages[0]!
@@ -164,6 +185,16 @@ describe('chaining', () => {
     expect(r.stages[1]!.status).toBe('red')
     expect(r.stages[0]!.status).toBe('red')
     expect(r.stages[0]!.reasons).toContain('a later stage is pushed past ex-factory')
+  })
+  it('a middle stage with no projection does not reset the chain to today', () => {
+    const cutting = stitching({ stage: 'cutting', sequence: 0, qty: 2000, milestone: '2026-11-20' })
+    const sewing = stitching({ stage: 'sewing', sequence: 1, qty: 1000, milestone: '2026-11-20' }) // no data, no planned rate
+    const packing = stitching({ stage: 'packing', sequence: 2, qty: 500, milestone: '2026-11-20', plannedRate: 100 })
+    const r = run([cutting, sewing, packing], days('cutting', ['2026-10-31', '2026-11-02', '2026-11-03'], 100))
+    expect(r.stages[0]!.projectedEnd).toBe('2026-11-24')
+    expect(r.stages[1]!.projectedEnd).toBeNull()
+    expect(r.stages[2]!.projectedEnd).toBe('2026-11-30') // after cutting ends, not 5 days from today
+    expect(r.stages[2]!.status).toBe('red')
   })
 })
 
@@ -212,5 +243,106 @@ describe('a day that is not over yet', () => {
   })
   it('the quoted example is unchanged when nothing has been sent today', () => {
     expect(run([stitching()], days('stitching', FIVE, 350)).stages[0]!.made).toBe(350)
+  })
+})
+
+// BUG-055: no data means grey. A planned rate is a plan, not a reading, so it must never make a stage green.
+describe('BUG-055: a planned rate with no updates is never green', () => {
+  // [label, qty, plannedRate, expected status]. Needed is qty / 6 working days (5,6,7,9,10,11 Nov).
+  const cases: Array<[string, number, number, string]> = [
+    ['an easy plan (needed 167, planned 480)', 1000, 480, 'grey'],
+    ['a plan exactly at the need', 1200, 200, 'grey'],
+    ['a plan well under the need stays red (DEC-010: the estimate can still raise a warning)', 1000, 100, 'red'],
+    ['a plan just under the need stays amber', 1000, 160, 'amber'],
+  ]
+  it.each(cases)('%s', (_label, qty, plannedRate, status) => {
+    const r = run([stitching({ qty, plannedRate })], [])
+    expect(r.stages[0]!.status).toBe(status)
+    expect(r.status).toBe(status)
+    expect(r.stages[0]!.madeIsEstimate).toBe(true)
+  })
+  it('says why it is grey', () => {
+    const s = run([stitching({ qty: 1000, plannedRate: 480 })], []).stages[0]!
+    expect(s.reasons).toEqual(['no update yet'])
+    expect(s.produced).toBe(0)
+  })
+  it('an order whose only stage has a good plan and no updates is grey, so the board cannot show it green', () => {
+    expect(run([stitching({ qty: 1000, plannedRate: 480 })], []).warning).toBeNull()
+  })
+  it('one real update moves it on: a good rate with fresh data is green again', () => {
+    const s = run([stitching({ qty: 1000, plannedRate: 480 })], [ev('stitching', TODAY, 100)]).stages[0]!
+    expect(s.madeIsEstimate).toBe(true)
+    expect(s.status).toBe('green')
+  })
+})
+
+// BUG-056: the words must agree with the maths. Compare exactly; round only to display.
+describe('BUG-056: "on pace" is only said when it is true', () => {
+  const sixDays = (qty: number, perDay: number[]) =>
+    run([stitching({ qty })], FIVE.map((d, i) => ev('stitching', d, perDay[i]!)))
+
+  it('a shortfall that rounds to zero is not "on pace" and never prints "0 pcs short"', () => {
+    // made 350.6/day over 6 days = 2103.6 against 2104 left: 0.4 of a piece short, amber.
+    const s = sixDays(1753 + 2104, [350, 350, 351, 351, 351]).stages[0]!
+    expect(s.status).toBe('amber')
+    expect(s.made).toBeCloseTo(350.6)
+    expect(s.shortBy).toBe(1)
+    const text = formatMaths(s, '2026-11-11')
+    expect(text).not.toContain('on pace')
+    expect(text).not.toContain('0 pcs')
+    expect(text).toBe('Need 351/day · making 351/day · 1 pc short by 11 Nov.')
+  })
+  it('a shortfall of a few pieces keeps its rounded figure', () => {
+    const s = sixDays(1753 + 2110, [350, 350, 351, 351, 351]).stages[0]!   // 6.4 short
+    expect(s.shortBy).toBe(6)
+    expect(formatMaths(s, '2026-11-11')).toContain('6 pcs short by 11 Nov')
+  })
+  it('exactly enough is on pace', () => {
+    const s = sixDays(1750 + 2100, [350, 350, 350, 350, 350]).stages[0]!
+    expect(s.shortBy).toBe(0)
+    expect(formatMaths(s, '2026-11-11')).toBe('Need 350/day · making 350/day · on pace.')
+  })
+  it('enough pieces per day but a projected finish after the milestone is not "on pace" either', () => {
+    // Sewing could cover its own pieces in time, but cutting ends after sewing is due, and sewing cannot start before.
+    const cutting = stitching({ stage: 'cutting', sequence: 0, qty: 4000, milestone: '2026-11-20' })
+    const sewing = stitching({ stage: 'sewing', sequence: 1, qty: 5300, milestone: '2026-11-11' })
+    const r = run([cutting, sewing], [...days('cutting', FIVE, 100), ...days('sewing', FIVE, 500)])
+    const s = r.stages[1]!
+    expect(s.shortBy).toBe(0)
+    expect(compareIso(s.projectedEnd!, '2026-11-11')).toBeGreaterThan(0)
+    const text = formatMaths(s, '2026-11-11')
+    expect(text).not.toContain('on pace')
+    expect(text).toContain('finish')
+  })
+})
+
+const compareIso = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+// BUG-057: the red reason must name the stage that is actually late.
+describe('BUG-057: the red reason names this stage or a later one correctly', () => {
+  const LATER = 'a later stage is pushed past ex-factory'
+  const SELF = 'this stage is projected past ex-factory'
+  it('a lone stage that is itself late says so, not "a later stage"', () => {
+    const r = run([stitching({ qty: 4550, milestone: '2026-11-11' })], days('stitching', FIVE, 100))
+    expect(r.stages[0]!.status).toBe('red')
+    expect(r.stages[0]!.reasons).toContain(SELF)
+    expect(r.stages[0]!.reasons).not.toContain(LATER)
+  })
+  it('the last late stage names itself; an earlier on-time stage names the later one', () => {
+    const cutting = stitching({ stage: 'cutting', sequence: 0, qty: 1000 })
+    const sewing = stitching({ stage: 'sewing', sequence: 1, qty: 4000, milestone: '2026-11-20', plannedRate: 400 })
+    const r = run([cutting, sewing], days('cutting', FIVE, 100))
+    expect(r.stages[1]!.reasons).toContain(SELF)
+    expect(r.stages[1]!.reasons).not.toContain(LATER)
+    expect(r.stages[0]!.reasons).toContain(LATER)
+    expect(r.stages[0]!.reasons).not.toContain(SELF)
+  })
+  it('two late stages: each names itself', () => {
+    const a = stitching({ stage: 'cutting', sequence: 0, qty: 4550, milestone: '2026-11-11' })
+    const b = stitching({ stage: 'sewing', sequence: 1, qty: 4550, milestone: '2026-11-20' })
+    const r = run([a, b], [...days('cutting', FIVE, 100), ...days('sewing', FIVE, 100)])
+    expect(r.stages[0]!.reasons).toContain(SELF)
+    expect(r.stages[1]!.reasons).toContain(SELF)
+    expect(r.stages[0]!.reasons).not.toContain(LATER)
   })
 })

@@ -47,12 +47,16 @@ export function backSchedule(
     plannedEnd: workingDaysBack(calendars[s.unitId], exFactory, Math.max(0, s.workingDaysBefore)),
   }))
 
-  // A later stage cannot be due before an earlier one.
+  // A later stage cannot be due before an earlier one. Only the offsets can make that a
+  // template fault; when closed days in different units cause it, the later stage is held
+  // to the earlier stage's date instead.
   for (let i = 1; i < milestones.length; i++) {
     const prev = milestones[i - 1]!
     const cur = milestones[i]!
-    if (compareDates(cur.plannedEnd, prev.plannedEnd) < 0) {
+    if (ordered[i]!.workingDaysBefore > ordered[i - 1]!.workingDaysBefore) {
       problems.push(`"${cur.stage}" would finish (${cur.plannedEnd}) before "${prev.stage}" (${prev.plannedEnd}); check the template offsets`)
+    } else if (compareDates(cur.plannedEnd, prev.plannedEnd) < 0) {
+      cur.plannedEnd = prev.plannedEnd
     }
   }
   const alreadyDue = milestones.filter((m) => compareDates(m.plannedEnd, today) <= 0).map((m) => m.stage)
