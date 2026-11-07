@@ -6,7 +6,7 @@ import { useLang } from '../i18n'
  * together: red, amber and green are almost the same lightness, so in greyscale or for a
  * colour-blind reader only the shape and the word tell them apart.
  */
-function Icon({ status }: { status: Status }) {
+export function StatusIcon({ status }: { status: Status }) {
   const common = { width: 16, height: 16, viewBox: '0 0 16 16', 'aria-hidden': true, focusable: false } as const
   switch (status) {
     case 'red': // filled triangle with !
@@ -45,7 +45,7 @@ export function StatusBadge({ status }: { status: Status }) {
   const { t } = useLang()
   return (
     <span className={`badge badge--${status}`}>
-      <Icon status={status} />
+      <StatusIcon status={status} />
       <span>{t(`status.${status}`)}</span>
     </span>
   )
