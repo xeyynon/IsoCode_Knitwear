@@ -1,0 +1,5 @@
+/* InlineUndo (ui/molecules/InlineUndo.tsx): a calm line where a card was. Tokens only; no fill, no animation (it is not a toast), no status colour. */
+.inlineundo { padding: var(--space-3) var(--space-4); border: 1px dashed var(--border); border-radius: var(--radius-m); background: transparent; }
+.inlineundo__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.inlineundo__text { min-width: 0; overflow-wrap: anywhere; }
+.inlineundo__error { margin: var(--space-2) 0 0; }
