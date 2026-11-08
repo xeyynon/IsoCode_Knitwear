@@ -82,6 +82,10 @@ try {
   const page = await ctx.newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
+  // The preview server sends the app's Content-Security-Policy (scripts/csp.mjs); the browser reports a blocked load as a console error.
+  const cspViolations: string[] = []
+  page.on('console', (m) => { if (m.type() === 'error' && /Content Security Policy|violates the following/i.test(m.text())) cspViolations.push(m.text().slice(0, 160)) })
+  await page.addInitScript(() => { document.addEventListener('securitypolicyviolation', (e) => console.error('Content Security Policy: ' + e.violatedDirective + ' blocked ' + e.blockedURI)) })
 
   // ---- sign in as a supervisor and let the service worker store the app
   await page.goto(`${WEB}/login`)
@@ -200,6 +204,7 @@ try {
   check('the Tamil note and reason arrived once, with the update they belong to', nt.n === 1 && nt.lang === 'ta' && nt.cat === 'machine' && nt.txt === TAMIL_NOTE && nt.linked === 1, `${nt.n} note, ${nt.lang}, ${nt.cat}, linked ${nt.linked}`)
 
   check('no script errors in the page', errors.length === 0, errors.join(' | '))
+  check('nothing the app needs was blocked by its Content-Security-Policy', cspViolations.length === 0, cspViolations.join(' | '))
   await browser.close()
 } catch (e) {
   console.error('e2e crashed:', e)

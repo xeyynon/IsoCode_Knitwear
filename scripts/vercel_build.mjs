@@ -13,6 +13,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { build } from 'esbuild'
 import { scriptDir } from './repoRoot.mjs'
+import { csp } from './csp.mjs'
 
 // The folder above this script, not git: Vercel's build has no .git folder.
 const root = path.resolve(scriptDir(import.meta.url), '..')
@@ -56,6 +57,7 @@ const security = {
   'x-frame-options': 'DENY',
   'permissions-policy': 'geolocation=(), microphone=(), camera=(self)',
   'strict-transport-security': 'max-age=31536000',
+  'content-security-policy': csp(),          // scripts/csp.mjs: the same policy the local browser checks run under
 }
 fs.writeFileSync(path.join(out, 'config.json'), JSON.stringify({
   version: 3,

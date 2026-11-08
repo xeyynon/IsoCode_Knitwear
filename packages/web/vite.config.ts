@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { csp } from '../../scripts/csp.mjs'
 
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -39,6 +40,7 @@ export default defineConfig(({ mode, command }) => {
       },
     ],
     server: { port: 5173, proxy: { '/api': 'http://localhost:8787' } },
-    preview: { port: 4173 },
+    // The preview server (the browser tests, npm run e2e) sends the policy the hosted build sends, so a violation shows up before a deploy.
+    preview: { port: 4173, headers: { 'Content-Security-Policy': csp({ localApi: true }) } },
   }
 })

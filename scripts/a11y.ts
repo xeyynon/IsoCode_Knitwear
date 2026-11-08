@@ -33,6 +33,8 @@ type Device = keyof typeof VIEWPORTS
 interface Node { target: string; summary: string }
 interface Finding { screen: string; id: string; impact: string; help: string; helpUrl: string; nodes: Node[] }
 const findings: Finding[] = []
+// When WEB is a preview server (vite preview) the app's Content-Security-Policy is enforced, and a blocked load is reported here.
+const cspViolations: string[] = []
 let screens = 0
 
 async function up(): Promise<void> {
@@ -44,7 +46,8 @@ async function up(): Promise<void> {
 /** Run axe on what is on screen now. WCAG 2.0 to 2.2 A and AA plus axe's best-practice rules; nothing is switched off. */
 async function check(page: Page, screen: string, only?: string): Promise<void> {
   await page.waitForTimeout(400)   // transitions and fonts settle, so contrast is measured on the final colours
-  if (!(await page.evaluate(() => 'axe' in window))) await page.addScriptTag({ content: AXE })
+  // Evaluated through the debugging channel, not as an inline <script>: the app's Content-Security-Policy (when WEB is a preview server) rightly blocks an inline script.
+  if (!(await page.evaluate(() => 'axe' in window))) await page.evaluate(AXE)
   const result = await page.evaluate(async (only) => {
     const axe = (window as unknown as { axe: { run: (c: Document | object, o: object) => Promise<{ violations: { id: string; impact: string | null; help: string; helpUrl: string; nodes: { target: unknown[]; failureSummary?: string }[] }[] }> } }).axe
     return axe.run(only ? { include: [[only]] } : document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] } })
@@ -76,7 +79,10 @@ async function newPage(browser: Browser, device: Device, lang: 'en' | 'ta' = 'en
   if (API) await ctx.route(`${WEB}/api/**`, async (route) => route.fulfill({ response: await route.fetch({ url: route.request().url().replace(WEB, API) }) }))
   await ctx.clock.setFixedTime(await apiNow())
   await ctx.addInitScript((l) => { try { window.localStorage.setItem('orders.lang', l) } catch { /* private window */ } }, lang)
-  return { ctx, page: await ctx.newPage() }
+  await ctx.addInitScript(() => { document.addEventListener('securitypolicyviolation', (e) => console.error('Content Security Policy: ' + e.violatedDirective + ' blocked ' + e.blockedURI)) })
+  const page = await ctx.newPage()
+  page.on('console', (m) => { if (m.type() === 'error' && /Content Security Policy|violates the following/i.test(m.text())) cspViolations.push(m.text().slice(0, 200)) })
+  return { ctx, page }
 }
 
 async function signInMerchandiser(page: Page): Promise<void> {
@@ -217,3 +223,9 @@ if (hard.length) {
   process.exit(1)
 }
 console.log('\nNo serious or critical violations.')
+if (cspViolations.length) {
+  console.log('\nBLOCKED by the Content-Security-Policy (these fail the run):')
+  for (const v of [...new Set(cspViolations)]) console.log(`  ${v}`)
+  process.exit(1)
+}
+console.log('No load was blocked by a Content-Security-Policy (a preview server enforces it; the dev server sends none).')
