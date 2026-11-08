@@ -346,3 +346,32 @@ describe('BUG-057: the red reason names this stage or a later one correctly', ()
     expect(r.stages[0]!.reasons).not.toContain(LATER)
   })
 })
+
+// A stage that has not started while the one before it is still running is waiting its turn, not silent.
+// Before this rule every order with a stage still ahead read grey, so a real multi-stage order could never be green.
+describe('a later stage waiting for the one before it', () => {
+  const cutting = (over: Partial<Stage> = {}): Stage => ({ stage: 'cutting', unitId: 'u1', qty: 1000, milestone: '2026-11-10', sequence: 1, ...over })
+  const sewing = (over: Partial<Stage> = {}): Stage => ({ stage: 'sewing', unitId: 'u1', qty: 1000, milestone: '2026-11-16', sequence: 2, ...over })
+  const goodCutting = days('cutting', FIVE, 150)   // 750 of 1000 made, 250 left with days to spare
+
+  it('is shown as waiting and does not stop a healthy order from being green', () => {
+    const r = run([cutting(), sewing()], goodCutting)
+    expect(r.stages[1]!.status).toBe('grey')
+    expect(r.stages[1]!.reasons).toEqual(['waiting for the previous stage'])
+    expect(r.status).toBe('green')
+  })
+  it('once the stage before it is complete, silence is "no update yet" again and the order is grey', () => {
+    const r = run([cutting(), sewing()], days('cutting', FIVE, 200))   // 1000 of 1000: cutting complete
+    expect(r.stages[0]!.complete).toBe(true)
+    expect(r.stages[1]!.reasons).toEqual(['no update yet'])
+    expect(r.status).toBe('grey')
+  })
+  it('a waiting stage whose own milestone has passed is still red', () => {
+    const r = run([cutting({ milestone: '2026-11-02' }), sewing({ milestone: '2026-11-03' })], goodCutting)
+    expect(r.stages[1]!.status).toBe('red')
+    expect(r.status).toBe('red')
+  })
+  it('a brand-new order with no update on any stage is still grey, never green', () => {
+    expect(run([cutting(), sewing()], []).status).toBe('grey')
+  })
+})
