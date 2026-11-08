@@ -16,6 +16,11 @@ import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { LowConfidence } from '../ui/LowConfidence'
 import { StatusBadge } from '../ui/StatusBadge'
+import { Button, ButtonLink } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { Chip } from '../ui/atoms/Chip'
+import { Input, Select } from '../ui/atoms/Input'
+import { LinkButton } from '../ui/atoms/TextLink'
 import { StatusTiles, type Tile } from '../ui/organisms/StatusTiles'
 import './Board.css'
 import { useNarrow } from '../ui/useNarrow'
@@ -140,13 +145,13 @@ export default function Board() {
             {(() => {
               const chips = (
                 <>
-                  <button className="chip" aria-pressed={!filters.status} onClick={() => setParams(withFilter(params, 'status', null))}>
+                  <Chip aria-pressed={!filters.status} onClick={() => setParams(withFilter(params, 'status', null))}>
                     {t('board.all')} <b>{c.total}</b>
-                  </button>
+                  </Chip>
                   {STATUSES.map((s) => (
-                    <button key={s} className={`chip chip--${s}`} aria-pressed={filters.status === s} onClick={() => setParams(withFilter(params, 'status', s))}>
+                    <Chip key={s} tone={s} aria-pressed={filters.status === s} onClick={() => setParams(withFilter(params, 'status', s))}>
                       {t(`status.${s}`)} <b>{c[s]}</b>
-                    </button>
+                    </Chip>
                   ))}
                 </>
               )
@@ -162,46 +167,46 @@ export default function Board() {
               const buyerSelect = (
                 <label className="strip__buyer">
                   <span className="visually-hidden">Buyer</span>
-                  <select className="input" value={filters.buyer ?? ''} onChange={(e) => setParams(withFilter(params, 'buyer', e.target.value || null))}>
+                  <Select value={filters.buyer ?? ''} onChange={(e) => setParams(withFilter(params, 'buyer', e.target.value || null))}>
                     <option value="">All buyers</option>
                     {buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                     {/* A shared link can name a buyer with no orders here: keep the choice visible so "All buyers" is a real change that clears it. */}
                     {isUnknownChoice(buyers, filters.buyer) && <option value={filters.buyer!}>Unknown buyer</option>}
-                  </select>
+                  </Select>
                 </label>
               )
               const sortSelect = (
                 <label className="strip__sort">
                   <span className="visually-hidden">Sort orders</span>
-                  <select className="input" value={sort} onChange={(e) => setParams(withSort(params, e.target.value as Sort))}>
+                  <Select value={sort} onChange={(e) => setParams(withSort(params, e.target.value as Sort))}>
                     {SORTS.map((s) => <option key={s} value={s}>{SORT_LABEL[s]}</option>)}
-                  </select>
+                  </Select>
                 </label>
               )
               const unitSelect = (
                 <label className="strip__unit">
                   <span className="visually-hidden">Unit</span>
-                  <select className="input" value={scope.unit ?? ''} onChange={(e) => setParams(withFilter(params, 'unit', e.target.value || null))}>
+                  <Select value={scope.unit ?? ''} onChange={(e) => setParams(withFilter(params, 'unit', e.target.value || null))}>
                     <option value="">All units</option>
                     {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                     {/* A shared link can name a unit that is gone: keep the choice visible rather than showing "All units" over an empty list. */}
                     {scope.unit && !units.some((u) => u.id === scope.unit) && <option value={scope.unit}>Unknown unit</option>}
-                  </select>
+                  </Select>
                 </label>
               )
               const weekSelect = (
                 <label className="strip__week">
                   <span className="visually-hidden">Ship week</span>
-                  <select className="input" value={scope.week ?? ''} onChange={(e) => setParams(withFilter(params, 'week', e.target.value || null))}>
+                  <Select value={scope.week ?? ''} onChange={(e) => setParams(withFilter(params, 'week', e.target.value || null))}>
                     <option value="">Any ship week</option>
                     {SHIP_WEEKS.map((w) => <option key={w} value={w}>{weekLabel(w, day)}</option>)}
-                  </select>
+                  </Select>
                 </label>
               )
               const searchBox = (
                 <label className="strip__search">
                   <span className="visually-hidden">Search by PO, buyer or style</span>
-                  <input className="input" type="search" enterKeyHint="search" autoComplete="off" spellCheck={false}
+                  <Input type="search" enterKeyHint="search" autoComplete="off" spellCheck={false}
                     placeholder="Search PO, buyer or style" value={text} onChange={(e) => onType(e.target.value)} />
                 </label>
               )
@@ -210,12 +215,12 @@ export default function Board() {
                   <span className="strip__meta">
                     {/* Only a failed refresh is announced: the time changes on every poll and would be read out every minute. */}
                     <span role="status">{error ? <span className="error">Could not refresh{updatedAt ? `; showing ${updatedAt.toLocaleTimeString()}` : ''}.</span> : null}</span>
-                    {error ? <> <button className="link" onClick={() => void load()}>Try again</button></>
+                    {error ? <> <LinkButton onClick={() => void load()}>Try again</LinkButton></>
                       : updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : ''}
                     {today ? ` · Today ${shortDate(today)}` : ''}
                   </span>
-                  <button className="btn btn--small" onClick={() => void load()}>{t('board.refresh')}</button>
-                  <Link className="btn btn--primary btn--small" to="/orders/new">New order</Link>
+                  <Button size="small" onClick={() => void load()}>{t('board.refresh')}</Button>
+                  <ButtonLink variant="primary" size="small" to="/orders/new">New order</ButtonLink>
                 </>
               )
               return narrow ? (
@@ -224,17 +229,17 @@ export default function Board() {
                   {rows.length > 0 && (
                     <form className="strip strip--find" role="search" onSubmit={(e) => { e.preventDefault(); pushQuery(text) }}>
                       {searchBox}
-                      <button type="button" className="btn filtersbtn" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen((o) => !o)}>
+                      <Button type="button" className="filtersbtn" aria-expanded={filtersOpen} aria-controls="board-filters" onClick={() => setFiltersOpen((o) => !o)}>
                         {filtersButtonText(panelFilterCount(panel))}
-                      </button>
+                      </Button>
                     </form>
                   )}
                   {applied.length > 0 && (
                     <div className="applied" role="group" aria-label="Filters that are on">
                       {applied.map((a) => (
-                        <button key={a.key} type="button" className="chip chip--applied" aria-label={`Remove filter: ${a.text}`} onClick={() => removeApplied(a.key)}>
+                        <Chip key={a.key} type="button" className="chip--applied" aria-label={`Remove filter: ${a.text}`} onClick={() => removeApplied(a.key)}>
                           {a.text} <span aria-hidden="true">×</span>
-                        </button>
+                        </Chip>
                       ))}
                     </div>
                   )}
@@ -257,20 +262,20 @@ export default function Board() {
             <p className="visually-hidden" role="status">{q.trim() && filtered.length > 0 ? `${filtered.length} ${filtered.length === 1 ? 'order matches' : 'orders match'}.` : ''}</p>
 
             {rows.length === 0 ? (
-              <div className="card"><p>No orders yet. Orders you set up will appear here.</p><p><Link className="btn" to="/orders/new">Set up the first order</Link></p></div>
+              <Card as="div"><p>No orders yet. Orders you set up will appear here.</p><p><ButtonLink to="/orders/new">Set up the first order</ButtonLink></p></Card>
             ) : filtered.length === 0 ? (
-              <div className="card">
+              <Card as="div">
                 {/* Only the sentence is a live region: a button inside one is read out with it. */}
                 <p role="status">{narrowedBy.includes('q') ? <>No orders match <b>“{q.trim()}”</b>{narrowedBy.length > 1 ? ' with the filters on' : ''}.</> : 'No orders match these filters.'}</p>
                 <p className="sub">{narrowedBy.includes('q') ? 'Check the spelling, or search for less: part of a PO number, the buyer or the style. ' : ''}Or widen the view:</p>
                 <div className="actions">
-                  {narrowedBy.includes('q') && <button className="btn btn--small" onClick={clearSearch}>Clear search</button>}
-                  {narrowedBy.includes('status') && <button className="btn btn--small" onClick={() => setParams(withFilter(params, 'status', null))}>Show every status</button>}
-                  {narrowedBy.includes('buyer') && <button className="btn btn--small" onClick={() => setParams(withFilter(params, 'buyer', null))}>Show every buyer</button>}
-                  {narrowedBy.includes('unit') && <button className="btn btn--small" onClick={() => setParams(withFilter(params, 'unit', null))}>Show every unit</button>}
-                  {narrowedBy.includes('week') && <button className="btn btn--small" onClick={() => setParams(withFilter(params, 'week', null))}>Show any ship week</button>}
+                  {narrowedBy.includes('q') && <Button size="small" onClick={clearSearch}>Clear search</Button>}
+                  {narrowedBy.includes('status') && <Button size="small" onClick={() => setParams(withFilter(params, 'status', null))}>Show every status</Button>}
+                  {narrowedBy.includes('buyer') && <Button size="small" onClick={() => setParams(withFilter(params, 'buyer', null))}>Show every buyer</Button>}
+                  {narrowedBy.includes('unit') && <Button size="small" onClick={() => setParams(withFilter(params, 'unit', null))}>Show every unit</Button>}
+                  {narrowedBy.includes('week') && <Button size="small" onClick={() => setParams(withFilter(params, 'week', null))}>Show any ship week</Button>}
                 </div>
-              </div>
+              </Card>
             ) : (
               // Explicit roles: under 720 px the table is laid out as cards (display:block), and a browser may drop table semantics for that.
               <table className={narrow ? 'board' : 'board board--wide'} role="table">
@@ -302,7 +307,7 @@ export default function Board() {
               </table>
             )}
             {capped && (
-              <p className="more">Showing {shown.length} of {filtered.length} orders. <button className="link" onClick={() => setShowAll(true)}>Show all</button></p>
+              <p className="more">Showing {shown.length} of {filtered.length} orders. <LinkButton onClick={() => setShowAll(true)}>Show all</LinkButton></p>
             )}
           </>
         )}
