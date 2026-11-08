@@ -1,0 +1,16 @@
+# Never uploaded by `vercel deploy` from a laptop (a Git deploy only ever sees committed files anyway).
+.env
+.env.*
+!packages/server/.env.example
+.vercel
+node_modules
+.claude
+.playwright-mcp
+md
+company-a-build-plan.md
+uiux
+recordings
+uploads
+media
+data
+*.log

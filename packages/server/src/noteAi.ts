@@ -163,13 +163,6 @@ export function anthropicClassifier(opts: { apiKey: string; model?: string; time
   }
 }
 
-/** From the environment: on when ANTHROPIC_API_KEY is set (AI_MODEL may name another model), otherwise off (null). */
-export function classifierFromEnv(env: Record<string, string | undefined>): NoteClassifier | null {
-  const key = env.ANTHROPIC_API_KEY?.trim()
-  if (!key) return null
-  return anthropicClassifier({ apiKey: key, model: env.AI_MODEL?.trim() || undefined })
-}
-
 export interface SuggestRun { asked: number; suggested: number; unsure: number; failed: number }
 
 /**

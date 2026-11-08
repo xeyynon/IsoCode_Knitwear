@@ -4,14 +4,14 @@
 // DEMO_DATA=fixture npm run dev:api  serves the small test fixture instead, which the a11y, snapshots and ux scripts check against.
 import { CREDS, TODAY } from '../test/helpers.js'
 import { startDemoApi } from './demo.js'
-import { classifierFromEnv } from './noteAi.js'
+import { classifierFromEnv } from './aiFromEnv.js'
 import { DEMO_BUYER_TOKENS, DEMO_LOGINS, DEMO_TODAY } from './demoSeed.js'
 
 const fixture = process.env.DEMO_DATA === 'fixture'
-const noteAi = classifierFromEnv(process.env)   // ANTHROPIC_API_KEY in this shell turns AI suggestions on; unset, they are off
+const noteAi = classifierFromEnv(process.env)   // GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY in this shell turns AI suggestions on; unset, they are off
 const demo = await startDemoApi({ data: fixture ? 'fixture' : 'brief', noteAi })
 console.log(`demo API on http://127.0.0.1:${demo.port}  (today = ${fixture ? TODAY : DEMO_TODAY}, ${fixture ? 'test fixture' : "the brief's sample data"})`)
-console.log(`  AI suggestions for notes: ${noteAi ? 'on' : 'off (set ANTHROPIC_API_KEY to turn them on)'}`)
+console.log(`  AI suggestions for notes: ${noteAi ? 'on' : 'off (set GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY to turn them on)'}`)
 if (fixture) {
   console.log(`  merchandiser: ${CREDS.email} / ${CREDS.password}`)
   console.log(`  supervisor:   ${CREDS.phone} / PIN ${CREDS.pin}`)

@@ -5,9 +5,12 @@ import type { PGlite } from '@electric-sql/pglite'
 import { buildApp } from '../src/app'
 import { DEMO_BUYER_TOKENS, DEMO_LOGINS, DEMO_TODAY, seedDemo } from '../src/demoSeed'
 import {
-  AiUnavailable, anthropicClassifier, answerSchema, classifierFromEnv, failureOf, judgeSuggestion, parseAnswer, systemPrompt, userMessage,
+  AiUnavailable, anthropicClassifier, answerSchema, failureOf, judgeSuggestion, parseAnswer, systemPrompt, userMessage,
   type AiInput, type AiRaw, type NoteClassifier,
 } from '../src/noteAi'
+import { classifierFromEnv } from '../src/aiFromEnv'
+import { geminiClassifier } from '../src/noteAiGemini'
+import { groqClassifier } from '../src/noteAiGroq'
 import { migratedDb, pgliteDb } from './helpers'
 
 const REASONS = [
@@ -63,10 +66,15 @@ describe('the request and the answer', () => {
     expect(failureOf(new AiUnavailable('refused'))).toBe('refused')
     expect(failureOf(new Error('anything'))).toBe('error')
   })
-  it('AI is on only when ANTHROPIC_API_KEY is set', () => {
+  it('AI is on only when a provider key is set, and a provider named without its key stops start-up', () => {
     expect(classifierFromEnv({})).toBeNull()
     expect(classifierFromEnv({ ANTHROPIC_API_KEY: '  ' })).toBeNull()
     expect(typeof classifierFromEnv({ ANTHROPIC_API_KEY: 'test-key' })).toBe('function')
+    expect(typeof classifierFromEnv({ GEMINI_API_KEY: 'test-key' })).toBe('function')
+    expect(() => classifierFromEnv({ AI_PROVIDER: 'gemini', ANTHROPIC_API_KEY: 'k' })).toThrow(/GEMINI_API_KEY/)
+    expect(() => classifierFromEnv({ AI_PROVIDER: 'openai' })).toThrow(/anthropic, gemini or groq/)
+    expect(typeof classifierFromEnv({ GROQ_API_KEY: 'test-key' })).toBe('function')
+    expect(() => classifierFromEnv({ AI_PROVIDER: 'groq' })).toThrow(/GROQ_API_KEY/)
   })
 })
 
@@ -95,6 +103,97 @@ describe('the Claude classifier, with the API stubbed', () => {
   })
   it('a timeout is a timeout', async () => {
     await expect(fake(new Anthropic.APIConnectionTimeoutError()).classify(input)).rejects.toMatchObject({ code: 'timeout' })
+  })
+})
+
+describe('the Gemini classifier (free tier), with fetch stubbed', () => {
+  const input: AiInput = { text: 'பிரிண்டிங் இங்க் இன்னும் வரல', language: 'ta', stage: 'Printing', reasons: REASONS, supervisorCategory: null }
+  const fake = (reply: { status?: number; body?: unknown } | Error) => {
+    const calls: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = []
+    const classify = geminiClassifier({
+      apiKey: 'test-key',
+      fetch: async (url, init) => {
+        calls.push({ url, headers: init.headers, body: JSON.parse(init.body) })
+        if (reply instanceof Error) throw reply
+        return { ok: (reply.status ?? 200) < 300, status: reply.status ?? 200, json: async () => reply.body }
+      },
+    })
+    return { calls, classify }
+  }
+  const answer = (text: string, finishReason = 'STOP') => ({ modelVersion: 'gemini-3.8-flash', candidates: [{ finishReason, content: { parts: [{ text: 'thinking…', thought: true }, { text }] } }] })
+
+  it('sends the key in a header (never the address), asks for JSON in the schema, and reads only the answer part', async () => {
+    const { calls, classify } = fake({ body: answer(JSON.stringify({ english: 'The printing ink has not come yet.', category: 'material', confidence: 0.9, why: 'ink not arrived' })) })
+    expect(await classify(input)).toMatchObject({ category: 'material', model: 'gemini-3.8-flash' })
+    expect(calls[0]!.url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent')
+    expect(calls[0]!.url).not.toContain('test-key')
+    expect(calls[0]!.headers['x-goog-api-key']).toBe('test-key')
+    const cfg = calls[0]!.body.generationConfig as { responseMimeType: string; responseSchema: { properties: { category: { enum: string[] } } } }
+    expect(cfg.responseMimeType).toBe('application/json')
+    expect(cfg.responseSchema.properties.category.enum).toEqual(REASONS.map((r) => r.id))
+  })
+  it.each([
+    ['over the free limit', { status: 429, body: {} }, 'rate_limited'],
+    ['a bad key', { status: 403, body: {} }, 'auth'],
+    ['a server fault', { status: 500, body: {} }, 'error'],
+    ['a blocked prompt', { body: { promptFeedback: { blockReason: 'SAFETY' } } }, 'refused'],
+    ['a safety stop', { body: answer('', 'SAFETY') }, 'refused'],
+    ['a cut-off answer', { body: answer('{"english":', 'MAX_TOKENS') }, 'bad_answer'],
+    ['no answer at all', { body: {} }, 'bad_answer'],
+    ['text that is not JSON', { body: answer('Sure! The reason is material.') }, 'bad_answer'],
+  ] as const)('%s is a failure with a code, never a guess', async (_l, reply, code) => {
+    await expect(fake(reply).classify(input)).rejects.toMatchObject({ code })
+  })
+  it('a timeout and a dropped connection are told apart', async () => {
+    await expect(fake(Object.assign(new Error('t'), { name: 'TimeoutError' })).classify(input)).rejects.toMatchObject({ code: 'timeout' })
+    await expect(fake(new TypeError('fetch failed')).classify(input)).rejects.toMatchObject({ code: 'unreachable' })
+  })
+})
+
+describe('the Groq classifier (free plan), with fetch stubbed', () => {
+  const input: AiInput = { text: 'இரண்டு அயர்னிங் மெஷின் பழுது', language: 'ta', stage: 'Finishing', reasons: REASONS, supervisorCategory: 'power' }
+  const fake = (reply: { status?: number; body?: unknown } | Error) => {
+    const calls: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = []
+    const classify = groqClassifier({
+      apiKey: 'test-key',
+      fetch: async (url, init) => {
+        calls.push({ url, headers: init.headers, body: JSON.parse(init.body) })
+        if (reply instanceof Error) throw reply
+        return { ok: (reply.status ?? 200) < 300, status: reply.status ?? 200, json: async () => reply.body }
+      },
+    })
+    return { calls, classify }
+  }
+  const answer = (content: string | null, finish_reason = 'stop', extra: Record<string, unknown> = {}) => ({ model: 'openai/gpt-oss-120b', choices: [{ finish_reason, message: { content, ...extra } }] })
+
+  it('asks with a strict JSON schema whose reason can only be on the list, and reads the answer', async () => {
+    const { calls, classify } = fake({ body: answer(JSON.stringify({ english: 'Two ironing machines are broken.', category: 'machine', confidence: 0.88, why: 'broken machines' })) })
+    expect(await classify(input)).toMatchObject({ category: 'machine', confidence: 0.88, model: 'openai/gpt-oss-120b' })
+    const c = calls[0]!
+    expect(c.url).toBe('https://api.groq.com/openai/v1/chat/completions')
+    expect(c.headers.authorization).toBe('Bearer test-key')
+    const rf = c.body.response_format as { type: string; json_schema: { strict: boolean; schema: { properties: { category: { enum: string[] } } } } }
+    expect(rf.type).toBe('json_schema')
+    expect(rf.json_schema.strict).toBe(true)
+    expect(rf.json_schema.schema.properties.category.enum).toEqual(REASONS.map((r) => r.id))
+    expect(c.body.reasoning_effort).toBe('low')
+    expect(JSON.stringify(c.body.messages)).toContain('<supervisor_tapped_reason>power</supervisor_tapped_reason>')
+  })
+  it.each([
+    ['over the free limit', { status: 429, body: {} }, 'rate_limited'],
+    ['a bad key', { status: 401, body: {} }, 'auth'],
+    ['output that failed the schema', { status: 400, body: { error: { code: 'json_validate_failed' } } }, 'bad_answer'],
+    ['a server fault', { status: 503, body: {} }, 'error'],
+    ['a refusal', { body: answer(null, 'stop', { refusal: 'cannot help' }) }, 'refused'],
+    ['a content filter', { body: answer('', 'content_filter') }, 'refused'],
+    ['a cut-off answer', { body: answer('{"english":', 'length') }, 'bad_answer'],
+    ['no choices', { body: {} }, 'bad_answer'],
+  ] as const)('%s is a failure with a code, never a guess', async (_l, reply, code) => {
+    await expect(fake(reply).classify(input)).rejects.toMatchObject({ code })
+  })
+  it('a timeout and a dropped connection are told apart', async () => {
+    await expect(fake(Object.assign(new Error('t'), { name: 'TimeoutError' })).classify(input)).rejects.toMatchObject({ code: 'timeout' })
+    await expect(fake(new TypeError('fetch failed')).classify(input)).rejects.toMatchObject({ code: 'unreachable' })
   })
 })
 

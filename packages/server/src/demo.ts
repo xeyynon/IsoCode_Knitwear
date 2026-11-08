@@ -5,6 +5,7 @@ import { buildApp } from './app.js'
 import { memoryMediaStore } from './mediaStore.js'
 import { migratedDb, pgliteDb, resetAndSeed, ID, TODAY } from '../test/helpers.js'
 import { DEMO_TODAY, seedDemo } from './demoSeed.js'
+import { demoClock } from './demoClock.js'
 import type { NoteClassifier } from './noteAi.js'
 
 export interface Demo { pg: PGlite; port: number; close: () => Promise<void> }
@@ -26,7 +27,9 @@ export async function startDemoApi(opts: { port?: number; origins?: string[]; da
     db: pgliteDb(pg),
     tokenSecret: 'dev-only-secret-dev-only-secret-dev-only',
     allowedOrigins: opts.origins ?? ['http://localhost:5173', 'http://127.0.0.1:5173'],
-    clock: () => new Date(`${today}T04:30:00Z`),   // fixed so the seeded figures line up
+    // The factory's day is fixed so the seeded figures line up; real time runs for sign-in tokens and locks, which the browser checks
+    // against its own clock. The browser scripts still pin both to the fixture's day (they drive a browser whose clock they set).
+    ...(brief ? { dayClock: demoClock(DEMO_TODAY)! } : { clock: () => new Date(`${today}T04:30:00Z`) }),
     logger: false,
     media: memoryMediaStore(),   // photos live in memory in the demo and vanish with it
     noteAi: opts.noteAi ?? null,
