@@ -24,7 +24,8 @@ const run = (args, extraEnv = {}) => execFileSync(npm, args, { cwd: root, stdio:
 fs.rmSync(out, { recursive: true, force: true })
 
 // 1. The web app. Same address as the API, said out loud (see vite.config.ts).
-run(['run', 'build', '-w', '@isocode/web'], { VITE_API_BASE: env.VITE_API_BASE || 'same-origin' })
+// The demo logins on the sign-in screen go with the demo clock: a deployment with DEMO_TODAY is the review demo, any other is not.
+run(['run', 'build', '-w', '@isocode/web'], { VITE_API_BASE: env.VITE_API_BASE || 'same-origin', VITE_DEMO_ACCESS: env.VITE_DEMO_ACCESS ?? (env.DEMO_TODAY ? '1' : '') })
 fs.cpSync(path.join(root, 'packages', 'web', 'dist'), path.join(out, 'static'), { recursive: true })
 
 // 2. The API, one file. pg can use a native driver if one is installed; it is not, and must not be bundled.

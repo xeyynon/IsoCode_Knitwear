@@ -2,10 +2,20 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* A faint drafting grid behind every page (a pattern cutter's paper): 96 px squares in --grid-line, on the page colour. It is on html,
+   which index.html already paints, so it fills the whole window however short the page; the body is clear over it. Cards are white on
+   top, so it never sits behind text. Fixed, so it does not scroll with long lists. */
+html:root {
+  background-color: var(--page);
+  background-image: linear-gradient(to right, var(--grid-line) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 96px 96px;
+  background-attachment: fixed;
+}
 body {
-  margin: 0; background: var(--page); color: var(--ink);
+  margin: 0; background: transparent; color: var(--ink);
   font: 16px/1.5 var(--font-latin);
 }
+@media print { html:root { background-image: none; } }
 /* Tamil is a tall script: more line height and size, as the design doc requires. */
 html[lang='ta'] body { font-family: var(--font-tamil); font-size: 18px; line-height: 1.6; }
 h1, h2 { line-height: 1.25; margin: 0 0 .5rem; }
