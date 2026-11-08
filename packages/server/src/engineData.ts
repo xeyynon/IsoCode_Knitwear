@@ -1,6 +1,6 @@
 // Loads what the run-rate engine needs, shared by the board (all orders) and the order detail
 // (one order), so the two can never disagree about the data behind a colour.
-import { DEFAULT_SETTINGS, type Settings, type Stage, type UnitCalendar, type UpdateEvent } from '@isocode/engine'
+import { DEFAULT_SETTINGS, isValidSetting, type Settings, type Stage, type UnitCalendar, type UpdateEvent } from '@isocode/engine'
 import type { Tx } from './db.js'
 
 export interface OrderRow {
@@ -10,6 +10,7 @@ export interface OrderRow {
   buyerName: string
   style: string
   colour: string
+  /** The sizes of the order. Read only when ONE order is asked for (the order page); the all-orders load leaves it empty, nothing that loads all orders uses it (O-10). */
   sizes: Record<string, number>
   qty: number
   exFactory: string
@@ -30,13 +31,22 @@ const SETTING_KEYS: Record<string, keyof Settings> = {
   red_below: 'redBelow', buffer_days: 'bufferDays', warn_within_days: 'warnWithinDays',
 }
 
+/** A stored value as a number: a JSON number, or a number written as text. Null, "", booleans, lists: nothing (never 0). */
+const asNumber = (v: unknown): number | undefined =>
+  typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : undefined
+
+/**
+ * The settings table over the defaults. Each key is checked on its own against its range (BE-005): a
+ * value that is missing, null, not a number or out of range (window_days 0, red_below 3) leaves that
+ * one setting at its default and does not touch the others.
+ */
 export async function loadSettings(tx: Tx): Promise<Settings> {
   const rows = await tx.query<{ key: string; value: unknown }>('select key, value from settings')
   const s: Settings = { ...DEFAULT_SETTINGS }
   for (const r of rows) {
-    const k = SETTING_KEYS[r.key]
-    const v = Number(r.value)
-    if (k && Number.isFinite(v)) s[k] = v
+    const k = Object.hasOwn(SETTING_KEYS, r.key) ? SETTING_KEYS[r.key] : undefined
+    const v = asNumber(r.value)
+    if (k && isValidSetting(k, v)) s[k] = v
   }
   return s
 }
@@ -47,7 +57,7 @@ export async function loadEngineData(tx: Tx, orderId?: string): Promise<EngineDa
   const arg = one ? [orderId] : []
   const [orders, milestones, events, days, settings] = await Promise.all([
     tx.query<{ id: string; po: string; buyer_id: string; buyer_name: string; style: string; colour: string; sizes: Record<string, number>; qty: number; ex_factory: string }>(
-      `select o.id::text as id, o.po, o.buyer_id::text as buyer_id, b.name as buyer_name, o.style, o.colour, o.sizes, o.qty,
+      `select o.id::text as id, o.po, o.buyer_id::text as buyer_id, b.name as buyer_name, o.style, o.colour, ${one ? 'o.sizes' : 'null::jsonb as sizes'}, o.qty,
               o.ex_factory::text as ex_factory
          from orders o join buyer b on b.id = o.buyer_id ${one ? 'where o.id = $1' : ''}
         order by o.ex_factory, o.po, o.style, o.colour, o.id`, arg),
@@ -58,8 +68,7 @@ export async function loadEngineData(tx: Tx, orderId?: string): Promise<EngineDa
         order by order_id, sequence, stage, id`, arg),
     tx.query<{ client_uuid: string; order_id: string; stage: string; date: string; qty: number; on_behalf: boolean }>(
       `select client_uuid::text as client_uuid, order_id::text as order_id, stage, date::text as date, qty, on_behalf
-         from update_event ${one ? 'where order_id = $1' : ''}
-        order by order_id, date, client_uuid`, arg),
+         from update_event ${one ? 'where order_id = $1' : ''}`, arg),   // no ORDER BY (O-10): the engine does not depend on the order of an order's events, see optServices.test.ts
     tx.query<{ unit_id: string; date: string; working: boolean }>(
       `select unit_id::text as unit_id, date::text as date, working from calendar_day order by unit_id, date`),
     loadSettings(tx),

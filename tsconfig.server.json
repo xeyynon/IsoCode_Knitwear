@@ -1,0 +1,16 @@
+{
+  // The engine and the server run in Node, never in a browser. The main tsconfig.json adds the browser's types (DOM,
+  // vite/client) because the web app needs them, which let a stray `window` or `localStorage` compile in server code
+  // (BE-060). This one checks the same files with Node's types only. Strictness is inherited from tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2022"]
+  },
+  "include": [
+    "packages/engine/src/**/*.ts",
+    "packages/engine/test/**/*.ts",
+    "packages/server/src/**/*.ts",
+    "packages/server/test/**/*.ts"
+  ]
+}

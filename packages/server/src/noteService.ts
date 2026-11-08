@@ -34,7 +34,7 @@ export function parseNote(input: NoteInput | undefined, reasons: Reason[]): Pars
   if (typeof input !== 'object') throw badRequest('The note is not valid')
   const text = typeof input.text === 'string' ? cleanNote(input.text) : ''
   if (input.text !== undefined && input.text !== null && typeof input.text !== 'string') throw badRequest('The note text is not valid')
-  if (text.length > MAX_NOTE_CHARS) throw badRequest(`Keep the note under ${MAX_NOTE_CHARS} characters`)
+  if (text.length > MAX_NOTE_CHARS) throw badRequest(`Keep the note to ${MAX_NOTE_CHARS} characters or fewer`)
   let category: string | null = null
   if (input.category !== undefined && input.category !== null && input.category !== '') {
     if (typeof input.category !== 'string') throw badRequest('Choose a reason from the list')
@@ -101,7 +101,7 @@ export async function confirmNote(tx: Tx, ctx: Ctx, userId: string, id: string, 
   if (input.textEn !== undefined && input.textEn !== null) {
     if (typeof input.textEn !== 'string') throw badRequest('The English text is not valid')
     textEn = cleanNote(input.textEn)
-    if (textEn.length > MAX_NOTE_CHARS) throw badRequest(`Keep it under ${MAX_NOTE_CHARS} characters`)
+    if (textEn.length > MAX_NOTE_CHARS) throw badRequest(`Keep it to ${MAX_NOTE_CHARS} characters or fewer`)
   }
   let category: string | null = null
   if (input.category !== undefined && input.category !== null && input.category !== '') {

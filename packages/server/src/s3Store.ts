@@ -45,15 +45,26 @@ const GENERIC = 'media store unavailable'
 
 type Failure = { name?: string; $metadata?: { httpStatusCode?: number } }
 const statusOf = (e: unknown): number | undefined => (e as Failure | null)?.$metadata?.httpStatusCode
-const isMissing = (e: unknown): boolean => (e as Failure | null)?.name === 'NoSuchKey' || (e as Failure | null)?.name === 'NotFound' || statusOf(e) === 404
+// Only a missing KEY is "not found". A 404 whose name says the bucket is missing is a configuration fault (a wrong or deleted bucket), and
+// reading it as "not found" would make every photo look gone and a purge look done. Any other 404 stays "not found", as the earlier tests pin.
+const isMissing = (e: unknown): boolean => {
+  const name = (e as Failure | null)?.name
+  if (name === 'NoSuchBucket') return false
+  return name === 'NoSuchKey' || name === 'NotFound' || statusOf(e) === 404
+}
 
 /** Only photos are stored today. Anything else is sent as opaque bytes, which a browser will not render. */
 export function contentTypeFor(key: string): string {
   return /\.jpe?g$/i.test(key) ? 'image/jpeg' : 'application/octet-stream'
 }
 
+/** Per attempt: how long to wait for a connection and for the bucket to answer once connected. Without them a stuck bucket held a request for ever. */
+export const S3_CONNECT_TIMEOUT_MS = 5_000
+export const S3_REQUEST_TIMEOUT_MS = 15_000
+
 export function makeS3Client(cfg: S3Config): S3Like {
   return new S3Client({
+    requestHandler: { connectionTimeout: S3_CONNECT_TIMEOUT_MS, requestTimeout: S3_REQUEST_TIMEOUT_MS },
     region: cfg.region,
     ...(cfg.endpoint ? { endpoint: cfg.endpoint } : {}),
     forcePathStyle: cfg.forcePathStyle === true,

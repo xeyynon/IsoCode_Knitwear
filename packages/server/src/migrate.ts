@@ -15,6 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
+import { errorReason } from './db.js'
 
 export interface Sql {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>
@@ -120,7 +121,7 @@ export async function runMigrations(session: MigrationSession, opts: MigrateOpti
           await tx.query(REVOKE_APP_USER)
         })
       } catch (e) {
-        throw new Error(`Migration ${f.file} failed and was rolled back (nothing of it was kept or recorded): ${(e as Error).message}`, { cause: e })
+        throw new Error(`Migration ${f.file} failed and was rolled back (nothing of it was kept or recorded): ${errorReason(e)}`, { cause: e })
       }
       done.push(f.file)
       log(`applied ${f.file}`)
@@ -160,7 +161,7 @@ export async function run(target: string | pg.Pool | pg.Client, opts: MigrateOpt
   if (typeof target !== 'string') return runMigrations(pgSession(target), opts)
   const client = new pg.Client({ connectionString: target })
   client.on('error', () => undefined)   // a dropped connection surfaces through the query that was waiting on it
-  try { await client.connect() } catch (e) { throw new Error(`Could not connect to ${redact(target)}: ${(e as Error).message}`) }
+  try { await client.connect() } catch (e) { throw new Error(`Could not connect to ${redact(target)}: ${errorReason(e)}`) }
   try { return await runMigrations(pgSession(client), opts) } finally { await client.end().catch(() => undefined) }
 }
 

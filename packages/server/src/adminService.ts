@@ -3,7 +3,7 @@ import { hashSecret } from './auth.js'
 import { normalisePhone } from './authService.js'
 import { AppError, badRequest, forbidden, notFound, orDuplicate } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
-import { isIsoDate } from './today.js'
+import { isIsoDate, isStageName } from './today.js'
 import { recordAudit } from './auditService.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -206,13 +206,25 @@ export async function saveTemplate(tx: Tx, ctx: Ctx, input: { id?: unknown; name
   const steps: TemplateStage[] = input.stages.map((s: unknown, i: number) => {
     const o = (s ?? {}) as { stage?: unknown; workingDaysBefore?: unknown; unitId?: unknown }
     const stage = text(o.stage, `Stage ${i + 1}'s name`, 40).toLowerCase()
+    // The same rule an update or a photo applies to the stage it names: a name that fails it could be saved here but never receive an update.
+    if (!isStageName(stage)) throw badRequest(`Stage ${i + 1}'s name has a character that is not allowed`)
     if (!Number.isInteger(o.workingDaysBefore) || (o.workingDaysBefore as number) < 0 || (o.workingDaysBefore as number) > 365) throw badRequest(`Stage "${stage}": working days before ex-factory must be a whole number from 0 to 365`)
     return { stage, workingDaysBefore: o.workingDaysBefore as number, unitId: uuid(o.unitId, `the unit for "${stage}"`) }
   })
   // Reuse the engine's own check, so a saved template can never be one that order setup would refuse.
   const engine: TemplateStep[] = steps.map((s, i) => ({ stage: s.stage, sequence: i + 1, workingDaysBefore: s.workingDaysBefore, unitId: s.unitId }))
-  const problems = backSchedule('2031-06-20', engine, {}, '2020-01-01').problems
-  if (problems.length) throw badRequest(`This template does not work: ${problems.join('; ')}`)
+  // The engine's order fault names two dates worked out from a probe date nobody entered, so the order fault is said here in offsets instead
+  // (the same rule: a later stage may not be further from ex-factory than the one before it). Its other faults hold no date.
+  const problems = backSchedule('2031-06-20', engine, {}, '2020-01-01').problems.filter((p) => !/\d{4}-\d{2}-\d{2}/.test(p))
+  let orderFault = false
+  for (let i = 1; i < steps.length; i++) {
+    const prev = steps[i - 1]!, cur = steps[i]!
+    if (cur.workingDaysBefore > prev.workingDaysBefore) {
+      orderFault = true
+      problems.push(`"${cur.stage}" would finish before "${prev.stage}" (${cur.workingDaysBefore} working days before ex-factory, against ${prev.workingDaysBefore})`)
+    }
+  }
+  if (problems.length) throw badRequest(`This template does not work: ${problems.join('; ')}${orderFault ? '. List the stages in the order they happen, with the biggest number first.' : ''}`)
   const known = new Set((await tx.query<{ id: string }>('select id::text as id from unit')).map((u) => u.id))
   for (const s of steps) if (!known.has(s.unitId)) throw notFound(`No such unit for "${s.stage}"`)
 

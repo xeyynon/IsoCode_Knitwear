@@ -1,43 +1,27 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { KEEP_BUILDS, publicBuilds } from '../../../scripts/buildInfo.mjs'
+import { KEEP_BUILDS, PLACEHOLDER, publicBuilds } from '../../../scripts/buildInfo.mjs'
+import { parseYaml, at, type Yaml } from './miniYaml'
+import { ROOT, SCRIPTS_DIR, git, loadScript, removeDirs, run, scriptIn, scriptRepo, tmpDir, write } from './scriptHelpers'
 
 // The release bookkeeping scripts (scripts/changelog.mjs, check_repo.mjs, check_docs.mjs) and the release
-// workflow, each run against a throw-away git repository so nothing here touches the real tree.
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
-const CHANGELOG = path.join(ROOT, 'scripts', 'changelog.mjs')
-const CHECK_REPO = path.join(ROOT, 'scripts', 'check_repo.mjs')
-const CHECK_DOCS = path.join(ROOT, 'scripts', 'check_docs.mjs')
+// workflow, each run against a throw-away git repository so nothing here touches the real tree. Every
+// repository gets its own copy of the scripts, because a script acts on the repository that holds it.
+// Several tests start git and node many times, so the describes that do carry their own longer timeout.
+const SLOW = 120_000
 
 const dirs: string[] = []
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }) })
+afterEach(() => removeDirs(dirs))
 
-function tmp(prefix: string) {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`))
-  dirs.push(d)
-  return d
-}
-const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', ...args],
-    { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-function repo(prefix = 'tooling') {
-  const d = tmp(prefix)
-  git(d, 'init', '-q')
-  return d
-}
-function write(dir: string, rel: string, text: string) {
-  const abs = path.join(dir, rel)
-  fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, text)
-}
+const tmp = (prefix: string) => { const d = tmpDir(prefix); dirs.push(d); return d }
+const repo = (prefix = 'tooling') => scriptRepo(dirs, prefix)
 const read = (dir: string, rel: string) => fs.readFileSync(path.join(dir, rel), 'utf8')
-const run = (script: string, cwd: string, args: string[] = [], env: Record<string, string> = {}) =>
-  spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env: { ...process.env, BANNED_TERMS: '', ...env } })
-const changelog = (cwd: string, ...args: string[]) => run(CHANGELOG, cwd, args)
+const changelog = (cwd: string, ...args: string[]) => run(scriptIn(cwd, 'changelog.mjs'), cwd, args)
+const checkRepo = (cwd: string, env: Record<string, string> = {}) => run(scriptIn(cwd, 'check_repo.mjs'), cwd, [], env)
+const checkDocs = (cwd: string) => run(scriptIn(cwd, 'check_docs.mjs'), cwd)
+const CHECK_DOCS = path.join(ROOT, 'scripts', 'check_docs.mjs')
 
 // ---------------------------------------------------------------------------------------------------
 // BUG-054: --pending run again with a new title
@@ -100,13 +84,9 @@ describe('changelog --pending run again replaces the pending report', () => {
 describe('check_repo attribution check reads real attribution lines only', () => {
   function commitWith(message: string) {
     const d = repo('attrib')
-    write(d, 'README.md', '# x\n')
-    git(d, 'add', 'README.md')
-    write(d, 'msg.txt', message)
-    // msg.txt is outside the index; -F reads it from the work tree
-    git(d, 'commit', '-q', '-F', 'msg.txt')
-    fs.rmSync(path.join(d, 'msg.txt'))
-    return run(CHECK_REPO, d)
+    // Only the message is under test, so the commit needs no file: two git runs fewer than add + commit from a file (BE-055).
+    git(d, 'commit', '-q', '--allow-empty', '-m', message)
+    return checkRepo(d)
   }
 
   it.each([
@@ -193,7 +173,7 @@ describe('build-info.json keeps whole summaries and a short list', () => {
 // BUG-070: check_docs looks at the files git knows, so a local run equals CI
 // ---------------------------------------------------------------------------------------------------
 describe('check_docs checks tracked and new-but-not-ignored Markdown only', () => {
-  const docs = (cwd: string) => run(CHECK_DOCS, cwd)
+  const docs = checkDocs
 
   it('ignores a broken link in an ignored folder', () => {
     const d = repo('docs')
@@ -246,6 +226,7 @@ describe('check_docs checks tracked and new-but-not-ignored Markdown only', () =
     const d = tmp('nogit')
     fs.mkdirSync(path.join(d, 'scripts'))
     fs.copyFileSync(CHECK_DOCS, path.join(d, 'scripts', 'check_docs.mjs'))
+    fs.copyFileSync(path.join(path.dirname(CHECK_DOCS), 'repoRoot.mjs'), path.join(d, 'scripts', 'repoRoot.mjs'))
     write(d, 'README.md', '[a](docs/a.md)\n')
     write(d, 'docs/a.md', 'x\n')
     const script = path.join(d, 'scripts', 'check_docs.mjs')
@@ -263,17 +244,13 @@ describe('check_docs checks tracked and new-but-not-ignored Markdown only', () =
 // release.yml: the notes come from the report, and a missing or empty one fails the step
 // ---------------------------------------------------------------------------------------------------
 describe('release workflow extracts the notes and refuses to publish empty ones', () => {
-  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8').split(/\r?\n/)
+  const releaseText = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8')
+  // The publishing step is the one that runs gh release create, wherever it sits among the jobs and steps.
   function runBlock() {
-    const start = yml.findIndex((l) => /^\s+run: \|\s*$/.test(l))
-    expect(start).toBeGreaterThan(-1)
-    const indent = /^(\s*)/.exec(yml[start + 1]!)![1]!.length
-    const out: string[] = []
-    for (const l of yml.slice(start + 1)) {
-      if (l.trim() !== '' && !(/^\s*/.exec(l)![0].length >= indent)) break
-      out.push(l.slice(indent))
-    }
-    return out.join('\n').trim() + '\n'
+    const steps = (at(parseYaml(releaseText), 'jobs.release.steps') as { [k: string]: Yaml }[]) ?? []
+    const step = steps.find((x) => String(x.run ?? '').includes('gh release create'))
+    expect(step, 'a step that runs gh release create').toBeTruthy()
+    return `${String(step!.run).trim()}\n`
   }
   const bash = (() => {
     const candidates = process.platform === 'win32'
@@ -286,9 +263,8 @@ describe('release workflow extracts the notes and refuses to publish empty ones'
   })()
 
   it('the step runs under bash with pipefail so a missing report fails', () => {
-    const text = yml.join('\n')
-    expect(text).toMatch(/shell: bash/)
-    expect(text).toContain('test -s notes.txt')
+    expect(releaseText).toMatch(/shell: bash/)
+    expect(releaseText).toContain('test -s notes.txt')
   })
 
   const exec = (cwd: string, tag: string) => {
@@ -328,5 +304,698 @@ describe('release workflow extracts the notes and refuses to publish empty ones'
     expect(r.status).not.toBe(0)
     expect(r.stdout + r.stderr).toContain("no 'What changed' text")
     expect(fs.existsSync(path.join(d, 'gh-args.txt'))).toBe(false)
+  })
+
+  // BE-050: the notes are only one paragraph, but the whole report must be written before a release goes out.
+  it.skipIf(!bash)('BE-050: fails, and publishes nothing, when any part of the report still holds placeholder text', () => {
+    for (const left of Object.values(PLACEHOLDER)) {
+      const d = tmp('release')
+      write(d, 'docs/builds/build-1000.md', `# Build 1000: T
+
+<!-- manual:start -->
+## What changed
+
+The public words.
+
+## Why
+
+${left}
+<!-- manual:end -->
+
+## Files changed
+
+- x
+`)
+      const r = exec(d, 'build-1000')
+      expect(r.status, left).not.toBe(0)
+      expect(r.stdout + r.stderr).toContain('placeholder')
+      expect(fs.existsSync(path.join(d, 'gh-args.txt'))).toBe(false)
+    }
+  })
+
+  it('BE-050: the step lists every placeholder text that changelog.mjs writes', () => {
+    const block = runBlock()
+    for (const p of Object.values(PLACEHOLDER)) expect(block, p).toContain(p)
+  })
+})
+
+// ---------------------------------------------------------------------------------------------------
+// Helpers for the BE- tests below
+// ---------------------------------------------------------------------------------------------------
+/** A repository with InBul01 committed and tagged, and b.txt staged, ready for --pending. */
+function startedRepo(prefix = 'started') {
+  const d = repo(prefix)
+  git(d, 'commit', '-q', '--allow-empty', '-m', 'InBul01: start')
+  git(d, 'tag', 'InBul01')
+  write(d, 'b.txt', 'b\n')
+  git(d, 'add', 'b.txt')
+  return d
+}
+const commitAll = (d: string, title: string) => { git(d, 'add', '-A'); git(d, 'commit', '-q', '--allow-empty', '-m', title) }
+const tagList = (cwd: string) => git(cwd, 'tag', '--list').split('\n').filter(Boolean)
+
+// BE-050: a build could be tagged and released with the placeholder text as its public notes.
+describe('BE-050: a build report with placeholder text is never tagged', { timeout: SLOW }, () => {
+  it('BE-050: --tag refuses a report that was started with only a title', () => {
+    const d = startedRepo()
+    expect(changelog(d, '--pending', 'Title only').status).toBe(0)
+    commitAll(d, 'Title only')
+    const r = changelog(d, '--tag')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('placeholder')
+    expect(r.stderr).toContain('(write one or two plain sentences)')
+    expect(git(d, 'tag', '--list', 'build-*')).toBe('')
+  })
+
+  it('BE-050: one part still unwritten is enough to refuse, and writing it lets the tag through', () => {
+    const d = startedRepo()
+    changelog(d, '--pending', 'Half done', 'Said what changed.', '--why', 'because', '--verified', 'checked')   // --next missing
+    commitAll(d, 'Half done')
+    const r = changelog(d, '--tag')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('(what to improve next)')
+    // fix the report, amend the commit, tag
+    expect(changelog(d, '--pending', 'Half done', '--next', 'more').status).toBe(0)
+    git(d, 'add', '-A'); git(d, 'commit', '-q', '--amend', '--no-edit')
+    const ok = changelog(d, '--tag')
+    expect(ok.status, ok.stderr).toBe(0)
+    expect(git(d, 'tag', '--list', 'build-*')).toBe('build-1000')
+  })
+
+  it('BE-050: check_repo fails a tagged report that holds placeholder text, and only warns for one not tagged yet', () => {
+    const d = startedRepo()
+    changelog(d, '--pending', 'Title only')
+    commitAll(d, 'Title only')
+    let r = checkRepo(d)
+    expect(r.status, r.stderr).toBe(0)
+    expect(r.stderr).toContain('not tagged yet')
+    git(d, 'tag', 'build-1000')   // as if it had been tagged by hand, around changelog.mjs
+    r = checkRepo(d)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('tag build-1000')
+    expect(r.stderr).toContain('placeholder')
+  })
+
+  it('BE-050: the committed history holds no tagged report with placeholder text', () => {
+    // The reason check_repo may fail (not just warn) on a tagged report: nothing already tagged would fail.
+    const tagged = tagList(ROOT).filter((t) => /^build-\d+$/.test(t))
+    // A CI checkout has no tags (it fetches the commit only), so there is nothing already tagged to compare: the reports must
+    // still be there to be read, and the tagged ones are checked wherever the tags exist (a developer's clone, the release job).
+    expect(fs.readdirSync(path.join(ROOT, 'docs', 'builds')).filter((f) => /^build-\d+\.md$/.test(f)).length).toBeGreaterThan(0)
+    for (const t of tagged) {
+      const report = path.join(ROOT, 'docs', 'builds', `${t}.md`)
+      if (!fs.existsSync(report)) continue     // a tag from another branch whose report is not in this checkout (check_repo covers the tags that are)
+      const text = fs.readFileSync(report, 'utf8')
+      for (const p of Object.values(PLACEHOLDER)) expect(text, `${t} holds ${p}`).not.toContain(p)
+    }
+  })
+})
+
+// BE-052: the secret-looking-text check rejected ordinary release prose.
+describe('BE-052: release prose that uses the words token and password is accepted', { timeout: SLOW }, () => {
+  it('BE-052: ordinary sentences with "token:" and "password =" are accepted', () => {
+    const d = startedRepo('prose')
+    for (const sentence of [
+      'Changed how the buyer token: cancelled links stop working at once.',
+      'Easy PIN rule. Password = refused when it is a run.',
+      'A reset password: nobody sees it twice.',
+    ]) {
+      const r = changelog(d, '--pending', 'Links', sentence)
+      expect(r.status, `${sentence}: ${r.stderr}`).toBe(0)
+    }
+  })
+
+  it('BE-052: a value that looks generated, or a key, is still refused', () => {
+    const d = startedRepo('prose')
+    for (const text of [
+      'Rotated it: password=' + 'Xk29sLq81vZ',
+      'The token: ' + '9f8a7b6c5d4e3f2a1b0c' + ' was pasted',
+      'secret = ' + 'AbCdEfGhIjKl',
+      'api_key: ' + 'zz90yy81xx72',
+      'Here is ' + '-----BEGIN RSA ' + 'PRIVATE KEY-----',
+      'tok ' + 'eyJhbGciOiJIUzI1NiJ9' + '.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc',
+    ]) {
+      const r = changelog(d, '--pending', 'Links', text)
+      expect(r.status, text).toBe(1)
+      expect(r.stderr).toContain('looks like it holds a secret')
+    }
+  })
+})
+
+// BE-053: nothing detected one InBul id used by two commits, and --next-internal read the local tags only.
+describe('BE-053: an InBul id is used once', { timeout: SLOW }, () => {
+  it('BE-053: check_repo fails when two commits carry the same InBul id', () => {
+    const d = repo('dupes')
+    write(d, 'a.txt', 'a'); commitAll(d, 'InBul02: first')
+    write(d, 'b.txt', 'b'); commitAll(d, 'InBul03: second')
+    expect(checkRepo(d).status).toBe(0)
+    write(d, 'c.txt', 'c'); commitAll(d, 'InBul02: a different change, same id')
+    const r = checkRepo(d)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toMatch(/InBul02 is the title of 2 commits/)
+  })
+
+  it('BE-053: a clash with a commit on another branch is found too', () => {
+    const d = repo('dupes')
+    write(d, 'a.txt', 'a'); commitAll(d, 'InBul02: first')
+    git(d, 'checkout', '-q', '-b', 'other')
+    write(d, 'b.txt', 'b'); commitAll(d, 'InBul05: on another branch')
+    git(d, 'checkout', '-q', '-')
+    write(d, 'c.txt', 'c'); commitAll(d, 'InBul05: the same id here')
+    const r = checkRepo(d)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('InBul05')
+  })
+
+  it('BE-053: --next-internal is the highest id in any tag or any commit title on any branch, plus one', () => {
+    const d = repo('next')
+    write(d, 'a.txt', 'a'); commitAll(d, 'InBul02: first'); git(d, 'tag', 'InBul02')
+    expect(changelog(d, '--next-internal').stdout.trim()).toBe('InBul03')
+    git(d, 'checkout', '-q', '-b', 'other')
+    write(d, 'b.txt', 'b'); commitAll(d, 'InBul07: a session that has not tagged yet')
+    git(d, 'checkout', '-q', '-')
+    expect(changelog(d, '--next-internal').stdout.trim()).toBe('InBul08')
+    expect(changelog(d, '--status').stdout).toContain('next InBul:  InBul08')
+    git(d, 'tag', 'InBul12', 'HEAD')   // a tag higher than every title
+    expect(changelog(d, '--next-internal').stdout.trim()).toBe('InBul13')
+  })
+
+  it('BE-053: tagging a normal InBul commit raises no warning, and a second commit with the same id is refused', () => {
+    const d = repo('tag')
+    write(d, 'a.txt', 'a'); commitAll(d, 'InBul01: first')
+    let r = changelog(d, '--tag')
+    expect(r.status, r.stderr).toBe(0)
+    expect(r.stderr).toBe('')
+    write(d, 'b.txt', 'b'); commitAll(d, 'InBul01: taken already')
+    r = changelog(d, '--tag')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('InBul01 already exists')
+    // the same clash with no tag: another branch used the id and never tagged it
+    const e = repo('tag2')
+    write(e, 'a.txt', 'a'); commitAll(e, 'InBul04: x')
+    git(e, 'checkout', '-q', '-b', 'other')
+    write(e, 'b.txt', 'b'); commitAll(e, 'InBul04: y')
+    r = changelog(e, '--tag')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('already the title of another commit')
+    expect(tagList(e)).toEqual([])
+  })
+
+  it('BE-053: the legacy duplicates (InBul17 and InBul18, already in history) pass, a third use of the id does not, and other ids do not', async () => {
+    const { findDuplicateInbuls, nextInbul, LEGACY_DUPLICATES } = await loadScript('inbul.mjs')
+    const e = (hash: string, title: string) => ({ hash, title })
+    const legacy = [
+      e('d77dc1f' + '0'.repeat(33), 'InBul17: a'), e('d85a545' + '0'.repeat(33), 'InBul17: b'),
+      e('3f085a7' + '0'.repeat(33), 'InBul18: c'), e('4d7999a' + '0'.repeat(33), 'InBul18: d'),
+    ]
+    expect(Object.keys(LEGACY_DUPLICATES).sort()).toEqual(['InBul17', 'InBul18'])
+    expect(findDuplicateInbuls(legacy)).toEqual([])
+    expect(findDuplicateInbuls([...legacy, e('abc1234' + '0'.repeat(33), 'InBul17: a third')])).toMatchObject([{ id: 'InBul17' }])
+    expect(findDuplicateInbuls([e('1'.repeat(40), 'InBul09: x'), e('2'.repeat(40), 'InBul09: y')])).toMatchObject([{ id: 'InBul09' }])
+    expect(findDuplicateInbuls([e('1'.repeat(40), 'Merge InBul09: x'), e('2'.repeat(40), 'Merge InBul09: y')])).toEqual([])
+    expect(nextInbul(['InBul02'], [e('1'.repeat(40), 'InBul09: x')])).toBe('InBul10')
+    expect(nextInbul([], [])).toBe('InBul01')
+  })
+})
+
+// BE-058: non-ASCII file names were written as octal escapes into the public build report.
+describe('BE-058: file names in a build report are written as they are', { timeout: SLOW }, () => {
+  it('BE-058: a staged café.txt and a Tamil-named file are listed by name', () => {
+    const d = startedRepo()
+    write(d, 'café.txt', 'x\n'); write(d, 'தமிழ்.txt', 'x\n')
+    git(d, 'add', '-A')
+    expect(changelog(d, '--pending', 'Names', 'Added files.').status).toBe(0)
+    const report = read(d, 'docs/builds/build-1000.md')
+    expect(report).toContain('- café.txt')
+    expect(report).toContain('- தமிழ்.txt')
+    expect(report).not.toContain('\\303')
+    expect(report).not.toContain('"\\')
+  })
+})
+
+// BE-059: the scripts act on the repository that holds them, and fail with one plain line outside git.
+describe('BE-059: scripts act on their own repository, and fail plainly outside git', { timeout: SLOW }, () => {
+  it('BE-059: changelog and check_repo started from another repository still act on the one that holds them', () => {
+    const a = repo('own')
+    write(a, 'a.txt', 'a'); commitAll(a, 'InBul01: x')
+    const b = repo('other')
+    write(b, '.env', 'SOMETHING=1\n')   // would fail check_repo if it looked at this folder
+    write(b, 'b.txt', 'b'); commitAll(b, 'InBul09: y')
+    expect(run(scriptIn(a, 'changelog.mjs'), b, ['--regenerate']).status).toBe(0)
+    expect(fs.existsSync(path.join(a, 'CHANGELOG.md'))).toBe(true)
+    expect(fs.existsSync(path.join(b, 'CHANGELOG.md'))).toBe(false)
+    expect(run(scriptIn(a, 'changelog.mjs'), b, ['--next-internal']).stdout.trim()).toBe('InBul02')
+    const r = run(scriptIn(a, 'check_repo.mjs'), b)
+    expect(r.status, r.stderr).toBe(0)
+  })
+
+  it.each(['changelog.mjs', 'check_repo.mjs'])('BE-059: %s outside any git repository says so in one line', (name) => {
+    const d = tmp('nogit')
+    fs.mkdirSync(path.join(d, 'scripts'))
+    for (const f of fs.readdirSync(SCRIPTS_DIR).filter((x) => x.endsWith('.mjs'))) fs.copyFileSync(path.join(SCRIPTS_DIR, f), path.join(d, 'scripts', f))
+    const r = run(path.join(d, 'scripts', name), d, ['--status'], { GIT_CEILING_DIRECTORIES: path.dirname(d) })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('not inside a git repository')
+    expect(r.stderr.trim().split('\n')).toHaveLength(1)
+    expect(r.stderr).not.toContain('node:internal')
+  })
+
+  it('BE-059: an unknown option, or two modes at once, is one plain line', () => {
+    const d = repo('args')
+    write(d, 'a.txt', 'a'); commitAll(d, 'InBul01: x')
+    let r = changelog(d, '--bogus')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('Unknown option')
+    expect(r.stderr).not.toContain('node:internal')
+    r = changelog(d, '--next-build', '--next-internal')
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('one of')
+  })
+})
+
+// BE-057: check_docs missed anchors, reference links and HTML links, and failed a valid link with parentheses.
+describe('BE-057: check_docs checks anchors, reference links, HTML links and unusual link targets', { timeout: SLOW }, () => {
+  const docsOf = (files: Record<string, string>) => {
+    const d = repo('docs57')
+    for (const [rel, text] of Object.entries(files)) write(d, rel, text)
+    return checkDocs(d)
+  }
+
+  it('BE-057: an anchor that is not a heading of the target file is broken; the real one, #top and a repeat heading are fine', () => {
+    let r = docsOf({ 'README.md': '[a](docs/a.md#renamed-heading)\n', 'docs/a.md': '# Real heading\n' })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('README.md: broken anchor docs/a.md#renamed-heading')
+    r = docsOf({
+      'README.md': '[a](docs/a.md#real-heading) [b](docs/a.md#top) [c](docs/a.md#same) [d](docs/a.md#same-1) [e](docs/a.md#npm-run-x--more) [f](docs/a.md#un-caf%C3%A9)\n',
+      'docs/a.md': '# Real heading\n\n## Same\n\n## Same\n\n## `npm run x` & more\n\n## Un café\n',
+    })
+    expect(r.status, r.stderr).toBe(0)
+  })
+
+  it('BE-057: a same-file anchor is checked against the headings of that file, not skipped', () => {
+    let r = docsOf({ 'README.md': '# Title\n\n[x](#nope)\n' })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('README.md: broken anchor #nope')
+    r = docsOf({ 'README.md': '# Title\n\n## Some Title!\n\n[x](#some-title) [y](#title)\n' })
+    expect(r.status, r.stderr).toBe(0)
+  })
+
+  it('BE-057: a reference-style link whose definition points at a missing file is broken', () => {
+    let r = docsOf({ 'README.md': '[b][ref]\n\n[ref]: gone.md\n' })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('README.md: broken link gone.md')
+    r = docsOf({ 'README.md': '[b][ref]\n\n[ref]: docs/a.md "A title"\n[other]: <docs/a.md#top>\n[web]: https://example.com\n', 'docs/a.md': 'x\n' })
+    expect(r.status, r.stderr).toBe(0)
+  })
+
+  it('BE-057: src and href in HTML are checked', () => {
+    let r = docsOf({ 'README.md': '<img src="missing.png" alt="">\n' })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('README.md: broken link missing.png')
+    r = docsOf({ 'README.md': '<a href="docs/a.md">a</a> <img src=\'pic.png\'> <a href="https://example.com">w</a> <a href="#top">t</a>\n', 'docs/a.md': 'x\n', 'pic.png': 'x' })
+    expect(r.status, r.stderr).toBe(0)
+  })
+
+  it('BE-057: <angle bracket> targets with a space, and targets with parentheses, are read whole', () => {
+    let r = docsOf({ 'README.md': '[c](<my file.md>) [d](a(1).md) [e](docs/a.md "title (with parens)")\n', 'my file.md': 'x\n', 'a(1).md': 'x\n', 'docs/a.md': 'x\n' })
+    expect(r.status, r.stderr).toBe(0)
+    r = docsOf({ 'README.md': '[d](a(2).md) [c](<no such.md>)\n' })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('broken link a(2).md')
+    expect(r.stderr).toContain('broken link no such.md')
+  })
+
+  it('BE-057: a link written inside inline code is an example, not a link', () => {
+    const r = docsOf({ 'README.md': 'Write `[x](nowhere.md)` or `<img src="nope.png">` like this.\n' })
+    expect(r.status, r.stderr).toBe(0)
+  })
+})
+
+// BE-051: .env.example said "copy to .env" though nothing reads it, and no script started the real server.
+describe('BE-051: the real server can be started, and the example settings say how', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+  const envExample = fs.readFileSync(path.join(ROOT, 'packages/server/.env.example'), 'utf8')
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+
+  it('BE-051: start:api runs packages/server/src/server.ts, which exists', () => {
+    expect(pkg.scripts['start:api']).toMatch(/packages\/server\/src\/server\.ts/)
+    expect(fs.existsSync(path.join(ROOT, 'packages/server/src/server.ts'))).toBe(true)
+  })
+
+  it('BE-051: tsx, which start:api and migrate need, is installed in production (dependencies, not only devDependencies)', () => {
+    expect(pkg.scripts['start:api']).toMatch(/^tsx /)
+    expect(pkg.scripts.migrate).toMatch(/^tsx /)
+    expect(pkg.dependencies?.tsx).toBeTruthy()
+    expect(pkg.devDependencies?.tsx).toBeUndefined()
+  })
+
+  it('BE-051: .env.example no longer says to copy it to .env; it says nothing loads it and names start:api', () => {
+    const header = envExample.split('\n').filter((l) => l.startsWith('#')).slice(0, 6).join('\n')
+    expect(header).not.toMatch(/copy to \.env/i)
+    expect(header).toMatch(/nothing (here )?(reads|loads) this file/i)
+    expect(header).toContain('start:api')
+  })
+
+  it('BE-051: the README names the start command, and every npm run in it exists', () => {
+    expect(readme).toContain('npm run start:api')
+    for (const m of readme.matchAll(/npm run ([a-z][\w:-]*)(?![\w:-])([^\n]*)/g)) {
+      if (/\s-w\s/.test(m[2]!)) continue   // a script of another workspace
+      expect(Object.keys(pkg.scripts), `README names "npm run ${m[1]}"`).toContain(m[1])
+    }
+  })
+})
+
+// BE-056: the README said things that are no longer true.
+describe('BE-056: the README matches what exists', () => {
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+
+  it('BE-056: every route the app registers is in the README (the .../name shorthand allowed)', async () => {
+    const { buildApp } = await import('../src/app.js')
+    const routes = buildApp({ db: null as never, tokenSecret: 'x'.repeat(40) }).routeList
+    expect(routes.length).toBeGreaterThan(20)
+    // The README writes a run of routes under one path as ".../dismiss" or ".../:id/pin": the last one or two segments.
+    const shorthand = (url: string) => [1, 2].some((n) => readme.includes(`.../${url.split('/').slice(-n).join('/')}`))
+    const missing = routes.map((r) => r.url).filter((url) => !readme.includes(url) && !shorthand(url))
+    expect(missing).toEqual([])
+  })
+
+  it('BE-056: it no longer says photos and notes are not built, quotes no test counts, and the finished roadmap item is gone', () => {
+    expect(readme).not.toMatch(/photos and notes are not built/i)
+    expect(readme).not.toMatch(/\b\d+ tests\b/)
+    expect(readme).not.toContain('a real-Postgres run of the isolation tests')
+  })
+
+  it('BE-056: it names the Postgres job and how to run the database tests on a real server', () => {
+    expect(readme).toContain('test:pg')
+    expect(readme).toContain('TEST_DATABASE_URL')
+    expect(readme).toContain('test-postgres')
+  })
+
+  it('BE-056: the start-up variables and the new error codes are documented as the server now treats them', () => {
+    const env = fs.readFileSync(path.join(ROOT, 'packages/server/.env.example'), 'utf8')
+    for (const name of ['ALLOW_UNSAFE_DB_ROLE', 'TRUST_PROXY', 'PORT']) {
+      expect(readme, name).toContain(`\`${name}\``)
+      expect(env, name).toContain(name)
+    }
+    expect(readme).not.toContain('Set to `1` behind a reverse proxy')
+    expect(readme).toContain('photo_too_large')
+    expect(readme).toContain('too_large')
+    expect(readme).toMatch(/Creating answers 201/)
+  })
+
+  it('BE-056: npm run verify is not described as everything CI does', () => {
+    expect(readme).not.toMatch(/npm run verify\s+# all of the above/)
+    expect(readme).toMatch(/npm run build/)
+  })
+})
+
+// BE-060: npm run typecheck did not cover the scripts or the config files, and server code was compiled with browser types.
+describe('BE-060: the scripts and config files are type-checked', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
+  const parseConfig = async (name: string) => {
+    const ts = (await import('typescript')).default
+    const file = path.join(ROOT, name)
+    const read = ts.readConfigFile(file, ts.sys.readFile)
+    expect(read.error, `${name} must parse`).toBeUndefined()
+    return ts.parseJsonConfigFileContent(read.config, ts.sys, ROOT, undefined, file)
+  }
+
+  it('BE-060: npm run typecheck runs all three configs', () => {
+    for (const name of ['tsconfig.json', 'tsconfig.server.json', 'tsconfig.scripts.json']) expect(pkg.scripts.typecheck).toContain(name)
+  })
+
+  it('BE-060: every file in scripts/ is type-checked or explicitly skipped, and the config files are covered', async () => {
+    const cfg = await parseConfig('tsconfig.scripts.json')
+    const covered = new Set(cfg.fileNames.map((f) => path.relative(ROOT, f).split(path.sep).join('/')))
+    const raw = fs.readFileSync(path.join(ROOT, 'tsconfig.scripts.json'), 'utf8')
+    for (const f of fs.readdirSync(path.join(ROOT, 'scripts'))) {
+      const rel = `scripts/${f}`
+      // the UI session's scripts are skipped on purpose, by name, with the reason written beside the list
+      // a script with a .d.mts beside it is read through its declarations (the tests import it as TypeScript)
+      const viaDeclaration = rel.endsWith('.mjs') && covered.has(rel.replace(/\.mjs$/, '.d.mts'))
+      expect(covered.has(rel) || viaDeclaration || raw.includes(`"${rel}"`), `${rel} is neither checked nor skipped by name`).toBe(true)
+    }
+    for (const rel of ['scripts/changelog.mjs', 'scripts/check_repo.mjs', 'scripts/check_docs.mjs', 'scripts/check_bugs.mjs', 'vitest.config.ts']) {
+      expect(covered.has(rel), `${rel} is type-checked`).toBe(true)
+    }
+    expect(raw).toMatch(/UI session/)
+  })
+
+  it('BE-060: server code is checked without browser types, and neither config loosens strict', async () => {
+    const server = await parseConfig('tsconfig.server.json')
+    expect(server.options.lib?.some((l) => /dom/i.test(l)) ?? false).toBe(false)
+    expect(server.fileNames.some((f) => f.includes('packages/server/src/'))).toBe(true)
+    expect(server.fileNames.some((f) => f.includes('packages/web/'))).toBe(false)
+    for (const name of ['tsconfig.server.json', 'tsconfig.scripts.json']) {
+      const cfg = await parseConfig(name)
+      expect(cfg.options.strict).toBe(true)
+      expect(cfg.options.noUncheckedIndexedAccess).toBe(true)
+    }
+  })
+})
+
+// BE-055: tests that are long on an idle machine fail on a busy one.
+describe('BE-055: timeouts', () => {
+  it('BE-055: the default is raised but not a blanket five minutes, and the long files get their own value', async () => {
+    const config = (await import('../../../vitest.config')).default as { test: { testTimeout: number; hookTimeout: number; setupFiles?: string[]; reporters?: unknown[] } }
+    expect(config.test.testTimeout).toBeGreaterThanOrEqual(60_000)
+    expect(config.test.testTimeout).toBeLessThan(300_000)
+    expect(config.test.hookTimeout).toBeGreaterThanOrEqual(60_000)
+    expect(config.test.setupFiles).toContain('./vitest.setup.ts')
+    const { slowTimeoutFor, SLOW_FILES } = await loadScript('slowTests.mjs')
+    for (const f of ['migrate.test.ts', 'rls.test.ts', 'fuzz.test.ts', 'toolingScripts.test.ts']) expect(Object.keys(SLOW_FILES)).toContain(f)
+    expect(slowTimeoutFor('E:\\x\\packages\\server\\test\\migrate.test.ts')).toBeGreaterThan(config.test.testTimeout)
+    expect(slowTimeoutFor('/x/packages/server/test/rls.test.ts')).toBeLessThan(300_000)
+    expect(slowTimeoutFor('/x/packages/server/test/board.test.ts')).toBeNull()
+  })
+
+  it('BE-055: vitest.setup.ts gives this very file its own longer limit (it is one of the long files)', async () => {
+    const { SLOW_FILES } = await loadScript('slowTests.mjs')
+    // vi.setConfig (called by vitest.setup.ts) writes into the worker's config, which is where the runner reads the limits from.
+    const cfg = (globalThis as unknown as { __vitest_worker__: { config: { testTimeout: number; hookTimeout: number } } }).__vitest_worker__.config
+    expect(cfg.testTimeout).toBe(SLOW_FILES['toolingScripts.test.ts'])
+    expect(cfg.hookTimeout).toBe(SLOW_FILES['toolingScripts.test.ts'])
+  })
+
+  it('BE-055: the slowest-tests reporter lists the 10 slowest, slowest first', async () => {
+    const { slowestTests, formatSlowest } = await loadScript('slowestReporter.mjs')
+    const test = (name: string, duration: number) => ({ type: 'test', name, result: { duration } })
+    const files = [{ name: 'packages/a.test.ts', tasks: [{ type: 'suite', name: 'S', tasks: Array.from({ length: 12 }, (_, i) => test(`t${i}`, (i + 1) * 100)) }] }, { name: 'packages/b.test.ts', tasks: [test('skipped', 0)] }]
+    const top = slowestTests(files, 10)
+    expect(top).toHaveLength(10)
+    expect(top[0]).toMatchObject({ duration: 1200, name: 'S > t11', file: 'packages/a.test.ts' })
+    expect(top.map((t: { duration: number }) => t.duration)).toEqual([...top.map((t: { duration: number }) => t.duration)].sort((a, b) => b - a))
+    expect(formatSlowest(top)).toContain('1.2 s')
+  })
+})
+
+// BE-061 and the helper half of BE-041.
+describe('BE-061: the test helpers follow the production migration runner and restore the settings', { timeout: SLOW }, () => {
+  it('BE-061: the helper lists the migrations the way production does', async () => {
+    const { migrationFiles } = await import('./helpers')
+    const { readMigrations } = await import('../src/migrate')
+    expect(migrationFiles()).toEqual(readMigrations().map((m) => m.file))
+  })
+
+  it('BE-061: numeric order, .sql files only, and a stray name is an error, not SQL to run', async () => {
+    const { migrationFiles } = await import('./helpers')
+    const d = tmp('migs')
+    for (const f of ['010_a.sql', '9_b.sql', '1000_c.sql', 'README.md', '016_x.sql.orig']) write(d, f, '-- x\n')
+    expect(migrationFiles(d)).toEqual(['9_b.sql', '010_a.sql', '1000_c.sql'])
+    write(d, 'notes.sql', '-- not a migration name\n')
+    expect(() => migrationFiles(d)).toThrow(/not named like/)
+  })
+
+  it('BE-061: resetAndSeed puts every setting back as the migrations seeded it', async () => {
+    const { migratedDb, resetAndSeed } = await import('./helpers')
+    const pg = await migratedDb()
+    try {
+      const settings = async () => (await pg.query<{ key: string; value: unknown }>('select key, value from settings order by key')).rows
+      const seeded = await settings()
+      expect(seeded.length).toBeGreaterThan(6)
+      await pg.exec(`update settings set value = '0.5' where key = 'red_below'`)
+      await pg.exec(`update settings set value = '99' where key = 'window_days'`)
+      await pg.exec(`update settings set value = '[{"id":"yarn","en":"Yarn"}]'::jsonb where key = 'reason_categories'`)
+      await pg.exec(`delete from settings where key = 'buffer_days'`)
+      await pg.exec(`insert into settings (key, value) values ('left_over_by_a_test', '1')`)
+      await resetAndSeed(pg)
+      expect(await settings()).toEqual(seeded)
+    } finally { await pg.close() }
+  })
+})
+
+describe('BE-041: the test helper says why a connection failed', { timeout: SLOW }, () => {
+  it('BE-041: reasonOf uses the message, then the code, then the errors inside an AggregateError', async () => {
+    const { reasonOf } = await import('./helpers')
+    const refused = (addr: string) => Object.assign(new Error(`connect ECONNREFUSED ${addr}:1`), { code: 'ECONNREFUSED' })
+    expect(reasonOf(new Error('boom'))).toBe('boom')
+    expect(reasonOf(Object.assign(new Error(''), { code: 'ECONNREFUSED' }))).toBe('ECONNREFUSED')
+    const agg = new AggregateError([refused('::1'), refused('127.0.0.1')], '')
+    expect(agg.message).toBe('')   // what Node 20 raises for a connection to localhost
+    expect(reasonOf(agg)).toContain('ECONNREFUSED 127.0.0.1:1')
+    expect(reasonOf(agg)).toContain('ECONNREFUSED ::1:1')
+    expect(reasonOf('plain string')).toBe('plain string')
+    expect(reasonOf(new Error(''))).not.toBe('')
+  })
+
+  it('BE-041: a dead localhost port gives a message that ends in a reason, not in nothing', async () => {
+    const { createRealPg } = await import('./helpers')
+    const err = await createRealPg('postgres://u:secret@localhost:1/x').then(() => null, (e: Error) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(err!.message).toMatch(/\): \S/)
+    expect(err!.message).not.toContain('secret')
+  })
+})
+
+// BE-062: CI and release process gaps. The workflow files are read as data.
+describe('BE-062: the workflows', () => {
+  const load = (name: string) => parseYaml(fs.readFileSync(path.join(ROOT, '.github', 'workflows', name), 'utf8'))
+  const stepsOf = (doc: Yaml, job: string) => (at(doc, `jobs.${job}.steps`) as { [k: string]: Yaml }[] | undefined) ?? []
+
+  it('BE-062: a push to main is never cancelled by the next one; a pull request still is', () => {
+    const ci = load('ci.yml')
+    const cancel = at(ci, 'concurrency.cancel-in-progress')
+    expect(cancel).not.toBe(true)
+    expect(String(cancel)).toContain('pull_request')
+    // a main push has a group of its own, so the next push does not even queue behind it
+    expect(String(at(ci, 'concurrency.group'))).toContain('github.sha')
+  })
+
+  it('BE-062: where the BANNED_TERMS secret exists, an empty one fails; fork and Dependabot pull requests are the exception', () => {
+    const ci = load('ci.yml')
+    const step = stepsOf(ci, 'checks').find((s) => String(s.run ?? '').includes('check_repo.mjs'))
+    expect(step, 'the check_repo step').toBeTruthy()
+    const env = step!.env as { [k: string]: Yaml }
+    expect(String(env.BANNED_TERMS)).toContain('secrets.BANNED_TERMS')
+    const require = String(env.REQUIRE_BANNED_TERMS)
+    expect(require).toContain('vars.REQUIRE_BANNED_TERMS')     // opt-in: a repository without the secret must not fail every run
+    expect(require).toContain('github.event_name')
+    expect(require).toContain('head.repo.full_name')
+    expect(require).toContain('dependabot')
+  })
+
+  it('BE-062: a release needs the checks, and runs them with the banned-terms guard required', () => {
+    const rel = load('release.yml')
+    const needs = at(rel, 'jobs.release.needs')
+    expect([needs].flat()).toContain('verify')
+    const verify = stepsOf(rel, 'verify')
+    const runs = verify.map((s) => String(s.run ?? ''))
+    expect(runs.some((r) => r.includes('npm ci'))).toBe(true)
+    expect(runs.some((r) => /npm run check\b|check_repo\.mjs/.test(r))).toBe(true)
+    expect(runs.some((r) => r.includes('npm run typecheck'))).toBe(true)
+    expect(runs.some((r) => /npm test\b/.test(r))).toBe(true)
+    const guard = verify.find((s) => /npm run check\b|check_repo\.mjs/.test(String(s.run ?? '')))
+    expect(String((guard!.env as { [k: string]: Yaml }).REQUIRE_BANNED_TERMS)).toContain('vars.REQUIRE_BANNED_TERMS')
+    expect(at(verify[0] as Yaml, 'with.fetch-depth')).toBe(0)   // tags and commit titles are checked
+  })
+
+  it('BE-062: the release job alone can write, and only a build-N tag starts it', () => {
+    const rel = load('release.yml')
+    expect(at(rel, 'permissions.contents')).toBe('read')
+    expect(at(rel, 'jobs.release.permissions.contents')).toBe('write')
+    expect(at(rel, 'on.push.tags')).toEqual(['build-[0-9]*'])
+  })
+})
+
+// scripts/check_bugs.mjs: every fixed bug has an entry with a test that exists.
+describe('check_bugs: bug.md, bugfixed.md and the tests they name agree', { timeout: SLOW }, () => {
+  const table = (rows: [string, string][]) => [
+    '# Bug log', '', '| ID | Sev | Where | What is wrong | Found | Status |', '| --- | --- | --- | --- | --- | --- |',
+    ...rows.map(([id, status]) => `| ${id} | S1 | \`x.ts\` | Something | A-1 | ${status} |`), '',
+  ].join('\n')
+  const entry = (id: string, ...tests: string[]) => [`## ${id} the title`, '', 'Root cause: x', ...tests.map((t) => `Test: ${t}`), ''].join('\n')
+  const TEST_FILE = "import { it } from 'vitest'\nit('BE-001: the thing works', () => {})\nit(\"BE-002: another thing\", () => {})\n"
+
+  function fixture(files: Record<string, string>) {
+    const d = tmp('bugs')
+    for (const [rel, text] of Object.entries(files)) write(d, rel, text)
+    return d
+  }
+  const check = async (d: string) => (await loadScript('check_bugs.mjs')).checkBugs(d) as { problems: string[]; fixed: number; entries: number }
+
+  it('everything agrees: no problems', async () => {
+    const d = fixture({
+      'bug.md': table([['BE-001', 'fixed'], ['BE-002', '`fixed`'], ['BE-003', 'open'], ['BE-004', 'deferred']]),
+      'bugfixed.md': '# Fixed\n\n' + entry('BE-001', 'packages/x/test/a.test.ts :: BE-001: the thing') + '\n' + entry('BE-002', '`packages/x/test/a.test.ts` :: `BE-002: another thing`') + '\n',
+      'packages/x/test/a.test.ts': TEST_FILE,
+    })
+    const r = await check(d)
+    expect(r.problems).toEqual([])
+    expect(r.fixed).toBe(2)
+    expect(r.entries).toBe(2)
+  })
+
+  it('a test file that does not exist, or a test name that is not in it, is a problem', async () => {
+    const d = fixture({
+      'bug.md': table([['BE-001', 'fixed'], ['BE-002', 'fixed']]),
+      'bugfixed.md': entry('BE-001', 'packages/x/test/missing.test.ts :: BE-001: the thing') + entry('BE-002', 'packages/x/test/a.test.ts :: BE-002: not written'),
+      'packages/x/test/a.test.ts': TEST_FILE,
+    })
+    const r = await check(d)
+    expect(r.problems).toHaveLength(2)
+    expect(r.problems[0]).toMatch(/BE-001.*packages\/x\/test\/missing\.test\.ts.*does not exist/)
+    expect(r.problems[1]).toMatch(/BE-002.*"BE-002: not written".*not in packages\/x\/test\/a\.test\.ts/)
+  })
+
+  it('a name that only appears in a comment, not as the start of a test title, does not count', async () => {
+    const d = fixture({
+      'bug.md': table([['BE-001', 'fixed']]),
+      'bugfixed.md': entry('BE-001', 'a.test.ts :: BE-001: the thing'),
+      'a.test.ts': "// BE-001: the thing is covered below\nit('something else', () => {})\n",
+    })
+    expect((await check(d)).problems).toHaveLength(1)
+  })
+
+  it('every Test line of an entry is checked, and an entry with no Test line is allowed', async () => {
+    const d = fixture({
+      'bug.md': table([['BE-001', 'fixed'], ['BE-002', 'fixed']]),
+      'bugfixed.md': entry('BE-001', 'a.test.ts :: BE-001: the thing', 'a.test.ts :: BE-001: nope') + entry('BE-002'),
+      'a.test.ts': TEST_FILE,
+    })
+    const r = await check(d)
+    expect(r.problems).toHaveLength(1)
+    expect(r.problems[0]).toContain('"BE-001: nope"')
+  })
+
+  it('an id marked fixed in bug.md with no entry, and an entry for an id that is not in bug.md, are problems', async () => {
+    const d = fixture({
+      'bug.md': table([['BE-001', 'fixed'], ['BE-002', 'open']]),
+      'bugfixed.md': entry('BE-009', 'a.test.ts :: BE-001: the thing'),
+      'a.test.ts': TEST_FILE,
+    })
+    const r = await check(d)
+    expect(r.problems.some((p) => /BE-001 is marked fixed in bug\.md but has no entry in bugfixed\.md/.test(p))).toBe(true)
+    expect(r.problems.some((p) => /BE-009 is in bugfixed\.md but not in bug\.md/.test(p))).toBe(true)
+  })
+
+  it('no bugfixed.md yet: fine while no row is fixed, a problem as soon as one is', async () => {
+    let d = fixture({ 'bug.md': table([['BE-001', 'open'], ['BE-002', 'deferred']]) })
+    expect((await check(d)).problems).toEqual([])
+    d = fixture({ 'bug.md': table([['BE-001', 'open'], ['BE-002', 'fixed']]) })
+    const r = await check(d)
+    expect(r.problems).toHaveLength(1)
+    expect(r.problems[0]).toContain('BE-002')
+  })
+
+  it('no bug.md at all: nothing to check, unless a bugfixed.md exists', async () => {
+    expect((await check(fixture({ 'README.md': 'x' }))).problems).toEqual([])
+    expect((await check(fixture({ 'bugfixed.md': entry('BE-001') }))).problems.length).toBeGreaterThan(0)
+  })
+
+  it('run as a script it exits 0 or 1 and prints the problems', () => {
+    const d = fixture({ 'bug.md': table([['BE-001', 'fixed']]) })
+    const r = run(path.join(SCRIPTS_DIR, 'check_bugs.mjs'), d, [d])
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('BE-001')
+    const ok = run(path.join(SCRIPTS_DIR, 'check_bugs.mjs'), d, [fixture({ 'bug.md': table([['BE-001', 'open']]) })])
+    expect(ok.status, ok.stderr).toBe(0)
+    expect(ok.stdout).toContain('check_bugs: ok')
+  })
+
+  it('it is part of npm run check, and the real bug.md and bugfixed.md agree', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
+    expect(pkg.scripts.check).toContain('scripts/check_bugs.mjs')
+    const r = run(path.join(ROOT, 'scripts', 'check_bugs.mjs'), ROOT)
+    expect(r.status, r.stderr).toBe(0)
   })
 })

@@ -12,3 +12,19 @@ export function publicBuilds(reports, keep = KEEP_BUILDS) {
   return [...reports].sort((a, b) => b.n - a.n).slice(0, keep)
     .map((r) => ({ n: r.n, date: r.date, title: r.title, summary: r.summary }))
 }
+
+/**
+ * What a build report holds for a part nobody has written yet. A report that still holds one of these must not be
+ * tagged, released or shown to merchandisers (BE-050): changelog.mjs --tag, check_repo.mjs and release.yml refuse it.
+ */
+export const PLACEHOLDER = {
+  summary: '(write one or two plain sentences)',
+  why: '(why this was done)',
+  verified: '(how it was verified, honestly; say what was not checked)',
+  next: '(what to improve next)',
+}
+
+/** The placeholder texts found in a report, or [] when every part is written. */
+export function placeholdersIn(text) {
+  return Object.values(PLACEHOLDER).filter((p) => text.includes(p))
+}

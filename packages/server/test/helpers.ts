@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
 import pgDriver from 'pg'
 import { hashSecret } from '../src/auth.js'
-import { CONTEXT_SQL, contextParams, type Db } from '../src/db.js'
+import { CONTEXT_SQL, contextParams, errorReason, type Db } from '../src/db.js'
+import { MIGRATIONS_DIR, readMigrations } from '../src/migrate.js'
 import { pgDb } from '../src/pgDb.js'
 
 const DB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'db')
@@ -53,6 +54,13 @@ export async function runSql(pg: { exec(sql: string): Promise<unknown> }, sql: s
 export const TEST_DATABASE_URL_ENV = 'TEST_DATABASE_URL'
 
 export type Backend = { kind: 'pglite' } | { kind: 'postgres'; url: string }
+
+/**
+ * Why something failed, always in words. Node 20 raises an AggregateError with an EMPTY message when a connection to
+ * `localhost` fails on both ::1 and 127.0.0.1, so the message alone can print nothing (BE-041). The one rule for this lives in
+ * src/db.ts (errorReason), so the tests and the server say the same thing: message, then code, then the errors inside it.
+ */
+export const reasonOf = errorReason
 
 /** A connection string with the password hidden, safe to put in an error message. */
 function redact(raw: string): string {
@@ -148,7 +156,7 @@ export async function createRealPg(url: string, opts: { asOwner?: boolean } = {}
   const admin = new pgDriver.Client({ connectionString: url })
   admin.on('error', () => undefined)
   try { await admin.connect() } catch (e) {
-    throw new Error(`${TEST_DATABASE_URL_ENV} is set but the server did not accept the connection (${redact(url)}): ${(e as Error).message}`)
+    throw new Error(`${TEST_DATABASE_URL_ENV} is set but the server did not accept the connection (${redact(url)}): ${reasonOf(e)}`)
   }
   const suffix = `${process.pid}_${Date.now().toString(36)}_${(counter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const name = `isotest_${suffix}`
@@ -197,13 +205,18 @@ export async function createRealPg(url: string, opts: { asOwner?: boolean } = {}
   }
 }
 
-const migrationFiles = (): string[] => fs.readdirSync(path.join(DB_DIR, 'migrations')).sort()
+/**
+ * The migration files, listed by the production runner's own rule (numeric order, .sql only, a stray name is an error),
+ * so the tests build the same database production would. Never list the folder here by hand (BE-061).
+ */
+export const migrationFiles = (dir: string = MIGRATIONS_DIR): string[] => readMigrations(dir).map((m) => m.file)
 
 /** A real-Postgres database with every migration applied, optionally as a non-superuser owner. */
 export async function migratedRealDb(opts: { asOwner?: boolean } = {}): Promise<RealPg> {
   const real = await createRealPg(requireRealUrl(), opts)
   try { for (const f of migrationFiles()) await runSql(real, sqlFile('migrations', f)) }
   catch (e) { await real.close().catch(() => undefined); throw e }
+  await rememberSettings(real)
   return real
 }
 
@@ -215,6 +228,7 @@ export async function migratedDb(): Promise<PGlite> {
   if (usingRealPostgres()) return (await migratedRealDb()) as unknown as PGlite
   const pg = new PGlite()
   for (const f of migrationFiles()) await runSql(pg, sqlFile('migrations', f))
+  await rememberSettings(pg)
   return pg
 }
 
@@ -292,9 +306,27 @@ export async function seed(pg: PGlite): Promise<void> {
 const DATA_TABLES = ['update_event', 'photo', 'note', 'warning', 'date_change', 'buyer_link', 'outbox',
   'calendar_day', 'milestone', 'orders', 'tna_template', 'account', 'unit', 'buyer']
 
-/** Wipe every data table (as the superuser; truncate skips the append-only triggers), restore default settings, seed. */
+// The settings rows exactly as the migrations seeded them, per database, taken by migratedDb() / migratedRealDb(). A test that
+// changes a setting (red_below, reason_categories, ...) must not leak it into the next one, whichever key it changed (BE-061).
+type SettingRow = { key: string; value: unknown }
+const seededSettings = new WeakMap<object, SettingRow[]>()
+
+async function rememberSettings(pg: { query<T>(sql: string): Promise<{ rows: T[] }> }): Promise<SettingRow[]> {
+  const rows = (await pg.query<SettingRow>('select key, value from settings order by key')).rows
+  seededSettings.set(pg, rows)
+  return rows
+}
+
+/** Wipe every data table (as the superuser; truncate skips the append-only triggers), put every setting back as seeded, seed. */
 export async function resetAndSeed(pg: PGlite): Promise<void> {
   await pg.exec(`truncate ${DATA_TABLES.join(', ')} cascade`)
-  await pg.exec(`update settings set value = '0.9' where key = 'red_below'`)
+  let seeded = seededSettings.get(pg)
+  if (!seeded) {
+    // A database these helpers did not migrate: all that can be restored is the one value they always reset; what it holds then counts as seeded.
+    await pg.exec(`update settings set value = '0.9' where key = 'red_below'`)
+    seeded = await rememberSettings(pg)
+  }
+  await pg.exec('delete from settings')
+  for (const row of seeded) await pg.query('insert into settings (key, value) values ($1, $2::jsonb)', [row.key, JSON.stringify(row.value)])
   await seed(pg)
 }

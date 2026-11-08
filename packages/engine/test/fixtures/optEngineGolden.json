@@ -1,0 +1,239 @@
+{
+ "orders": 300,
+ "stages": 696,
+ "colours": {
+  "grey": 103,
+  "red": 124,
+  "green": 70,
+  "amber": 3
+ },
+ "sha256": {
+  "results": "2475cd7c252803b6c0df3fedb5950adf94b139629c74d53255cd18bc87501152",
+  "maths": "deb8fdee18fb1372dafaf220feeed2674dea29d07f9e33f04548481eeef3c52a",
+  "rateDates": "7c8f856f70165937c5a124932cfe04a6bb9591e86a114647e43f38a54bf075d0"
+ },
+ "sample": [
+  {
+   "orderId": "order-0",
+   "status": "grey",
+   "stages": [
+    {
+     "stage": "cutting",
+     "status": "grey",
+     "reasons": [
+      "no update yet"
+     ],
+     "qty": 1300,
+     "produced": 0,
+     "remaining": 1300,
+     "complete": false,
+     "daysLeft": 67,
+     "needed": 19.402985074626866,
+     "made": null,
+     "madeIsEstimate": false,
+     "dataDays": 0,
+     "rampUp": false,
+     "projectedEnd": null,
+     "shortBy": null,
+     "bufferDays": null,
+     "noRecentUpdate": false
+    },
+    {
+     "stage": "sewing",
+     "status": "grey",
+     "reasons": [
+      "no update on the last working day"
+     ],
+     "qty": 5000,
+     "produced": 713,
+     "remaining": 4287,
+     "complete": false,
+     "daysLeft": 69,
+     "needed": 62.130434782608695,
+     "made": 356.5,
+     "madeIsEstimate": true,
+     "dataDays": 2,
+     "rampUp": true,
+     "projectedEnd": "2026-11-02",
+     "shortBy": 0,
+     "bufferDays": 53,
+     "noRecentUpdate": true
+    },
+    {
+     "stage": "finishing",
+     "status": "green",
+     "reasons": [
+      "complete"
+     ],
+     "qty": 1600,
+     "produced": 2442,
+     "remaining": 0,
+     "complete": true,
+     "daysLeft": 61,
+     "needed": 0,
+     "made": 638,
+     "madeIsEstimate": false,
+     "dataDays": 4,
+     "rampUp": false,
+     "projectedEnd": "2026-10-13",
+     "shortBy": 0,
+     "bufferDays": 70,
+     "noRecentUpdate": false
+    },
+    {
+     "stage": "ironing",
+     "status": "grey",
+     "reasons": [
+      "no update on the last working day"
+     ],
+     "qty": 2200,
+     "produced": 1724,
+     "remaining": 476,
+     "complete": false,
+     "daysLeft": 46,
+     "needed": 10.347826086956522,
+     "made": 401,
+     "madeIsEstimate": true,
+     "dataDays": 2,
+     "rampUp": true,
+     "projectedEnd": "2026-11-04",
+     "shortBy": 0,
+     "bufferDays": 51,
+     "noRecentUpdate": true
+    }
+   ],
+   "warning": null
+  },
+  {
+   "orderId": "order-1",
+   "status": "red",
+   "stages": [
+    {
+     "stage": "ironing",
+     "status": "red",
+     "reasons": [
+      "this stage is projected past ex-factory"
+     ],
+     "qty": 6300,
+     "produced": 324,
+     "remaining": 5976,
+     "complete": false,
+     "daysLeft": 31,
+     "needed": 192.7741935483871,
+     "made": 212,
+     "madeIsEstimate": true,
+     "dataDays": 1,
+     "rampUp": true,
+     "projectedEnd": "2026-12-14",
+     "shortBy": 0,
+     "bufferDays": 0,
+     "noRecentUpdate": true
+    }
+   ],
+   "warning": null
+  },
+  {
+   "orderId": "order-2",
+   "status": "grey",
+   "stages": [
+    {
+     "stage": "cutting",
+     "status": "grey",
+     "reasons": [
+      "no update on the last working day"
+     ],
+     "qty": 500,
+     "produced": 355,
+     "remaining": 145,
+     "complete": false,
+     "daysLeft": 13,
+     "needed": 11.153846153846153,
+     "made": 118.33333333333333,
+     "madeIsEstimate": false,
+     "dataDays": 3,
+     "rampUp": true,
+     "projectedEnd": "2026-12-10",
+     "shortBy": 0,
+     "bufferDays": 11,
+     "noRecentUpdate": true
+    },
+    {
+     "stage": "sewing",
+     "status": "green",
+     "reasons": [
+      "complete"
+     ],
+     "qty": 900,
+     "produced": 1177,
+     "remaining": 0,
+     "complete": true,
+     "daysLeft": 0,
+     "needed": 0,
+     "made": 199.75,
+     "madeIsEstimate": false,
+     "dataDays": 4,
+     "rampUp": false,
+     "projectedEnd": "2026-12-05",
+     "shortBy": 0,
+     "bufferDays": 15,
+     "noRecentUpdate": false
+    }
+   ],
+   "warning": null
+  },
+  {
+   "orderId": "order-3",
+   "status": "red",
+   "stages": [
+    {
+     "stage": "sewing",
+     "status": "red",
+     "reasons": [
+      "making less than 90% of needed",
+      "this stage is projected past ex-factory"
+     ],
+     "qty": 4400,
+     "produced": 798,
+     "remaining": 3602,
+     "complete": false,
+     "daysLeft": 5,
+     "needed": 720.4,
+     "made": 266,
+     "madeIsEstimate": false,
+     "dataDays": 3,
+     "rampUp": true,
+     "projectedEnd": "2026-11-26",
+     "shortBy": 2272,
+     "bufferDays": 0,
+     "noRecentUpdate": false
+    },
+    {
+     "stage": "ironing",
+     "status": "red",
+     "reasons": [
+      "milestone passed with pieces remaining",
+      "this stage is projected past ex-factory"
+     ],
+     "qty": 4700,
+     "produced": 1751,
+     "remaining": 2949,
+     "complete": false,
+     "daysLeft": 0,
+     "needed": null,
+     "made": 504.6666666666667,
+     "madeIsEstimate": false,
+     "dataDays": 3,
+     "rampUp": true,
+     "projectedEnd": "2026-12-03",
+     "shortBy": 2949,
+     "bufferDays": 0,
+     "noRecentUpdate": false
+    }
+   ],
+   "warning": {
+    "stage": "sewing",
+    "status": "red"
+   }
+  }
+ ]
+}
