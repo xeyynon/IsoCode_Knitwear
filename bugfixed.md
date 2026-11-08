@@ -537,6 +537,21 @@ The deferred bug (BE-038) has an entry with no test line.
 - Before the fix: the workflow files had none of these rules (the tests read the workflow YAML).
 - Guard: the repository secret `BANNED_TERMS` must exist, otherwise pushes to `main` and build tags now fail on purpose. Requiring the tagged commit to be on `main` was not done (a build was once tagged on a branch before the merge).
 
+## BE-063 A build tag from another branch failed the repo check everywhere
+- Root cause: `check_repo.mjs` demanded `docs/builds/<tag>.md` for every `build-N` tag in the repository, but a tag lives in the whole repository while the report lives on the branch that made the release. The UI release tag reached the remote before its branch was merged, so `main` and every other branch failed.
+- Fix: the report is required only when the tagged commit is part of the checked-out history (`git merge-base --is-ancestor`). Only a definite "not in this history" skips the check; when git cannot tell (a shallow clone, an error) the tag is treated as reachable, the strict way.
+- Test: packages/server/test/toolingScripts.test.ts :: BE-063: a tag on another branch is ignored
+- Before the fix: `FAIL tag build-1000: no report docs/builds/build-1000.md` for a tag that only exists on another branch.
+- Guard: BE-050 and the existing tag-without-report test still fail a tag on this history with no report (checked in the same test: `build-1001` on this history still fails).
+
+## BE-064 The dependency pull request broke the build on TypeScript 7
+- Root cause: the BE-060 tests called `ts.readConfigFile` and `ts.parseJsonConfigFileContent`, which exist in TypeScript 5 but not in the native TypeScript 7. The Dependabot group `dev-tooling` also bundled three major upgrades, so one pull request failed in several places and did not say which upgrade was at fault.
+- Fix: the tests now run `tsc -p <config> --showConfig` and read the resolved file list and options from its JSON, which is the same on 5.x and 7.x (checked by running the tests with `TSC_BIN` pointing at TypeScript 7.0.2 and at 5.9). `dependabot.yml` ignores semver-major updates, so a major version is upgraded by hand, one at a time, with the whole suite run on it.
+- Test: packages/server/test/toolingScripts.test.ts :: BE-060: every file in scripts/ is type-checked or explicitly skipped
+- Test: packages/server/test/toolingScripts.test.ts :: BE-060: server code is checked without browser types
+- Before the fix: `error TS2339: Property 'readConfigFile' does not exist` under TypeScript 7.0.2.
+- Guard: the same three BE-060 assertions pass unchanged on TypeScript 5.9 and 7.0.2. The other majors in that pull request (Vitest 5, `@types/node` 26) are not covered here: they stay open for a manual upgrade.
+
 ## Open questions
 
 Where a report and the code differ, the code was trusted. Nothing below changes a status in `bug.md`; every listed id is marked fixed unless said otherwise.

@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -411,6 +411,27 @@ describe('BE-050: a build report with placeholder text is never tagged', { timeo
   })
 })
 
+// BE-063: a tag from another branch (its report is on that branch) failed every branch that did not have it yet.
+describe('BE-063: a build tag needs its report only where the tagged commit is part of the history', { timeout: SLOW }, () => {
+  it('BE-063: a tag on another branch is ignored, a tag on this history still needs its report', () => {
+    const d = startedRepo('tagreach')
+    commitAll(d, 'InBul02: base')
+    const home = git(d, 'rev-parse', '--abbrev-ref', 'HEAD')
+    git(d, 'checkout', '-q', '-b', 'other-branch')
+    git(d, 'commit', '-q', '--allow-empty', '-m', 'InBul03: release work on another branch')
+    git(d, 'tag', 'build-1000')                               // tagged over there; its report would be over there too
+    git(d, 'checkout', '-q', home)
+    let r = checkRepo(d)
+    expect(r.status, r.stderr).toBe(0)
+    expect(r.stderr).not.toContain('build-1000')
+    git(d, 'tag', 'build-1001')                               // a tag on THIS history with no report is still a failure
+    r = checkRepo(d)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('tag build-1001: no report')
+    expect(r.stderr).not.toContain('tag build-1000')
+  })
+})
+
 // BE-052: the secret-looking-text check rejected ordinary release prose.
 describe('BE-052: release prose that uses the words token and password is accepted', { timeout: SLOW }, () => {
   it('BE-052: ordinary sentences with "token:" and "password =" are accepted', () => {
@@ -508,7 +529,7 @@ describe('BE-053: an InBul id is used once', { timeout: SLOW }, () => {
       e('d77dc1f' + '0'.repeat(33), 'InBul17: a'), e('d85a545' + '0'.repeat(33), 'InBul17: b'),
       e('3f085a7' + '0'.repeat(33), 'InBul18: c'), e('4d7999a' + '0'.repeat(33), 'InBul18: d'),
     ]
-    expect(Object.keys(LEGACY_DUPLICATES).sort()).toEqual(['InBul17', 'InBul18'])
+    expect(Object.keys(LEGACY_DUPLICATES).sort()).toEqual(['InBul17', 'InBul18', 'InBul21'])
     expect(findDuplicateInbuls(legacy)).toEqual([])
     expect(findDuplicateInbuls([...legacy, e('abc1234' + '0'.repeat(33), 'InBul17: a third')])).toMatchObject([{ id: 'InBul17' }])
     expect(findDuplicateInbuls([e('1'.repeat(40), 'InBul09: x'), e('2'.repeat(40), 'InBul09: y')])).toMatchObject([{ id: 'InBul09' }])
@@ -712,12 +733,13 @@ describe('BE-056: the README matches what exists', () => {
 // BE-060: npm run typecheck did not cover the scripts or the config files, and server code was compiled with browser types.
 describe('BE-060: the scripts and config files are type-checked', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
+  // Through the compiler's command line, not its JavaScript API: TypeScript 7 (the native compiler) has no `ts.readConfigFile`,
+  // so a test written against the API would break on the upgrade. `tsc --showConfig` prints the same resolved list on 5.x and 7.x.
   const parseConfig = async (name: string) => {
-    const ts = (await import('typescript')).default
-    const file = path.join(ROOT, name)
-    const read = ts.readConfigFile(file, ts.sys.readFile)
-    expect(read.error, `${name} must parse`).toBeUndefined()
-    return ts.parseJsonConfigFileContent(read.config, ts.sys, ROOT, undefined, file)
+    const tsc = process.env.TSC_BIN ?? path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc')   // TSC_BIN: try another compiler version
+    const out = execFileSync(process.execPath, [tsc, '-p', name, '--showConfig'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+    const shown = JSON.parse(out) as { files?: string[]; compilerOptions: { lib?: string[]; strict?: boolean; noUncheckedIndexedAccess?: boolean } }
+    return { fileNames: (shown.files ?? []).map((f) => path.resolve(ROOT, f).split(path.sep).join('/')), options: shown.compilerOptions }
   }
 
   it('BE-060: npm run typecheck runs all three configs', () => {

@@ -1,51 +1,73 @@
-# IsoCode Knitwear: order tracking
+<div align="center">
+
+# IsoCode Knitwear
+### Order tracking that tells a knitwear exporter, *before* it is too late, which orders will miss their ship date, and why.
 
 [![CI](https://github.com/xeyynon/IsoCode_Knitwear/actions/workflows/ci.yml/badge.svg)](https://github.com/xeyynon/IsoCode_Knitwear/actions/workflows/ci.yml)
 [![Release](https://github.com/xeyynon/IsoCode_Knitwear/actions/workflows/release.yml/badge.svg)](https://github.com/xeyynon/IsoCode_Knitwear/actions/workflows/release.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+![React 19](https://img.shields.io/badge/React-19-61dafb)
+![Postgres 16](https://img.shields.io/badge/Postgres-16%20%C2%B7%20row--level%20security-336791)
+![Works offline](https://img.shields.io/badge/phone-works%20offline-6e56b0)
+![Tamil and English](https://img.shields.io/badge/language-Tamil%20%C2%B7%20English-6e56b0)
 
-Order tracking for a knitwear exporter. Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order, whether it will ship on time and shows the reasoning. Merchandisers see the orders that need attention first; buyers get a read-only view of only their own orders.
+<img src="uiux/2.0/03-board-desktop.png" alt="The merchandiser order board: orders worst first, each with the sum behind its colour" width="900">
 
-> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate, the buyer's read-only view, photos on a daily update and typed notes work and are tested; voice notes and automatic translation are not built. See [Status](#status) and [Roadmap](#roadmap).
+<sub>The merchandiser's board on demo data. Every colour comes with an icon, a word and the working behind it.</sub>
 
-## Contents
-[Why](#why) · [Status](#status) · [How the colours are decided](#how-the-colours-are-decided) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security model](#security-model) · [Testing](#testing) · [Development workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
+</div>
 
-## Why
-Orders slip because progress on the floor reaches the merchandiser late, by phone or chat, and the delay is noticed when it is too late to recover. This project replaces chasing with a live board:
+## What it does
 
-- **Floor to board in one tap.** A supervisor enters today's pieces for a stage. The server recomputes the order's status.
-- **A colour you can explain.** Every row shows the sum behind its colour: *need 467 a day, making 350 a day, 700 pieces short by 11 Nov.*
-- **Honest by design.** An order with no updates is grey, never green. A rate based on little data is labelled an estimate. Nothing reaches a buyer until a merchandiser confirms it.
+Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order and every stage, whether it will ship on time and **shows the reasoning**. Merchandisers see the orders that need attention first. Buyers get a read-only page of only their own orders, and only what a merchandiser has confirmed.
 
-## Status
-
-| Area | State |
+| | |
 | --- | --- |
-| Run-rate engine (status, projected finish, working-day calendars, TNA back-scheduling) | Built, tested |
-| Database schema with row-level security | Built, tested |
-| HTTP API: sign-in with lockout, board, daily updates (single and batch), order creation, ex-factory change with logged reason, status check | Built, tested |
-| Web app: sign-in, order board, public status page | Built (`build-1000`) |
-| Board search and sort: search by PO, buyer or style (every word must match), sort by worst status, ex-factory date, buyer or PO; both live in the address (`q`, `sort`) beside the status and buyer filters, and the link to the review queue says how many are waiting | Built, tested |
-| Board unit and ship-week filters, and a stage progress bar: a unit matches an order when it owns any of its stages (`unit`); ship week is the Monday-to-Sunday week of the ex-factory date against today in India, chosen from Overdue (earlier weeks), This week, Next week or Later, with the dates spelled out (`week`); both combine with the search, sort, status and buyer, the status counts follow them, and each row shows stages finished out of all with the current stage in words (a neutral bar, never a status colour) | Built, tested |
-| Supervisor app: "My orders today", the daily update, an offline queue that survives restarts, "3 waiting" status, and the app opening with no signal | Built (`build-1001`), 14 browser checks |
-| Order setup (with a schedule preview before creating) and order detail (a stage timeline with plan, projected date and days early or late; the working behind each colour; date-change history as who, what and when, newest first; change ex-factory with a reason; "Order board" goes back to the board with the same filters, search and sort, kept in the address so a reload keeps it) | Built (`build-1002`) |
-| Order detail, horizontal stage timeline (screens wider than 720 px): one bar per stage on a shared date axis from the first update (or today) to ex-factory, the planned finish marked above the bar and the projected finish below it with how many days late or early, a dashed labelled ex-factory line, and each stage's own unit's closed days hatched behind it (Sundays in a light hatch, and named closures with the merchandiser's note such as "Deepavali" in a darker one the other way, each with its own legend entry such as "Closed: Deepavali"); a stage that finishes after ex-factory says so in words, and the track widens so it is never cut off. Status is the badge's icon and word, and the chart uses no status colour, so it reads in greyscale. It scrolls inside its own box when the period is long; a phone gets the vertical list instead, so the page never scrolls sideways. A "Closed days in this period" line gives the same days as text for a screen reader and the phone. Layout maths is `orders/timelineLayout.ts` | Built, tested |
-| "Add an update" on the order detail (merchandiser): enter a stage on a visit, for a stage nobody on the floor reports. Stage, date (defaults to the factory's today, never a future day), pieces (a whole number: "-5" is refused, not read as 5) and an optional note. It is kept as entered on behalf (migration `012`, insert-only like every update; a supervisor's session cannot write such a row) and the stage shows a person icon with "Entered by a merchandiser, low confidence" on the order page and the board, so the flag is never colour alone. One id per entry, so pressing again after a lost answer is never counted twice. Logic is `orders/visitEntry.ts`; which stages are flagged is `server/src/confidence.ts` | Built, tested |
-| A photo on a daily update: shrunk on the phone, uploaded safely even after a lost signal or a lost reply, approved in the review queue before a buyer can see it | Built (`build-1004`) |
-| Photos the right way up and viewable: the phone applies the camera's rotation before it shrinks a photo (a portrait shot is no longer sent sideways), a supervisor can **Retake** a chosen photo, and a merchandiser can click a photo in the Review queue to open it full size in a dialog (scroll, pinch to zoom, Close or Escape). Photos are not yet shown on Order detail. The rotation is checked in headless Edge only: a real-phone check is listed in `frontendskill.md` 8.7 | Built; real-phone check pending |
-| Review queue (confirm, reword or hide a warning before a buyer can see it; a sticky summary bar with a count per section and jump links that move focus to the section heading; a section with nothing in it shrinks to one line saying when items appear there), buyer links (create, cancel, expire) and the buyer's read-only page, with automated cross-buyer leak tests | Built (`build-1003`) |
-| A reason (one tap from a fixed list) and a few typed words, in Tamil or English, on a daily update; a merchandiser reviews them, adding the English meaning of Tamil text. Notes are internal and never shown to buyers | Built (`build-1005`) |
-| **Setup** for the pilot: add supervisors and merchandisers (easy PINs refused), reset a PIN, sign someone out on every phone, stop an account, add units, set closed days per unit, create and edit TNA templates; signing out everywhere, stopping an account and deleting a template ask first in an accessible dialog (`ui/ConfirmDialog.tsx`, not the browser's box) | Built (`build-1006`) |
-| Withdraw an approved photo from the screen, and clear the files of old rejected photos | Built (`build-1006`) |
-| Tamil on every supervisor screen: sign-in (with a language switch before signing in), My orders today, the daily update with its photo, reason and note, the sync chip, storage warnings, error messages, the usual stage names, month names and the menu. Words the server wrote in English (why an update was refused) show as a plain Tamil sentence instead. Merchandiser screens stay English | Built; the Tamil is **unreviewed** and must be read and corrected by supervisors before the pilot |
-| Tamil first for supervisors: a supervisor who signs in on a phone where nobody has chosen a language sees Tamil straight away; a merchandiser stays in English. The language switch (menu, or the sign-in screen) is a choice and always wins, and signing out never erases it. A language that was only our default is remembered so the sign-in screen is Tamil on that phone, but the next person to sign in gets their own default. The rule is `langRules.ts` (pure, tested); the browser scripts (`e2e_offline`, `snapshots`) set English first so their pictures and checks stay the same | Built, tested; the Tamil is still unreviewed |
-| One calm "cannot reach the server" state: when a screen cannot load because the connection is down (a failed fetch, a timeout, or a proxy or gateway page instead of the app's own answer) it shows "Can't reach the server. Check the connection and try again." with a Retry button and a link to the public status page, the same card on the board, order screens, review, setup and the supervisor's Today and Update; supervisor screens add "Your work saved on this phone is safe" (Tamil: unreviewed), and a buyer's page leaves out the status link. A server that answered with an error still shows its own message. The classification is `api/sessionRules.ts`, the card is `ui/LoadFailed.tsx`; the offline queue and the sync chip are unchanged | Built, tested |
-| Mocked alerts: when a warning is confirmed for buyers, a stage turns red, or a photo is approved, the email or WhatsApp message that would go out is written to the `outbox` table in the same transaction as the change (to the buyer's name or to "Merchandisers", never a real address). A buyer's message holds only the confirmed wording or "a photo is ready", never a rate or a shortfall. **Nothing is sent anywhere.** Merchandisers read the latest 50 in Setup > Alerts ("Alerts (not sent: demo)"); buyers and supervisors cannot read the table, and the API never edits or deletes a row | Built, tested |
-| Voice notes, automatic translation, and automatic reason suggestions | **Not built** (they need a speech and translation service agreement; until then a person does the translating) |
+| **One tap from floor to board** | A supervisor enters today's pieces for a stage. The server recomputes the order's colour at once. |
+| **A colour you can explain** | *Need 467 a day, making 350 a day, 700 pieces short by 11 Nov.* Every row shows the sum. |
+| **Honest by design** | An order with no updates is grey, never green. A rate based on little data is labelled an estimate. Nothing reaches a buyer until a merchandiser confirms it. |
+| **Built for a bad signal** | The app opens with no signal, saves every update on the phone first, and sends when it can. A repeated send is never counted twice. |
+| **Tamil first for supervisors** | Every supervisor screen is in Tamil (the wording still needs reading by supervisors before the pilot). |
+| **Private by construction** | Row-level security is forced on every table, so a forgotten filter cannot leak another buyer's data. |
 
-**Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
+## Three people, three screens
+
+<table>
+<tr>
+<td align="center" width="33%"><b>Supervisor, on a phone</b><br><sub>"My orders today": one big button per stage</sub><br><br><img src="uiux/2.0/11-today-list-phone.png" alt="The supervisor list: three stages, progress and an Update button each" width="230"></td>
+<td align="center" width="33%"><b>The same, in Tamil</b><br><sub>A supervisor who has not chosen a language sees Tamil straight away</sub><br><br><img src="uiux/2.0/12-today-list-tamil-phone.png" alt="The supervisor list in Tamil" width="230"></td>
+<td align="center" width="33%"><b>Buyer, with a private link</b><br><sub>Read-only. Their own orders and confirmed notices only</sub><br><br><img src="uiux/2.0/25-buyer-view-phone.png" alt="The buyer page: orders and planned finish dates" width="230"></td>
+</tr>
+</table>
+
+## A tour
+
+### The merchandiser's desk
+
+<table>
+<tr>
+<td width="50%" valign="top"><b>Order detail</b><br><sub>Plan against projected finish on one timeline, closed days hatched, the working behind the colour</sub><br><br><img src="uiux/2.0/21-order-detail.png" alt="Order detail with a timeline, key facts and stage detail" width="560"></td>
+<td width="50%" valign="top"><b>Review gate</b><br><sub>Confirm, reword or hide a warning. Nothing is visible to a buyer until you do</sub><br><br><img src="uiux/2.0/24-review-queue.png" alt="The review queue with two warnings waiting" width="560"></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><b>New order, with a schedule preview</b><br><sub>Back-scheduled from the ship date, in each unit's own working days</sub><br><br><img src="uiux/2.0/19-order-form-preview.png" alt="The new order form with the dates each stage must finish by" width="560"></td>
+<td width="50%" valign="top"><b>Pilot setup</b><br><sub>People, units, closed days and templates; stop an account or sign someone out of a lost phone in one click</sub><br><br><img src="uiux/2.0/29-setup-people.png" alt="Setup: people who can sign in" width="560"></td>
+</tr>
+</table>
+
+### On the floor, with a poor signal
+
+<table>
+<tr>
+<td align="center" width="50%"><b>Saved on the phone, sent later</b><br><sub>"Offline, 1 waiting". The count is safe; Send works when there is signal</sub><br><br><img src="uiux/2.0/15-update-offline-saved.png" alt="An update saved on the phone while offline" width="260"></td>
+<td align="center" width="50%"><b>A reason in one tap, and a few words</b><br><sub>In Tamil. A merchandiser reviews notes before anyone else can read them</sub><br><br><img src="uiux/2.0/28-update-reason-note-tamil-phone.png" alt="The update screen in Tamil with a reason chosen and a note typed" width="260"></td>
+</tr>
+</table>
+
+More pictures of every screen, in English and Tamil, wide and phone-sized, are in [`uiux/2.0`](uiux/2.0/README.md) (what changed since 1.0 is in [`uiux/2.0/CHANGES.md`](uiux/2.0/CHANGES.md)).
 
 ## How the colours are decided
+
 For each stage, in order, the engine takes the pieces still to make, the working days left (in that stage's own unit calendar), and the recent rate (the average of the last five days with an update).
 
 | Colour | Rule |
@@ -84,6 +106,14 @@ npm run load                     # load times on an emulated slow network and pr
 npm run phone                    # the keyboard check on a real Android phone over USB (adb)
 ```
 
+## Status
+
+An early build, **tested but not yet tried in production**. The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (nearly 2,000, including a real Postgres 16 run in CI). Voice notes, automatic translation and automatic reason suggestions are **not built** (they need a speech and translation service agreement).
+
+Not yet verified: a production Postgres server, a real S3 bucket, real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
+
+Quality is tracked in the open: [`bug.md`](bug.md) lists every reproduced bug, [`bugfixed.md`](bugfixed.md) how each was fixed and the test that keeps it fixed, and [`optimised.md`](optimised.md) what was made cheaper to run, with measurements. The research behind those is in [`docs/optimisation-research.md`](docs/optimisation-research.md).
+
 ## Architecture
 ```mermaid
 flowchart LR
@@ -92,9 +122,10 @@ flowchart LR
   BUY["Buyer link<br/>read-only, one buyer"] --> API
   API["Fastify API<br/>guarded by default"] --> ENG["Run-rate engine<br/>pure function"]
   API --> DB[("Postgres<br/>row-level security")]
+  API --> OBJ[("Photo store<br/>disk or private S3")]
 ```
 
-- **Phones never compute status.** They send dated events; the server recomputes after each one.
+- **Phones never compute status.** They send dated events; the server recomputes after each one (only the touched order, with one full pass per day).
 - **The engine is a pure function** with no database or clock access, so it is fully unit-tested.
 - **Security lives in the database.** Row-level security is forced on every table, so a forgotten filter in the API cannot leak another buyer's data.
 - **Updates are append-only and idempotent.** A repeated send (flaky network, app killed mid-sync) is recognised by its client id and never counted twice.
@@ -106,11 +137,12 @@ flowchart LR
 packages/
   engine/    Run-rate engine and TNA back-scheduling (pure TypeScript)
   server/    Fastify API, services, SQL migrations and row-level security tests
-  web/       React app: sign-in, board, status page
+  web/       React app: board, order screens, review, setup, supervisor screens, buyer page, status page
   design/    Colour tokens
 scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser tools
-docs/builds/ One report per numbered build
-uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) and 2.0 (npm run snapshots writes it; earlier 2.0 sets are kept)
+docs/        status.md, optimisation-research.md, and builds/ (one report per numbered build)
+uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) and 2.0
+bug.md, bugfixed.md, optimised.md   The bug log, the fix log and the speed-and-cost log
 .github/     CI, release and Dependabot configuration
 ```
 
@@ -122,7 +154,7 @@ npm install
 npm run verify        # static checks, typecheck and every test (not the web build: CI also runs npm run build)
 ```
 
-**Run the whole app locally on demo data** (an in-memory database with illustrative orders; today is fixed to 4 Nov 2026 so the figures line up):
+**Run the whole app locally on demo data** (an in-memory database with illustrative orders; today is fixed to 4 Nov 2026 so the figures line up, and the pictures above are taken from it):
 
 ```bash
 npm run dev:api                 # terminal 1: API on http://127.0.0.1:8787
@@ -141,6 +173,9 @@ These are throwaway demo credentials for the in-memory database. Never reuse the
 VITE_API_BASE=https://api.example.com npm run build
 ```
 The build deliberately fails without `VITE_API_BASE`: the value is baked into the bundle, and a missing one would silently point production at the wrong place.
+
+## Contents
+[What it does](#what-it-does) · [Three screens](#three-people-three-screens) · [A tour](#a-tour) · [Colours](#how-the-colours-are-decided) · [The look](#the-look-uiux-20) · [Status](#status) · [Architecture](#architecture) · [Layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security](#security-model) · [Testing](#testing) · [Workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
 
 ## Configuration
 **API** (`packages/server/.env.example`)
@@ -236,11 +271,19 @@ npm run a11y           # axe-core on every screen, in a real browser (needs the 
 - **Offline, in a real browser:** `npm run e2e` builds the app, starts the API and the app, and drives Edge (or Chrome with `E2E_BROWSER=chrome`). It loads the app, goes offline, enters 20 updates, restarts the app while still offline, reconnects, and checks that each update arrived exactly once and the totals add up. It also loses a server reply on purpose to prove a retry never double-counts. Set `E2E_SHOTS=<folder>` to save screenshots.
 - **Accessibility, in a real browser:** `npm run a11y` (with `npm run dev:api` and `npm run dev -w @isocode/web` running) drives Edge through every screen at 390x844 touch and 1280x900 (sign-in both tabs, board with the menu open, order setup with and without errors, an order detail, review, each Setup section, status, a buyer page opened with a link made through the API and cancelled again at the end, and the supervisor's list and update screen with a reason, a note and the "too many pieces" question open, in English and Tamil). It injects axe-core (WCAG 2.0 to 2.2 A and AA plus best practice, no rule switched off), also requires exactly one `h1` per screen, exits with an error on any serious or critical violation and lists the moderate and minor ones grouped by screen. Set `API=<url>` to use a spare API when the demo one has locked the sign-in. A clean run is a floor: a screen-reader pass (NVDA, TalkBack) is still needed.
 
-### Service worker and new versions
+<details>
+<summary><b>Service worker and new versions</b></summary>
+
 `packages/web/public/sw.js` keeps the app itself available with no signal (production builds only; it never touches the API, the app's own queue keeps the updates). A new version installs in the background and then **waits**: it is never swapped in by itself, because new files under a screen that is still open would break it. When one is waiting, a quiet bar at the bottom of the screen says "A new version is ready. Reload when you have finished." (also in Tamil) with **Reload** and **Later**. Reload posts `{type: 'SKIP_WAITING'}` to the waiting worker, which then takes over, and the page reloads once (a flag in the tab stops a reload loop). The bar stays away while the Update screen holds a count, reason, note or photo that is not saved yet, and shows once the update is saved. Saved updates live in IndexedDB, so they are still there after the reload and are sent from there; if the phone only kept the queue in memory (the warned fallback) and something is waiting, the bar is not shown at all. The app also asks the browser for a newer version when it comes back to the front, at most every 30 minutes. The rules are in `packages/web/src/ui/swUpdate.ts` (tests in `packages/web/test/swUpdate.test.ts`), the wiring in `swUpdateStore.ts` and `UpdateBanner.tsx`.
 
-### Fonts
+</details>
+
+<details>
+<summary><b>Fonts</b></summary>
+
 The fonts ship with the app, so a phone with no Tamil font does not show boxes: `@fontsource/noto-sans` (Latin, weights 400, 600, 700) and `@fontsource/noto-sans-tamil` (Tamil, the same three weights), both licensed under the SIL Open Font License. `packages/web/src/fonts.ts` imports only those six subset files (the weights `styles.css` uses); each has `font-display: swap`, and the token stacks in `packages/design/tokens.css` keep the system fonts as the fallback while a file loads. A new weight in `styles.css` needs its own line in `fonts.ts`. The build's `precache.json` lists the `.woff2` files (not the `.woff` fallbacks the font CSS also names), so the fonts are kept for no-signal use with the rest of the app. Cost, measured on the production build: six `.woff2` files, 83 kB in total (Latin 40 kB, Tamil 45 kB; they are already compressed, so gzip saves nothing), about 0.3 kB more gzipped CSS, and no extra JavaScript. The files load only when a screen first needs them (Tamil text pulls the Tamil ones), and are fetched once, then served from the service worker's cache.
+
+</details>
 
 ## Development workflow
 Every change is either a **build** or an **InBul** (internal build):
