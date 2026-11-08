@@ -1,0 +1,19 @@
+/* StageCard (ui/organisms/StageCard.tsx). Tokens only. Two classes on the card ("stage stagetile") so it wins over the plain ".stage" in styles.css
+   whatever order the stylesheets load in. */
+.stage.stagetile { display: grid; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-l); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-bar); }
+.stagetile__top { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.stagetile__stage { display: inline-block; padding: var(--space-1) var(--space-3); border-radius: 999px; background: var(--page); border: 1px solid var(--border); color: var(--ink); font-weight: 600; font-size: 0.9375rem; text-transform: capitalize; }
+.stagetile__due { color: var(--muted); font-size: 0.9375rem; }
+.stagetile__due b { color: var(--ink); }
+.stagetile__po { font-size: 1.625rem; line-height: 1.15; overflow-wrap: anywhere; }
+.stagetile__meta { color: var(--muted); font-size: 0.9375rem; margin-top: calc(var(--space-1) * -1); }
+.stagetile__prog { display: grid; gap: var(--space-2); margin-top: var(--space-1); }
+.stagetile__nums { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-2); }
+.stagetile__label { color: var(--muted); font-size: 0.9375rem; font-family: inherit; }
+.stagetile__big { font-size: 1.75rem; line-height: 1.1; }
+.stagetile__of { color: var(--muted); font-size: 1.0625rem; }
+.stagetile__pct { margin-left: auto; font-weight: 700; font-size: 1.0625rem; }
+.stagetile__today { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--muted); font-size: 1.0625rem; }
+.stagetile__today b { color: var(--ink); font-size: 1.25rem; }
+/* something was entered today: a tick and the action colour, so it is not colour alone */
+.stagetile__today--done { color: var(--accent); font-weight: 600; }

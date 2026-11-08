@@ -1,0 +1,3 @@
+/* PieceBar (ui/atoms/PieceBar.tsx). Tokens only; ink on a light grey track. */
+.piecebar { height: 14px; border-radius: 7px; background: var(--border-soft); overflow: hidden; }
+.piecebar > span { display: block; height: 100%; border-radius: 7px; background: var(--accent); }

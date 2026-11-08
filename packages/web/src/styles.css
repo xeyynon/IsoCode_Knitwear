@@ -37,7 +37,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 }
 .field { display: block; margin: 0 0 1rem; }
 .field > span { display: block; margin-bottom: .25rem; color: var(--muted); font-size: 14px; }
-.error { color: var(--status-red-text); margin: 0 0 1rem; }
+.error { color: var(--ink); font-weight: 600; margin: 0 0 1rem; }   /* red means order status only (rule 10): a failure is ink with a "!" mark, and role=alert */
 .card { --card-pad: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: var(--card-pad); max-width: 640px; }
 
 /* ---- sign in */
@@ -68,7 +68,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .chip { min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
 .chip b { font-variant-numeric: tabular-nums; margin-left: 4px; }
-.chip[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .strip__buyer { min-width: 150px; }
 .strip__meta { margin-left: auto; color: var(--muted); font-size: 14px; }
 .strip__search { flex: 1 1 240px; max-width: 420px; }
@@ -84,20 +84,18 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .filterpanel .input { width: 100%; }
 
 /* ---- status badge: colour for exceptions only, with a mark and a word every time */
-.badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: 12px; font-size: 14px; font-weight: 600; white-space: normal; }
-.badge--red { color: var(--status-red-text); background: var(--status-red-tint); }
-.badge--red svg { color: var(--status-red); }
-.badge--amber { color: var(--status-amber-text); background: var(--status-amber-tint); border: 1px solid var(--status-amber); }
-.badge--amber svg { color: var(--status-amber); }
+.badge { display: inline-flex; align-items: center; font-weight: 600; }   /* the shape is the stamp: ui/StatusStamp.css */
+.badge--red { color: var(--status-red-text); }
+.badge--amber { color: var(--status-amber-text); }
 .badge--green { color: var(--status-green); }
 .badge--grey { color: var(--status-grey); }
-.badge--neutral { color: var(--ink); background: var(--surface); border: 1px solid var(--border); }   /* buyer page: no status colour */
+.badge--neutral { color: var(--ink); }   /* buyer page: no status colour */
 
 /* ---- the board: a table on wide screens, cards on narrow ones */
 .board { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .board th { text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .board td { padding: 10px 12px; vertical-align: top; border-bottom: 1px solid var(--border-soft); }
-.row--red td { background: var(--status-red-tint); }       /* only red rows are tinted */
+/* A row is not tinted: the status is the badge (icon, word, colour), and a filled row reads as generated (UI/UX 2.0 feedback). */
 .why { margin-top: 2px; }
 .po { min-width: 0; }
 .flag { color: var(--status-grey); font-style: italic; }
@@ -155,6 +153,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .sync__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
 .sync--ok .sync__dot { background: var(--accent); }
 .sync--problem { border-color: var(--ink); }
+/* A change of state is marked for a moment (slice 4.4): a ring in the action colour that thins away. Sync is not order status: never green. */
+.sync--noticed { animation: sync-notice 1600ms ease-out; }
+@keyframes sync-notice { from { box-shadow: 0 0 0 5px var(--accent); } to { box-shadow: 0 0 0 0 var(--accent); } }
+@media (prefers-reduced-motion: reduce) { .sync--noticed { animation: none; outline: 2px solid var(--accent); outline-offset: 2px; } }
 .sync--problem .sync__dot { background: var(--ink); }
 .banner { background: var(--surface); border: 2px solid var(--ink); border-radius: 8px; padding: 12px 14px; margin: 0 0 12px; }
 .notice { color: var(--muted); margin: 0 0 12px; }
@@ -172,19 +174,20 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 
 .stages { display: grid; gap: 12px; }
 .stage { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-.stage__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.stage__po { font-size: 20px; }
-.stage__name { text-transform: capitalize; font-size: 18px; margin: 4px 0 8px; }
-.stage__nums { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); margin-bottom: 12px; }
-.stage__nums b { color: var(--ink); }
+.stage--skeleton { display: grid; gap: var(--space-3); border-color: var(--border-soft); }
 .stage__go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .finished { margin-top: 16px; color: var(--muted); }
 .back { display: inline-block; margin-bottom: 12px; }
+.update__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; margin-bottom: var(--space-2); }
+.update__bar .back, .update__bar .syncbar { margin-bottom: 0; }
+/* On a phone the way back is a round arrow (48 px); its words stay for a screen reader and for scripts, and the sync chip fits beside it in Tamil. */
+@media (max-width: 479px) {
+  .back--arrow { flex: none; width: var(--tap-min); min-height: var(--tap-min); padding: 0; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-m); text-decoration: none; color: var(--ink); background: var(--surface); }   /* the same shape as the menu button beside it */
+  .back--arrow .back__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 
-.update h1 { font-size: 24px; margin-bottom: 0; }
-.update__nums { display: flex; gap: 20px; margin: 8px 0 16px; font-size: 18px; }
-.update__nums b { font-size: 22px; }
-.input--big { min-height: var(--tap-primary); font-size: 28px; text-align: center; }
+.back__arrow { vertical-align: -4px; }
+.input--big { min-height: var(--tap-primary); font-size: 36px; font-weight: 700; line-height: 1.2; text-align: center; border-width: 2px; }   /* the figure typed is the point of the screen (phase 8A) */
 /* The supervisor's sign-in fields are the first thing used each day: 56 px. Two classes so no later rule can lower it. */
 .input.input--tall { min-height: var(--tap-primary); }
 .btn--big { font-size: 20px; }
@@ -198,8 +201,9 @@ html[lang='ta'] .btn { line-height: 1.6; padding-top: 6px; padding-bottom: 6px; 
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .grid3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0 16px; }
 @media (max-width: 640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
-.field__error { display: block; color: var(--status-red-text); font-size: 14px; margin-top: 4px; }
-.input[aria-invalid='true'] { border-color: var(--status-red); border-width: 2px; }
+.field__error { display: block; color: var(--ink); font-size: 14px; font-weight: 600; margin-top: 4px; }
+.error::before, .field__error::before { content: '!'; display: inline-grid; place-items: center; width: 1.15em; height: 1.15em; margin-right: 6px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 0.8em; font-weight: 700; line-height: 1; vertical-align: 0.05em; }
+.input[aria-invalid='true'] { border-color: var(--ink); border-width: 2px; }
 /* The number field while the "more than is left" question is open: pointed at, in ink. Not red: red means order status, and more than is left is allowed. */
 .input--asking { border-color: var(--ink); border-width: 2px; }
 .sizes { display: grid; gap: 8px; }
@@ -222,13 +226,13 @@ html[lang='ta'] .btn { line-height: 1.6; padding-top: 6px; padding-bottom: 6px; 
 
 .stagelist { display: grid; gap: 12px; margin: 0 0 20px; }
 .stagecard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-.stagecard--red { background: var(--status-red-tint); }
+/* A stage card is a plain card: the status is its badge, not a fill. */
 .stagecard__top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .stagecard__top > b { font-size: 18px; }
 .page .stagecard__top > h2 { font-size: 18px; font-weight: 700; margin: 0; }   /* beats ".page--form h2" */
 .stagecard__top .badge { margin-left: auto; }
 .bar { height: 8px; border-radius: 4px; background: var(--border-soft); margin: 10px 0 4px; overflow: hidden; }
-.bar > span { display: block; height: 100%; background: var(--ink); }
+.bar > span { display: block; height: 100%; background: var(--accent); }
 .dates { display: flex; gap: 28px; margin: 8px 0; flex-wrap: wrap; }
 .dates dt { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
 .dates dd { margin: 0; font-size: 18px; font-weight: 600; }
@@ -286,7 +290,7 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 }
 
 .tlc__bar { position: absolute; top: 34px; height: 14px; border: 2px solid var(--ink); border-radius: 3px; background: color-mix(in srgb, var(--muted) 30%, var(--surface)); }
-.tlc__bar--done { background: var(--ink); }
+.tlc__bar--done { background: var(--accent); }
 .tlc__pin { position: absolute; left: var(--x); transform: translateX(-50%); z-index: 1; }
 .tlc__pin--plan { top: 24px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--ink); }   /* a flag pointing down at the bar */
 .tlc__pin--proj { top: 50px; width: 10px; height: 10px; border: 2px solid var(--ink); background: var(--surface); transform: translateX(-50%) rotate(45deg); }   /* a hollow diamond */
@@ -325,7 +329,7 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 .textarea { min-height: 64px; padding: 8px 12px; resize: vertical; font: inherit; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .internal { background: var(--page); border-radius: 6px; padding: 6px 10px; margin: 8px 0; }
-.count { background: var(--ink); color: var(--on-ink); border-radius: 10px; padding: 0 7px; font-size: 13px; margin-left: 4px; }
+.count { background: var(--accent); color: var(--on-accent); border-radius: 10px; padding: 0 7px; font-size: 13px; margin-left: 4px; }
 .notice-box .input { margin: 8px 0; }
 .warns { display: grid; gap: 8px; margin: 10px 0; }
 .warns li { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
@@ -393,7 +397,7 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 .reasons__list { display: flex; flex-wrap: wrap; gap: 8px; }
 .reason { position: relative; display: inline-block; cursor: pointer; }
 .reason__pill { display: flex; align-items: center; min-height: 48px; padding: 0 14px; border: 1px solid var(--border); border-radius: 24px; background: var(--surface); color: var(--ink); text-align: left; }
-.reason input:checked + .reason__pill { background: var(--ink); border-color: var(--ink); color: var(--on-ink); font-weight: 600; }
+.reason input:checked + .reason__pill { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .reason input:checked + .reason__pill::before { content: "\2713"; margin-right: .4em; }
 .reason input:focus-visible + .reason__pill { outline: 3px solid var(--accent); outline-offset: 2px; }
 .lang-tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; color: var(--muted); }

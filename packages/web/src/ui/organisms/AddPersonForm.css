@@ -1,0 +1,14 @@
+/* AddPersonForm (ui/organisms/AddPersonForm.tsx): a role choice, then that role's fields. Tokens only. */
+.addperson__roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); border: 0; padding: 0; margin: 0 0 var(--space-4); min-width: 0; }
+.addperson__roles legend { padding: 0; margin-bottom: var(--space-2); font-weight: 600; }
+.addperson__choice { position: relative; display: flex; align-items: flex-start; gap: var(--space-3); min-height: var(--tap-primary); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); cursor: pointer; }
+/* The real radio covers the whole box and is invisible, so the thing to hit is the box (a 20 px radio is under the tap size); the dot is drawn beside the words. */
+.addperson__choice input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.addperson__dot { flex: none; width: 20px; height: 20px; margin-top: 2px; border: 2px solid var(--border); border-radius: 50%; background: var(--surface); display: grid; place-items: center; }
+.addperson__choice input:checked + .addperson__dot { border-color: var(--accent); }
+.addperson__choice input:checked + .addperson__dot::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.addperson__choice small { display: block; color: var(--muted); font-size: 0.875rem; }
+/* the chosen role: a heavier border and a soft wash, as well as the filled dot and the bold name (never colour alone) */
+.addperson__choice--on { border: 2px solid var(--accent); padding: calc(var(--space-3) - 1px); background: var(--accent-soft); }
+.addperson__choice:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 560px) { .addperson__roles { grid-template-columns: 1fr; } }

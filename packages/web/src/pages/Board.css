@@ -1,0 +1,23 @@
+/* The board as a dashboard on a wide screen (UI/UX 2.0 phase 8B). Everything here is scoped to .board--wide / .strip--attached /
+   .boardhead, which only the wide layout uses, so the phone layout and its density rules in styles.css are untouched. Tokens only. */
+
+/* the row above the tiles: the buyer choice (it changes their numbers) on the left, the update time, Refresh and New order on the right */
+.strip.boardhead { margin-bottom: 0; }
+
+/* the search and filters are the table's own toolbar: one card with the table under it */
+.strip.strip--attached {
+  margin: 0; padding: var(--space-3) var(--space-4);
+  background: var(--surface); border: 1px solid var(--border-soft); border-bottom: 0;
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+}
+
+table.board.board--wide { border-color: var(--border-soft); border-radius: 0 0 var(--radius-l) var(--radius-l); }
+.board--wide th { background: var(--page); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-soft); font-weight: 600; }
+.board--wide td { padding: var(--space-4); }
+.board--wide tbody tr:hover td { background: var(--page); }
+.board--wide .po-link { font-size: 1.0625rem; }
+.board--wide .row td:first-child { width: 9.5rem; }
+.board--wide td[data-label='Buyer'] { width: 9rem; }
+.board--wide td[data-label='Ship'] { width: 9rem; font-weight: 600; }
+.board--wide td[data-label='Gap'] { width: 9.5rem; font-weight: 600; }
+.ship__in { display: block; font-weight: 400; font-family: inherit; }

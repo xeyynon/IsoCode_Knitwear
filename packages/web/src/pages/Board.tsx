@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import {
-  activeConstraints, applyFilters, applyScope, buyersOf, counts, isUnknownChoice, parseFilters, parseScope, parseView, preview, progressOf, searchRows, shortDate,
+  activeConstraints, applyFilters, applyScope, buyersOf, counts, isUnknownChoice, parseFilters, parseScope, parseView, preview, progressOf, searchRows, shipIn, shortByStatus, shortDate,
   SHIP_WEEKS, sortRows, SORTS, STATUSES, unitsOf, weekRange, withFilter, withQuery, withSort, type BoardRow, type ShipWeek, type Sort,
 } from '../board/boardLogic'
 import { istDate } from '../dates'
@@ -16,6 +16,8 @@ import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { LowConfidence } from '../ui/LowConfidence'
 import { StatusBadge } from '../ui/StatusBadge'
+import { StatusTiles, type Tile } from '../ui/organisms/StatusTiles'
+import './Board.css'
 import { useNarrow } from '../ui/useNarrow'
 import { appliedFilters, filtersButtonText, panelFilterCount, type PanelFilters } from '../board/filterPanel'
 
@@ -111,6 +113,7 @@ export default function Board() {
   const searched = useMemo(() => (rows ? searchRows(rows, q) : []), [rows, q])
   const scoped = useMemo(() => applyScope(searched, scope, day), [searched, scope.unit, scope.week, day]) // eslint-disable-line react-hooks/exhaustive-deps
   const c = useMemo(() => (rows ? counts(scoped, filters) : null), [rows, scoped, filters.buyer]) // eslint-disable-line react-hooks/exhaustive-deps
+  const short = useMemo(() => (rows ? shortByStatus(scoped, filters) : null), [rows, scoped, filters.buyer]) // eslint-disable-line react-hooks/exhaustive-deps
   const buyers = useMemo(() => (rows ? buyersOf(rows) : []), [rows])
   const units = useMemo(() => (rows ? unitsOf(rows) : []), [rows])
   const filtered = useMemo(() => sortRows(applyFilters(scoped, filters), sort), [scoped, sort, filters.status, filters.buyer]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -147,6 +150,15 @@ export default function Board() {
                   ))}
                 </>
               )
+              // The same numbers as the chips (counts), each with the pieces still short for those orders when there are any.
+              const note = (n: number | undefined, suffix: string) => (n && n > 0 ? `${pieces(n)} pcs short${suffix}` : undefined)
+              const tiles: Tile[] = [
+                { key: 'all', label: t('board.all'), count: c.total, note: note(short?.total, ' in total'), pressed: !filters.status, onPress: () => setParams(withFilter(params, 'status', null)) },
+                ...STATUSES.map((s): Tile => ({
+                  key: s, label: t(`status.${s}`), count: c[s], note: s === 'red' || s === 'amber' ? note(short?.[s], '') : undefined,
+                  pressed: filters.status === s, onPress: () => setParams(withFilter(params, 'status', s)),
+                })),
+              ]
               const buyerSelect = (
                 <label className="strip__buyer">
                   <span className="visually-hidden">Buyer</span>
@@ -231,9 +243,10 @@ export default function Board() {
                 </>
               ) : (
                 <>
-                  <div className="strip" role="group" aria-label="Filter by status">{chips}{buyerSelect}{tools}</div>
+                  <div className="strip boardhead">{buyerSelect}{tools}</div>
+                  <StatusTiles label="Filter by status" tiles={tiles} />
                   {rows.length > 0 && (
-                    <form className="strip strip--find" role="search" onSubmit={(e) => { e.preventDefault(); pushQuery(text) }}>
+                    <form className="strip strip--find strip--attached" role="search" onSubmit={(e) => { e.preventDefault(); pushQuery(text) }}>
                       {searchBox}{sortSelect}{unitSelect}{weekSelect}
                     </form>
                   )}
@@ -244,7 +257,7 @@ export default function Board() {
             <p className="visually-hidden" role="status">{q.trim() && filtered.length > 0 ? `${filtered.length} ${filtered.length === 1 ? 'order matches' : 'orders match'}.` : ''}</p>
 
             {rows.length === 0 ? (
-              <div className="card"><p>No orders yet. Orders you set up will appear here.</p></div>
+              <div className="card"><p>No orders yet. Orders you set up will appear here.</p><p><Link className="btn" to="/orders/new">Set up the first order</Link></p></div>
             ) : filtered.length === 0 ? (
               <div className="card">
                 {/* Only the sentence is a live region: a button inside one is read out with it. */}
@@ -260,7 +273,7 @@ export default function Board() {
               </div>
             ) : (
               // Explicit roles: under 720 px the table is laid out as cards (display:block), and a browser may drop table semantics for that.
-              <table className="board" role="table">
+              <table className={narrow ? 'board' : 'board board--wide'} role="table">
                 <caption className="visually-hidden">Orders, {SORT_LABEL[sort].toLowerCase()}</caption>
                 <thead role="rowgroup">
                   <tr role="row"><th role="columnheader" scope="col">Status</th><th role="columnheader" scope="col">PO</th><th role="columnheader" scope="col">Buyer</th><th role="columnheader" scope="col">Ship</th><th role="columnheader" scope="col">Gap</th></tr>
@@ -281,7 +294,7 @@ export default function Board() {
                         </div>
                       </td>
                       <td role="cell" data-label="Buyer">{r.buyerName}</td>
-                      <td role="cell" data-label="Ship" className="mono">{shortDate(r.exFactory)}</td>
+                      <td role="cell" data-label="Ship" className="mono">{shortDate(r.exFactory)}{!narrow && today && shipIn(r.exFactory, today) ? <span className="sub ship__in">{shipIn(r.exFactory, today)}</span> : null}</td>
                       <td role="cell" data-label="Gap" className="mono">{r.shortBy && r.shortBy > 0 ? `${pieces(r.shortBy)} ${t('board.shortBy')}` : '–'}</td>
                     </tr>
                   ))}

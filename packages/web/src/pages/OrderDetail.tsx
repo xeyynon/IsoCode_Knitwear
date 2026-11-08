@@ -11,6 +11,7 @@ import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
 import { DateWords } from '../ui/atoms/DateWords'
 import { KeyFacts } from '../ui/organisms/KeyFacts'
+import { BentoCell, OrderBento } from '../ui/organisms/OrderBento'
 import { dateInWords } from '../dateWords'
 import { reasonById, usableReasons, type Reason } from '../notes/reasons'
 import { AppBar } from '../ui/AppBar'
@@ -80,10 +81,12 @@ export default function OrderDetail() {
     setBusy(false)
   }
 
+  const last = d?.stages[d.stages.length - 1]
+
   return (
     <>
       <AppBar title={d ? d.order.po : 'Order'} plainTitle={!!d} />
-      <main className="page page--form">
+      <main className="page page--form page--bento">
         <Link className="link back" to={boardPath}>← Order board</Link>
         {!d && !error && <Loading label="Loading order" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
@@ -91,26 +94,35 @@ export default function OrderDetail() {
         {d && (
           <>
             {created && <p className="notice-box" role="status">Order created. Its stage dates were worked out from ex-factory.</p>}
+            <OrderBento
+              head={
             <section className="card summary">
               <div className="summary__top">
                 <h1 className="mono">{d.order.po}</h1>
                 <StatusBadge status={d.order.status} />
               </div>
-              <p className="sub">{d.order.buyerName} · {d.order.style} · {d.order.colour}</p>
+              <p className="sub summary__who">{d.order.buyerName} · {d.order.style} · {d.order.colour}</p>
               <KeyFacts facts={[
                 { label: 'Quantity', value: pieces(d.order.qty), hint: 'pieces' },
                 { label: 'Ex-factory', value: shortDate(d.order.exFactory), hint: dateInWords(d.order.exFactory) || undefined },
                 ...(d.stages.length > 0 ? [{ label: 'Stages done', value: `${d.stages.filter((s) => s.complete).length} of ${d.stages.length}` }] : []),
+                // The last stage's projected finish, from the server's own projection; no tile when there is none yet (nothing is guessed here).
+                ...(last && !last.complete && last.projectedEnd ? [{ label: 'Projected finish', value: shortDate(last.projectedEnd), hint: slipText(last.plannedEnd, last.projectedEnd) ?? undefined, wideOnly: true }] : []),
               ]} />
-              <p className="sub mono">{Object.entries(d.order.sizes).map(([s, q]) => `${s} ${pieces(q)}`).join(' · ')}</p>
+              <p className="sub mono summary__sizes">{Object.entries(d.order.sizes).map(([s, q]) => `${s} ${pieces(q)}`).join(' · ')}</p>
               {d.history[0] && (
-                <p className="sub">Last date change: {when(d.history[0].at)} by {d.history[0].by ?? 'a person not recorded'}. <a className="link" href="#history">See the history</a></p>
+                <p className="sub summary__last">Last date change: {when(d.history[0].at)} by {d.history[0].by ?? 'a person not recorded'}. <a className="link" href="#history">See the history</a></p>
               )}
             </section>
-
+              }
+              timeline={
+                <BentoCell>
             <h2>Timeline</h2>
             <StageTimeline stages={d.stages} exFactory={d.order.exFactory} calendar={d.calendar} />
-
+                </BentoCell>
+              }
+              stages={
+                <BentoCell>
             <h2>Stage detail</h2>
             <ol className="stagelist plain">
               {d.stages.map((s) => {
@@ -136,7 +148,10 @@ export default function OrderDetail() {
                 )
               })}
             </ol>
-
+                </BentoCell>
+              }
+              actions={
+                <>
             {d.stages.length > 0 && <VisitEntryForm key={d.order.id} orderId={d.order.id} stages={d.stages.map((s) => s.stage)} today={d.today ?? istDate()} onAdded={load} />}
 
             <section className="card">
@@ -153,7 +168,11 @@ export default function OrderDetail() {
               </details>
               {moved && <p className="notice-box" role="status">{moved}</p>}
             </section>
-
+                </>
+              }
+              log={
+                <>
+                <BentoCell>
             <h2 id="history" tabIndex={-1}>History of date changes{d.history.length > 0 ? ` (${d.history.length})` : ''}</h2>
             {d.history.length === 0 ? <p className="sub">No dates have been changed on this order.</p> : (
               <ol className="plain historylist">
@@ -169,7 +188,8 @@ export default function OrderDetail() {
                 ))}
               </ol>
             )}
-
+                </BentoCell>
+                <BentoCell>
             <h2>Notes from the floor</h2>
             {d.notes.length === 0 ? <p className="sub">No notes have been written on this order.</p> : (
               <ul className="plain stagelist">
@@ -186,6 +206,10 @@ export default function OrderDetail() {
                 ))}
               </ul>
             )}
+                </BentoCell>
+                </>
+              }
+            />
           </>
         )}
       </main>
