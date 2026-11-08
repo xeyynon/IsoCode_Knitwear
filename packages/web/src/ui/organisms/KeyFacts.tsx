@@ -9,7 +9,7 @@ export interface Fact {
 /**
  * The few numbers an order page is opened for, as tiles (UI/UX plan, slice 3.6). A description list, so a screen reader hears
  * "Quantity, 4,550" as a pair. States: no facts = nothing is drawn; a fact without a hint = a smaller tile. It never colours a
- * value: status is drawn by StatusBadge alone (frontendskill.md hard rule), so a tile is the same in greyscale.
+ * value: status is drawn by StatusBadge alone (a hard design rule), so a tile is the same in greyscale.
  */
 export function KeyFacts({ facts }: { facts: Fact[] }) {
   if (facts.length === 0) return null

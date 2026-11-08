@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Rule 11 (frontendskill.md): tokens only. A colour is written once, in packages/design/tokens.css; a component asks for a
+// Design rule: tokens only. A colour is written once, in packages/design/tokens.css; a component asks for a
 // token. Text on a filled control is a token too (--on-accent, --on-ink), so a button's text is never a literal "#fff".
 // The same idea fails a build in the Dukaan Dost guide ("a test fails on any literal colour outside the token rules").
 const SRC = fileURLToPath(new URL('../src/', import.meta.url))
