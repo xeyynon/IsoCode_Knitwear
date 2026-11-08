@@ -7,6 +7,9 @@ import { pieces } from '../numberFormat'
 import { exportFileName } from '../review/exportLogic'
 import { readBuyerToken, severityWord, type Severity } from '../review/reviewLogic'
 import { AuthImage } from '../ui/AuthImage'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 
@@ -91,21 +94,21 @@ export default function Buyer() {
       {!problem && heading}
       {!view && !problem && <Loading label="Loading your orders" />}
       {problem === 'invalid' && (
-        <div className="card" role="alert">
+        <Card as="div" role="alert">
           {heading}
           <p>It may have expired or been cancelled. Please ask your contact for a new link.</p>
-        </div>
+        </Card>
       )}
       {problem === 'unreachable' && <>{heading}<LoadFailed unreachable message="" statusLink={false} onRetry={() => setAttempt((n) => n + 1)} /></>}
 
       {view && (
         <>
-          {view.orders.length === 0 && <div className="card"><p>There are no orders to show yet.</p></div>}
+          {view.orders.length === 0 && <Card as="div"><p>There are no orders to show yet.</p></Card>}
           {view.orders.length > 0 && (
             <div className="actions buyer__save">
-              <button className="btn" disabled={saving} onClick={() => void saveExcel()}>{saving ? 'Preparing the file…' : 'Download (Excel)'}</button>
+              <Button disabled={saving} onClick={() => void saveExcel()}>{saving ? 'Preparing the file…' : 'Download (Excel)'}</Button>
               <span className="sub">Your orders and planned dates as a spreadsheet.</span>
-              {saveError && <p className="error" role="alert">{saveError}</p>}
+              {saveError && <ErrorText>{saveError}</ErrorText>}
             </div>
           )}
           <ul className="plain stagelist">

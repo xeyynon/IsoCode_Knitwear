@@ -9,6 +9,11 @@ import { purgeDays } from '../setup/setupLogic'
 import { TemplatesTab } from '../setup/TemplatesTab'
 import { useSetupChecklist } from '../setup/useSetupChecklist'
 import { AppBar } from '../ui/AppBar'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input } from '../ui/atoms/Input'
+import { Field } from '../ui/molecules/Field'
 import { SetupChecklist } from '../ui/organisms/SetupChecklist'
 
 const TABS = [['people', 'People'], ['days', 'Closed days'], ['templates', 'Templates'], ['alerts', 'Alerts'], ['housekeeping', 'Housekeeping']] as const
@@ -77,14 +82,14 @@ function Housekeeping() {
   return (
     <>
       <h2>Housekeeping</h2>
-      <form className="card change" onSubmit={purge} noValidate>
+      <Card as="form" className="change" onSubmit={purge} noValidate>
         <p>Photos you reject are kept for a while, then their files can be cleared to save space. Photos that are waiting or approved are never cleared.</p>
-        <label className="field"><span>Clear files of photos rejected more than this many days ago</span>
-          <input className="input mono" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></label>
-        {error && <p className="error" role="alert">{error}</p>}
+        <Field label="Clear files of photos rejected more than this many days ago">
+          <Input mono inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
+        {error && <ErrorText>{error}</ErrorText>}
         {result && <p className="notice-box" role="status">{result}</p>}
-        <button className="btn btn--primary">Clear old rejected photos</button>
-      </form>
+        <Button variant="primary">Clear old rejected photos</Button>
+      </Card>
     </>
   )
 }

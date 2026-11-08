@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { API_BASE } from '../api/session'
+import { ButtonLink } from '../ui/atoms/Button'
 import { Loading } from '../ui/Loading'
 import { BUILD_LABEL } from '../release/buildInfo'
 import { checkedText } from '../statusRules'
@@ -45,7 +45,7 @@ export default function Status() {
       {body && <p className="sub">{checkedText(body.checkedAt)}</p>}
       {BUILD_LABEL && <p className="sub">{BUILD_LABEL}</p>}
       {/* Not a dead end: the app opens on the right place for whoever is signed in, or on the sign-in. */}
-      <p><Link className="btn" to="/">← Back to the app</Link></p>
+      <p><ButtonLink to="/">← Back to the app</ButtonLink></p>
     </main>
   )
 }

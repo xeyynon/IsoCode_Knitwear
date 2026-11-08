@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate } from '../board/boardLogic'
 import { pieces } from '../numberFormat'
+import { Banner } from '../ui/atoms/Banner'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
 import { DateWords } from '../ui/atoms/DateWords'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input, Select } from '../ui/atoms/Input'
+import { TextLink } from '../ui/atoms/TextLink'
+import { Field } from '../ui/molecules/Field'
 import { isRealDate, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
@@ -92,7 +99,7 @@ export default function OrderSetup() {
     <>
       <AppBar title="New order" />
       <main className="page page--form">
-        <Link className="link back" to="/board">← Order board</Link>
+        <TextLink className="back" to="/board">← Order board</TextLink>
         {!opts && !loadError && <Loading label="Loading" />}
         {loadError && <LoadFailed unreachable={loadError.unreachable} message={loadError.message} onRetry={loadOptions} />}
 
@@ -104,60 +111,60 @@ export default function OrderSetup() {
                 <ul>{problemList.map((m) => <li key={m}>{m}</li>)}</ul>
               </div>
             )}
-            {serverError && <p className="banner" role="alert">{serverError}</p>}
+            {serverError && <Banner>{serverError}</Banner>}
 
-            <section className="card">
+            <Card>
               <h2>Order</h2>
-              <label className="field"><span>Buyer</span>
-                <select className="input" value={form.buyerId} onChange={(e) => set('buyerId', e.target.value)} aria-invalid={showErrors && !!errors.buyerId}>
+              <Field label="Buyer" below={err('buyerId')}>
+                <Select value={form.buyerId} onChange={(e) => set('buyerId', e.target.value)} aria-invalid={showErrors && !!errors.buyerId}>
                   <option value="">Choose a buyer</option>
                   {opts.buyers.map((b) => <option key={b.id} value={b.id}>{b.name}{b.country ? ` (${b.country})` : ''}</option>)}
-                </select>{err('buyerId')}
-              </label>
+                </Select>
+              </Field>
               <div className="grid3">
-                <label className="field"><span>PO number</span>
-                  <input className="input mono" value={form.po} onChange={(e) => set('po', e.target.value)} aria-invalid={showErrors && !!errors.po} />{err('po')}</label>
-                <label className="field"><span>Style</span>
-                  <input className="input" value={form.style} onChange={(e) => set('style', e.target.value)} aria-invalid={showErrors && !!errors.style} />{err('style')}</label>
-                <label className="field"><span>Colour</span>
-                  <input className="input" value={form.colour} onChange={(e) => set('colour', e.target.value)} aria-invalid={showErrors && !!errors.colour} />{err('colour')}</label>
+                <Field label="PO number" below={err('po')}>
+                  <Input mono value={form.po} onChange={(e) => set('po', e.target.value)} aria-invalid={showErrors && !!errors.po} /></Field>
+                <Field label="Style" below={err('style')}>
+                  <Input value={form.style} onChange={(e) => set('style', e.target.value)} aria-invalid={showErrors && !!errors.style} /></Field>
+                <Field label="Colour" below={err('colour')}>
+                  <Input value={form.colour} onChange={(e) => set('colour', e.target.value)} aria-invalid={showErrors && !!errors.colour} /></Field>
               </div>
-            </section>
+            </Card>
 
-            <section className="card">
+            <Card>
               <h2>Quantity by size</h2>
               <div className="sizes">
                 {form.rows.map((r) => (
                   <div className="sizes__row" key={r.id}>
-                    <input className="input" aria-label="Size" placeholder="Size" value={r.size}
+                    <Input aria-label="Size" placeholder="Size" value={r.size}
                       onChange={(e) => set('rows', form.rows.map((x) => (x.id === r.id ? { ...x, size: e.target.value } : x)))} />
-                    <input className="input mono" aria-label={`Quantity for size ${r.size || 'row'}`} placeholder="Pieces" inputMode="numeric" value={r.qty}
+                    <Input mono aria-label={`Quantity for size ${r.size || 'row'}`} placeholder="Pieces" inputMode="numeric" value={r.qty}
                       onChange={(e) => set('rows', form.rows.map((x) => (x.id === r.id ? { ...x, qty: e.target.value } : x)))} />
-                    <button type="button" className="btn btn--small" aria-label={`Remove size ${r.size || 'row'}`}
-                      onClick={() => set('rows', form.rows.filter((x) => x.id !== r.id))}>Remove</button>
+                    <Button type="button" size="small" aria-label={`Remove size ${r.size || 'row'}`}
+                      onClick={() => set('rows', form.rows.filter((x) => x.id !== r.id))}>Remove</Button>
                   </div>
                 ))}
               </div>
               <div className="sizes__foot">
-                <button type="button" className="btn btn--small" onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>Add a size</button>
+                <Button type="button" size="small" onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>Add a size</Button>
                 <span className="mono" aria-live="polite">Total <b>{sizes.total > 0 ? pieces(sizes.total) : '–'}</b>{sizes.total > 0 ? ' pieces' : ''}</span>
               </div>
               {err('sizes')}
-            </section>
+            </Card>
 
-            <section className="card">
+            <Card>
               <h2>Dates</h2>
               <div className="grid2">
-                <label className="field"><span>Ex-factory date</span>
-                  <input className="input" type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} /><DateWords iso={form.exFactory} />{err('exFactory')}</label>
-                <label className="field"><span>TNA template</span>
-                  <select className="input" value={form.templateId} onChange={(e) => set('templateId', e.target.value)} aria-invalid={showErrors && !!errors.templateId}>
+                <Field label="Ex-factory date" below={err('exFactory')}>
+                  <Input type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} /><DateWords iso={form.exFactory} /></Field>
+                <Field label="TNA template" below={err('templateId')}>
+                  <Select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} aria-invalid={showErrors && !!errors.templateId}>
                     <option value="">Choose a template</option>
                     {opts.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>{err('templateId')}</label>
+                  </Select></Field>
               </div>
 
-              {previewError && <p className="error" role="alert">{previewError}</p>}
+              {previewError && <ErrorText>{previewError}</ErrorText>}
               {form.templateId && isRealDate(form.exFactory) && !preview && !previewError && <p className="sub" role="status">Working out the dates…</p>}
               {preview && (
                 <div aria-live="polite">
@@ -168,7 +175,7 @@ export default function OrderSetup() {
                       <tr key={m.stage}><td>{cap(m.stage)}</td><td>{m.unitName}</td><td className="mono">{shortDate(m.plannedEnd)}</td></tr>
                     ))}</tbody>
                   </table>
-                  {preview.problems.length > 0 && <p className="banner" role="alert">This template cannot be used: {preview.problems.join('; ')}.</p>}
+                  {preview.problems.length > 0 && <Banner>This template cannot be used: {preview.problems.join('; ')}.</Banner>}
                   {preview.alreadyDue.length > 0 && (
                     <p className="notice-box" role="status">
                       {preview.alreadyDue.map(cap).join(', ')} {preview.alreadyDue.length === 1 ? 'is' : 'are'} already due. You can still create the order; it will show as late on the board.
@@ -176,9 +183,9 @@ export default function OrderSetup() {
                   )}
                 </div>
               )}
-            </section>
+            </Card>
 
-            <button className="btn btn--primary btn--big" disabled={busy || blocked}>{busy ? 'Creating…' : 'Create order'}</button>
+            <Button variant="primary" size="big" disabled={busy || blocked}>{busy ? 'Creating…' : 'Create order'}</Button>
           </form>
         )}
       </main>
