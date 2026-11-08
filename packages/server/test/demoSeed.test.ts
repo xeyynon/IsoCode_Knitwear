@@ -28,6 +28,11 @@ describe('demo seed from the brief', () => {
     }
   })
 
+  it('every note in the seed is written, in Tamil and English, and none is reviewed yet', async () => {
+    const r = (await pg.query<{ language: string; n: number }>(`select language, count(*)::int as n from note where confirmed_by is null group by language order by language`)).rows
+    expect(r).toEqual([{ language: 'en', n: 2 }, { language: 'ta', n: 4 }])
+  })
+
   it('refuses to load twice', async () => {
     await expect(pgliteDb(pg).tx({ role: 'system' }, (tx) => seedDemo(tx))).rejects.toThrow(/already has orders/)
   })

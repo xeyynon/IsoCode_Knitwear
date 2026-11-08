@@ -14,6 +14,7 @@ import {
   resetPin, saveTemplate, setCalendarDay, setDisabled, signOutEverywhere,
 } from './adminService.js'
 import { confirmNote, listPendingNotes, loadReasons } from './noteService.js'
+import { suggestNotes, type NoteClassifier } from './noteAi.js'
 import { approvePhoto, getBuyerPhotoBytes, listApprovedPhotos, purgeRejectedPhotos, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
 import type { MediaStore } from './mediaStore.js'
 import { createBuyerLink, getBuyerView, getBuyerViewFor, listBuyerLinks, resolveBuyerToken, revokeBuyerLink, type BuyerView } from './buyerService.js'
@@ -61,6 +62,11 @@ export interface AppOptions {
   authCacheMs?: number
   /** gzip for JSON bodies over 1 KB when the client accepts it. Default on. */
   compress?: boolean
+  /**
+   * Suggests an English meaning and a reason for each note from the floor (noteAi.ts). Without it, AI is off: the review queue
+   * says so and a person does the translating, as before. Never a fake answer.
+   */
+  noteAi?: NoteClassifier | null
 }
 
 declare module 'fastify' {
@@ -361,8 +367,27 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     reply.header('Cache-Control', 'no-store')
     return opts.db.tx(ctx, async (tx) => ({
       ...(await listReview(tx, ctx)), photos: await listPendingPhotos(tx, ctx), approvedPhotos: await listApprovedPhotos(tx, ctx),
-      notes: await listPendingNotes(tx, ctx), reasons: await loadReasons(tx),
+      notes: await listPendingNotes(tx, ctx), reasons: await loadReasons(tx), aiEnabled: !!opts.noteAi,
     }))
+  })
+  // AI suggestions for notes still waiting for one (a few per call; the review page calls it while any are waiting), or for one note
+  // again ("Ask again"). Merchandisers only. With AI off: 503, and the page says a person does it.
+  const aiOr503 = (ctx: Ctx): NoteClassifier => {
+    if (!isStaff(ctx)) throw forbidden('Only merchandisers review notes')
+    if (!opts.noteAi) throw new AppError(503, 'ai_off', 'AI suggestions are not set up on this server')
+    return opts.noteAi
+  }
+  app.post('/api/notes/suggest', async (req) => {
+    const ctx = ctxOf(req)
+    return suggestNotes(opts.db, ctx, aiOr503(ctx), { limit: 3 })
+  })
+  app.post<{ Params: { id: string } }>('/api/notes/:id/suggest', async (req) => {
+    const ctx = ctxOf(req)
+    const classify = aiOr503(ctx)
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) throw badRequest('Invalid request')
+    const run = await suggestNotes(opts.db, ctx, classify, { limit: 1, onlyId: req.params.id })
+    if (!run.asked) throw new AppError(409, 'already_reviewed', 'This note has already been reviewed, or has no words to read')
+    return run
   })
   app.post<{ Params: { id: string } }>('/api/warnings/:id/confirm', async (req) => {
     const ctx = ctxOf(req)

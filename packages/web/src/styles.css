@@ -492,3 +492,11 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 @media (pointer: coarse) {
   .textarea { resize: none; }
 }
+
+/* The AI's suggestion on a note in the review queue: a quiet box beside the original, never a status colour. An unsure or
+   failed suggestion is marked by its words and a dashed rule, so it reads the same in greyscale. */
+.ai-box { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: var(--radius-m); background: var(--accent-soft); display: grid; gap: 6px; justify-items: start; }
+.ai-box--unsure, .ai-box--failed, .ai-box--off { background: var(--surface); border-style: dashed; border-color: var(--border); }
+.ai-box--waiting { background: var(--surface); color: var(--muted); }
+.ai-box__why { margin: 0; }
+.ai-box__clash { margin: 0; font-weight: 600; }

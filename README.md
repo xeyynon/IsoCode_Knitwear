@@ -5,7 +5,7 @@
 
 Order tracking for a knitwear exporter. Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order, whether it will ship on time and shows the reasoning. Merchandisers see the orders that need attention first; buyers get a read-only view of only their own orders.
 
-> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate, the buyer's read-only view, photos on a daily update and typed notes work and are tested; voice notes and automatic translation are not built. See [Status](#status) and [Roadmap](#roadmap).
+> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate, the buyer's read-only view, photos on a daily update, typed notes and AI suggestions for notes (an English meaning and a reason, with what happens when the AI is unsure or wrong) work and are tested; voice notes are not built. See [Status](#status) and [Roadmap](#roadmap).
 
 ## Contents
 [Why](#why) · [Status](#status) · [How the colours are decided](#how-the-colours-are-decided) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security model](#security-model) · [Testing](#testing) · [Development workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
@@ -41,7 +41,8 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 | Tamil first for supervisors: a supervisor who signs in on a phone where nobody has chosen a language sees Tamil straight away; a merchandiser stays in English. The language switch (menu, or the sign-in screen) is a choice and always wins, and signing out never erases it. A language that was only our default is remembered so the sign-in screen is Tamil on that phone, but the next person to sign in gets their own default. The rule is `langRules.ts` (pure, tested); the browser scripts (`e2e_offline`, `snapshots`) set English first so their pictures and checks stay the same | Built, tested; the Tamil is still unreviewed |
 | One calm "cannot reach the server" state: when a screen cannot load because the connection is down (a failed fetch, a timeout, or a proxy or gateway page instead of the app's own answer) it shows "Can't reach the server. Check the connection and try again." with a Retry button and a link to the public status page, the same card on the board, order screens, review, setup and the supervisor's Today and Update; supervisor screens add "Your work saved on this phone is safe" (Tamil: unreviewed), and a buyer's page leaves out the status link. A server that answered with an error still shows its own message. The classification is `api/sessionRules.ts`, the card is `ui/LoadFailed.tsx`; the offline queue and the sync chip are unchanged | Built, tested |
 | Mocked alerts: when a warning is confirmed for buyers, a stage turns red, or a photo is approved, the email or WhatsApp message that would go out is written to the `outbox` table in the same transaction as the change (to the buyer's name or to "Merchandisers", never a real address). A buyer's message holds only the confirmed wording or "a photo is ready", never a rate or a shortfall. **Nothing is sent anywhere.** Merchandisers read the latest 50 in Setup > Alerts ("Alerts (not sent: demo)"); buyers and supervisors cannot read the table, and the API never edits or deletes a row | Built, tested |
-| Voice notes, automatic translation, and automatic reason suggestions | **Not built** (they need a speech and translation service agreement; until then a person does the translating) |
+| AI for notes from the floor: Claude (`claude-opus-5-5`, a JSON schema that only allows the list's reason ids) drafts the English meaning of a Tamil note and suggests one reason with its confidence. It sits beside the original, never in place of it. Under `ai_min_confidence` (0.7) or off the list it is shown as "not sure" and nothing is pre-chosen; a timeout, refusal, unreadable answer or a service fault is shown as such and tried again (3 times at most, or **Ask AI again**). The supervisor's tap and the AI are compared and a clash is called out. The merchandiser decides; their reason is stored apart from the AI's, so every override is on record. Buyers never see notes. Without `ANTHROPIC_API_KEY` the queue says AI is off and a person does it, as before (`noteAi.ts`, `review/noteAiLogic.ts`) | Built, tested with a stubbed model |
+| Voice notes | **Not built** (the note's `audio_key` column is ready; speech to text needs a service agreement) |
 
 **Not yet verified:** nothing has run against a production Postgres server or on real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording has not been checked with floor supervisors.
 
@@ -122,7 +123,7 @@ npm install
 npm run verify        # static checks, typecheck and every test (not the web build: CI also runs npm run build)
 ```
 
-**Run the whole app locally on demo data** (an in-memory database with illustrative orders; today is fixed to 4 Nov 2026 so the figures line up):
+**Run the whole app locally on demo data** (an in-memory database loaded with the brief's sample POs and four illustrative orders from `packages/server/src/demoSeed.ts`; today is fixed to 6 Nov 2026 so the figures line up):
 
 ```bash
 npm run dev:api                 # terminal 1: API on http://127.0.0.1:8787
@@ -131,10 +132,14 @@ npm run dev -w @isocode/web     # terminal 2: app on http://localhost:5173
 
 | Demo account | Sign in with |
 | --- | --- |
-| Merchandiser | `m@example.test` / `correct horse battery` |
-| Supervisor | phone `98765 43210` / PIN `4321` (My orders today and the daily update) |
+| Merchandiser | `merch@companya.test` / `demo knitwear 2026` |
+| Supervisor, Unit 1 | phone `90000 10001` / PIN `4826` (B-PO-88240 finishing, B-PO-88213 stitching) |
+| Supervisor, Unit 2 | phone `90000 10002` / PIN `5937` |
+| Supervisor, Unit 3 | phone `90000 10003` / PIN `6048` (the printed styles) |
+| Buyer, Company B (read-only) | `http://localhost:5173/buyer#bl_demoCompanyB_readonly_2026` |
+| Buyer, Company C (read-only) | `http://localhost:5173/buyer#bl_demoCompanyC_readonly_2026` |
 
-These are throwaway demo credentials for the in-memory database. Never reuse them anywhere real.
+These are throwaway demo credentials. Never reuse them anywhere real. Set `ANTHROPIC_API_KEY` in terminal 1 to turn AI suggestions on. `DEMO_DATA=fixture npm run dev:api` serves the small test fixture instead (`m@example.test` / `correct horse battery`, supervisor `98765 43210` / `4321`), which `npm run a11y`, `snapshots` and `ux` check against. `npm run seed:demo` loads the same demo data into a real, migrated, empty Postgres (as `app_user`).
 
 **Production build of the web app:**
 ```bash
@@ -162,6 +167,8 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `LOG_LEVEL` | `fatal`, `error`, `warn`, `info` (default), `debug`, `trace` or `silent`. At `info` each request writes one short line (method, route pattern, status, milliseconds), never a body, a header or a query string. Any other value stops the server at start-up |
 | `DB_POOL_MAX` | Database connections, 1 to 50, default 5. Each is a Postgres process and the work is mostly CPU, so more do not help a small server. A request that cannot get one within 5 seconds answers 503 `busy` |
 | `DB_STATEMENT_TIMEOUT_MS` | The database ends any single statement that runs longer than this, default 30000; 0 means no limit. A transaction left idle is ended after 15 seconds |
+| `ANTHROPIC_API_KEY` | Turns on AI suggestions for notes from the floor. Unset: AI is off and the review queue says so (never a made-up suggestion) |
+| `AI_MODEL` | Optional. The Claude model for those suggestions; default `claude-opus-5-5` |
 | `ALLOW_UNSAFE_DB_ROLE` | `1` lets the server start even though `DATABASE_URL` is a superuser, `BYPASSRLS` or table-owner login, which silently turns row-level security off. For local development only; leave it unset in every real deployment (the default is to refuse to start) |
 
 **Start the real API** with `npm run start:api` (it runs `packages/server/src/server.ts` through `tsx`, which is installed with `npm ci --omit=dev`). Nothing loads `packages/server/.env.example` or a `.env` file: export the variables in the environment of the process (the host's settings, `export`, a systemd `EnvironmentFile`, `docker run --env-file`). `npm run dev:api` is the in-memory demo, not this.
@@ -192,6 +199,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET /api/buyers/:id/export.csv` | merchandiser | The file one buyer would get, for checking it or sending it on |
 | `GET /api/reasons` | signed in | The fixed list of reasons for a slow stage |
 | `POST /api/notes/:id/confirm` | merchandiser | Review a note: add the English meaning of a Tamil note and settle the reason |
+| `POST /api/notes/suggest`, `POST /api/notes/:id/suggest` | merchandiser | AI suggestions: for up to 3 notes still waiting for one, or for one note again. 503 when AI is not set up |
 | `POST /api/photos` | supervisor | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). Checked to be a real JPEG, 1 KB to 3 MB |
 | `GET /api/photos/:id/file`, `POST /api/photos/:id/approve`, `.../reject` | merchandiser | View, approve or withdraw a photo |
 | `POST /api/photos/purge` | merchandiser | Delete the files of photos rejected more than N days ago (waiting and approved photos are never touched) |
@@ -289,7 +297,7 @@ git push origin main --tags
 2. **Order screens, remaining:** setting an order's stages by hand, and an option to re-date existing orders when a holiday is added.
 3. **Review gate:** done for warnings, photos and notes.
 4. **Buyer view:** done, including the isolation tests on real Postgres (`test-postgres` in CI).
-5. **Notes, remaining:** voice notes, and automatic translation and reason suggestions with low-confidence ones sent to review. The original is always kept beside any translation.
+5. **Notes, remaining:** voice notes (speech to text, then the same AI step), and measuring the AI's suggestions against the merchandisers' final reasons over the pilot to set the confidence threshold from data.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 
 ## Licence
