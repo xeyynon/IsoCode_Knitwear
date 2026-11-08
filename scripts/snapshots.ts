@@ -84,9 +84,9 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.waitForSelector('table.board')
   await snap(page, 3, 'board-desktop', 'desktop', 'Order board', 'Every order, worst first. The counts at the top are filters. Under each order is the working behind its colour. Only the red row is tinted; every status also has an icon and a word.')
 
-  await page.click('.chip--red')
+  await page.click('.statustile--red, .chip--red')
   await snap(page, 4, 'board-filtered-red', 'desktop', 'Order board: filtered to late risk', 'The filter is kept in the web address, so a reload or a shared link keeps it.')
-  await page.click('.chip--red')
+  await page.click('.statustile--red, .chip--red')
 
   await page.click('button[aria-haspopup=menu]')
   await snap(page, 5, 'board-menu-open', 'desktop', 'App menu', 'Language and sign out live in one menu. Esc closes it and returns focus to the button.')

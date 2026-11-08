@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
@@ -10,8 +9,10 @@ import { dayProgress } from '../stages/dayProgress'
 import { stagesErrorText, useStages, type Stage } from '../stages/useStages'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
-import { Loading } from '../ui/Loading'
+import { Skeleton } from '../ui/atoms/Skeleton'
 import { SyncChip } from '../ui/SyncChip'
+import { StageCard } from '../ui/organisms/StageCard'
+import { TodayHero } from '../ui/organisms/TodayHero'
 
 export default function Today() {
   const { t, lang } = useLang()
@@ -50,7 +51,14 @@ export default function Today() {
     <>
       <AppBar title={t('sup.title')} />
       <main className="page page--narrow" ref={main} tabIndex={-1}>
-        {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
+        {/* The day at a glance (phase 8A): a ring, the sentence and the date the counts go to, with the sync chip inside. With no day to
+            show (loading, or nothing to update) the chip stands alone, as before. */}
+        {progress ? (
+          <TodayHero updated={progress.updated} total={progress.total} headline={t('today.progress', { n: progress.updated, m: progress.total })}
+            dateLine={st.today ? t('today.countsFor', { date: dayMonth(lang, st.today) }) : undefined}>
+            {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
+          </TodayHero>
+        ) : (queue && state && <SyncChip state={state} ctl={queue.ctl} />)}
         {warning && <p className="banner" role="alert">{t(warning)}</p>}
 
         {state && state.rejected.length > 0 && queue && (
@@ -82,35 +90,31 @@ export default function Today() {
         {st.source === 'saved' && st.savedAt && (
           <p className="notice" role="status">{t('today.savedList', { date: dayMonth(lang, istDate(new Date(st.savedAt))), time: new Date(st.savedAt).toLocaleTimeString() })}</p>
         )}
-        {st.stages === null && !st.error && <Loading label={t('today.loading')} />}
+        {st.stages === null && !st.error && (
+          <div className="skeletons" role="status" aria-label={t('today.loading')}>
+            <ul className="stages plain" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="stage stage--skeleton">
+                  <Skeleton width="45%" height={22} />
+                  <Skeleton width="30%" height={20} />
+                  <Skeleton width="70%" height={20} />
+                  <Skeleton height={56} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {st.stages === null && st.error && (
           <LoadFailed unreachable={st.error.unreachable} message={stagesErrorText(st.error, lang)} onRetry={() => void st.reload()} workSafe />
         )}
-        {st.stages && open.length === 0 && <div className="card"><p>{t('today.nothing')}</p></div>}
-        {progress && (
-          <p className="sub today__progress">
-            <b>{t('today.progress', { n: progress.updated, m: progress.total })}</b>
-            {st.today ? ` · ${t('today.countsFor', { date: dayMonth(lang, st.today) })}` : ''}
-          </p>
-        )}
-
+        {st.stages && open.length === 0 && <div className="card"><p>{t('today.nothing')}</p><p className="sub">{t('today.nothingNext')}</p></div>}
         <ul className="stages plain">
           {open.map((s) => {
             const n = shown(s)
             return (
-              <li key={`${s.orderId}/${s.stage}`} className="stage">
-                <div className="stage__head">
-                  <b className="mono stage__po">{s.po}</b>
-                  <span className="sub">{s.style} · {s.colour}</span>
-                </div>
-                <div className="stage__name">{stageLabel(lang, s.stage)}</div>
-                <div className="stage__nums mono">
-                  <span>{t('today.today')} <b>{pieces(n.today)}</b></span>
-                  <span>{t('today.done')} <b>{pieces(n.total)}</b> / {pieces(s.qty)}</span>
-                  <span>{t('today.due')} <b>{dayMonth(lang, s.plannedEnd)}</b></span>
-                </div>
-                <Link className="btn btn--primary btn--block stage__go" to={stageHref(s.orderId, s.stage)}>{t('today.update')}</Link>
-              </li>
+              <StageCard key={`${s.orderId}/${s.stage}`} po={s.po} meta={`${s.style} · ${s.colour}`} stageName={stageLabel(lang, s.stage)}
+                done={n.total} qty={s.qty} today={n.today} dueText={dayMonth(lang, s.plannedEnd)} href={stageHref(s.orderId, s.stage)}
+                labels={{ today: t('today.today'), done: t('today.done'), due: t('today.due'), update: t('today.update') }} />
             )
           })}
         </ul>

@@ -1,0 +1,6 @@
+/* AccountActivity (ui/organisms/AccountActivity.tsx): a plain list, a divider between entries. Tokens only. */
+.activity { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-l); margin: 0 0 var(--space-3); }
+.activity__item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-soft); }
+.activity__item:last-child { border-bottom: 0; }
+.activity__sentence { min-width: 0; overflow-wrap: anywhere; }
+.activity__time { color: var(--muted); font-size: 0.875rem; white-space: nowrap; }

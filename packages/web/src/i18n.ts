@@ -101,6 +101,7 @@ const en = {
   'today.loading': 'Loading your orders',
   'today.loadFailed': 'Could not load your orders.',
   'today.nothing': 'Nothing to update right now.',
+  'today.nothingNext': 'New orders appear here when your merchandiser sets them up.',
   'today.today': 'Today',
   'today.done': 'Done',
   'today.due': 'Due',
@@ -238,6 +239,7 @@ const ta: Partial<Record<Key, string>> = {
   'today.loading': 'உங்கள் ஆர்டர்கள் ஏற்றப்படுகின்றன',
   'today.loadFailed': 'உங்கள் ஆர்டர்களை ஏற்ற முடியவில்லை.',
   'today.nothing': 'இப்போது பதிவு செய்ய எதுவும் இல்லை.',
+  'today.nothingNext': 'புதிய ஆர்டர்களை மெர்ச்சண்டைசர் சேர்த்ததும் அவை இங்கே தெரியும்.',   // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'today.today': 'இன்று',
   'today.done': 'முடிந்தது',
   'today.due': 'கெடு',

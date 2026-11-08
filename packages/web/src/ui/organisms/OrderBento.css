@@ -1,0 +1,41 @@
+/* OrderBento (ui/organisms/OrderBento.tsx): the order page as a grid of rounded cells. Tokens only.
+   Phone: one column, the cells are plain blocks, so nothing changes from the page it was. */
+.bento { display: grid; gap: var(--space-4); }
+.bento > [data-area] { min-width: 0; }
+.bento .card { max-width: none; }
+.bento .card + .card { margin-top: 0; }   /* the grid's gap does the spacing here */
+.bento__actions, .bento__log { display: grid; gap: var(--space-4); }
+
+@media (min-width: 1000px) {
+  .page.page--bento { max-width: 1240px; }
+  .bento {
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);   /* the timeline needs about 740 px inside its cell before it scrolls sideways */
+    grid-template-areas:
+      "head head"
+      "timeline stages"
+      "actions actions"
+      "log log";
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .bento__head { grid-area: head; }
+  .bento__timeline { grid-area: timeline; }
+  .bento__stages { grid-area: stages; }
+  .bento__actions { grid-area: actions; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+  .bento__log { grid-area: log; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+
+  /* a cell is a card: soft border, a roomy padding, the larger radius */
+  .bento__cell { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-l); padding: var(--space-4) var(--space-5); min-width: 0; }
+  .bento__cell > h2:first-child { margin-top: 0; }
+  .bento__cell .stagelist { margin-bottom: 0; }
+  .bento .card { border-color: var(--border-soft); border-radius: var(--radius-l); padding: var(--space-5); }
+
+  /* the order card: who it is on the left, the key facts as large tiles on the right */
+  .bento .summary { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2.1fr); column-gap: var(--space-6); align-items: start; }
+  .bento .summary > * { grid-column: 1; min-width: 0; }
+  .bento .summary > .keyfacts { grid-column: 2; grid-row: 1 / span 4; margin: 0; align-self: stretch; }
+  .bento .summary h1 { font-size: 2.25rem; }
+  .bento .keyfacts { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .bento .keyfacts__tile { padding: var(--space-4); }
+  .bento .keyfacts dd.mono { font-size: 1.875rem; }
+}

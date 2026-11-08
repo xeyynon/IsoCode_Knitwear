@@ -26,3 +26,14 @@ These fields are for the merchandiser board only. The buyer view must not gain t
 
 ## Tests I will add on the UI side once the field exists
 Words when nothing is reported; estimate label; over 100%; the bar's width capped; greyscale check.
+
+---
+
+# Also for the backend session: slice 4.1, undo for "Don't show" on a warning waiting for review
+
+Not started: it needs a new route and a transaction, which is the backend's lane.
+
+- Today `dismissWarning` clears the confirmation (`warningService.ts` around line 171) and `refreshWarnings` skips dismissed rows. An undo has to return the warning to "waiting for review" and refresh its wording and figures in the same transaction, so what comes back is what the order says now.
+- **Only for a warning that was still waiting for review.** A confirmed warning that a merchandiser hides from the buyer has no undo: showing it again needs a fresh confirmation (rule 18).
+- Role and isolation tests as for the other review routes.
+- UI side, when the route exists: an InlineUndo line that stays while the item is on the screen, until the next refresh; no timer; keyboard reachable; focus kept after the action (`review.test.ts` lines 96 to 110 guard this).

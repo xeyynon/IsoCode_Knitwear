@@ -205,6 +205,32 @@ export function counts(rows: BoardRow[], f: Filters): Record<Status, number> & {
   return out
 }
 
+/**
+ * The pieces still short, added up for each status, under the same buyer choice as counts() so a status tile's number and its
+ * shortfall describe the same orders. Only real values count: a missing, zero or negative shortfall adds nothing.
+ */
+export function shortByStatus(rows: BoardRow[], f: Filters): Record<Status, number> & { total: number } {
+  const out = { red: 0, amber: 0, grey: 0, green: 0, total: 0 }
+  for (const r of rows) {
+    if (f.buyer && r.buyerId !== f.buyer) continue
+    if (typeof r.shortBy !== 'number' || !(r.shortBy > 0)) continue
+    out[r.status] += r.shortBy
+    out.total += r.shortBy
+  }
+  return out
+}
+
+/** How far away a ship date is, in words ("in 16 days", "tomorrow", "5 days ago"); empty when either date cannot be read. */
+export function shipIn(exFactory: string, today: string): string {
+  const at = (iso: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN }
+  const days = Math.round((at(exFactory) - at(today)) / 86_400_000)
+  if (!Number.isFinite(days)) return ''
+  if (days === 0) return 'today'
+  if (days === 1) return 'tomorrow'
+  if (days > 1) return `in ${days} days`
+  return `${-days} day${days === -1 ? '' : 's'} ago`
+}
+
 /** A link can name a buyer who has no orders on the board: the select needs an option for it, or it shows "All buyers" over an empty list. */
 export const isUnknownChoice = (options: { id: string }[], id: string | null): boolean => !!id && !options.some((o) => o.id === id)
 

@@ -25,7 +25,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 /** The buyer's word for a notice, in neutral ink: never the board's red or amber, its marks or its words. */
 export function BuyerNotice({ severity }: { severity: Severity }) {
-  return <span className="badge badge--neutral">{severityWord(severity)}</span>
+  return <span className="badge badge--neutral badge--stamp">{severityWord(severity)}</span>
 }
 
 /** Orders are unique by PO, style and colour, so the same PO can appear twice: the key needs all three. */
