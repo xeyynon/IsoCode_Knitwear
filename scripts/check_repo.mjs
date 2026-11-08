@@ -162,7 +162,7 @@ if (fs.existsSync(reportsDir)) {
 }
 
 // One InBul id on two commits (BE-053). History cannot be rewritten, so the ones that already happened are listed in inbul.mjs.
-for (const d of findDuplicateInbuls(commitTitles(ROOT))) {
+for (const d of findDuplicateInbuls(commitTitles(ROOT, true))) {
   problems.push(`${d.id} is the title of ${d.hashes.length} commits (${d.hashes.map((h) => h.slice(0, 7)).join(', ')}); take the next free id with changelog.mjs --next-internal`)
 }
 
