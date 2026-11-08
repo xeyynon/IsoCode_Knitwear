@@ -9,7 +9,7 @@ import { buildApp } from './app.js'
 import { parseOrigins } from './cors.js'
 import { demoClock } from './demoClock.js'
 import { mediaStoreFromEnv } from './mediaFromEnv.js'
-import { classifierFromEnv } from './noteAi.js'
+import { classifierFromEnv } from './aiFromEnv.js'
 import { assertSafeDbRole, pgDb, unsafeRoleOverride } from './pgDb.js'
 import { parseLogLevel, parseTrustProxy, poolSettings } from './startup.js'
 
