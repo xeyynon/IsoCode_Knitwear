@@ -367,6 +367,19 @@ describe('BE-050: a build report with placeholder text is never tagged', { timeo
     expect(git(d, 'tag', '--list', 'build-*')).toBe('')
   })
 
+  it('BE-075: a build squash-merged on GitHub (its title ends with the pull request number) is tagged, and a different title still is not', () => {
+    const d = startedRepo()
+    changelog(d, '--pending', 'A whole day', 'Said what changed.', '--why', 'because', '--verified', 'checked', '--next', 'more')
+    commitAll(d, 'A whole day (#23)')
+    const ok = changelog(d, '--tag')
+    expect(ok.status, ok.stderr).toBe(0)
+    expect(git(d, 'tag', '--list', 'build-*')).toBe('build-1000')
+    const e = startedRepo()
+    changelog(e, '--pending', 'A whole day', 'Said what changed.', '--why', 'because', '--verified', 'checked', '--next', 'more')
+    commitAll(e, 'Something else (#23)')
+    expect(changelog(e, '--tag').status).toBe(1)
+  })
+
   it('BE-050: one part still unwritten is enough to refuse, and writing it lets the tag through', () => {
     const d = startedRepo()
     changelog(d, '--pending', 'Half done', 'Said what changed.', '--why', 'because', '--verified', 'checked')   // --next missing

@@ -214,7 +214,8 @@ function regenerate() {
 }
 
 function tagHead() {
-  const title = git('log', '-1', '--format=%s')
+  // GitHub's squash merge appends the pull request number to the title ("Title (#23)"); the report's title is the one without it.
+  const title = git('log', '-1', '--format=%s').replace(/\s*\(#\d+\)$/, '')
   const here = git('tag', '--points-at', 'HEAD').split('\n').filter((t) => /^(build-\d+|InBul\d+)$/.test(t))
   if (here.length) fail(`HEAD is already tagged ${here.join(', ')}. Tags are never moved.`)
   if (/\(Build \d+\)/i.test(title)) fail('commit title contains "(Build N)". The tag carries the number.')
