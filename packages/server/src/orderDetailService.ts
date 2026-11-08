@@ -1,7 +1,7 @@
-import { addDays, compareDates, formatMaths, isWorking, projectOrder, type IsoDate, type Status, type UnitCalendar } from '@isocode/engine'
+import { compareDates, formatMaths, isSunday, MAX_DATE, MIN_DATE, projectOrder, type IsoDate, type Status } from '@isocode/engine'
 import { badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
-import { lowConfidenceStages } from './confidence.js'
+import { calendarOfStages, lowConfidenceStages } from './confidence.js'
 import { loadEngineData } from './engineData.js'
 import { listOrderNotes, loadReasons, type Reason } from './noteService.js'
 
@@ -66,22 +66,30 @@ export interface TimelineUnit { unitId: string; unitName: string; closed: Closed
 /** The days each unit does not work between the first date that matters and the last, for the horizontal stage timeline. */
 export interface TimelineCalendar { from: string; to: string; units: TimelineUnit[] }
 
-const MAX_SPAN_DAYS = 400
-
 /**
  * Every day in [from, to] a unit is closed, with the reason in words: the note the merchandiser wrote,
  * "Sunday" for the ordinary weekly closure, otherwise "Closed". A Sunday marked as worked is not closed.
+ * Nothing is left out for being far away (BE-006); the only bound is the window of real dates
+ * (2000-2100), so a stray year-9999 date cannot make this walk for minutes. Sundays are visited a week
+ * at a time and the calendar entries are looked at once, not every day in between.
  */
 export function closedDaysIn(entries: { date: string; working: boolean; note: string | null }[], from: IsoDate, to: IsoDate): ClosedDay[] {
+  const lo = compareDates(from, MIN_DATE) < 0 ? MIN_DATE : from
+  const hi = compareDates(to, MAX_DATE) > 0 ? MAX_DATE : to
+  if (compareDates(lo, hi) > 0) return []
   const byDate = new Map(entries.map((e) => [e.date, e]))
-  const cal: UnitCalendar = { days: Object.fromEntries(entries.map((e) => [e.date, e.working])) }
-  const out: ClosedDay[] = []
-  let d = from
-  for (let i = 0; i < MAX_SPAN_DAYS && compareDates(d, to) <= 0; i++, d = addDays(d, 1)) {
-    if (isWorking(cal, d)) continue
-    out.push({ date: d, reason: byDate.get(d)?.note?.trim() || (isWorking(undefined, d) ? 'Closed' : 'Sunday') })
+  const closed = new Set<IsoDate>()
+  const DAY = 86_400_000
+  const first = Date.parse(`${lo}T00:00:00Z`) / DAY, last = Date.parse(`${hi}T00:00:00Z`) / DAY
+  // Day number 3 (4 Jan 1970) was a Sunday, so Sundays are 3 mod 7.
+  for (let k = first + ((((3 - first) % 7) + 7) % 7); k <= last; k += 7) {
+    const day = new Date(k * DAY).toISOString().slice(0, 10)
+    if (byDate.get(day)?.working !== true) closed.add(day)
   }
-  return out
+  for (const e of entries) if (e.working === false && compareDates(e.date, lo) >= 0 && compareDates(e.date, hi) <= 0) closed.add(e.date)
+  return [...closed].sort().map((date) => ({
+    date, reason: byDate.get(date)?.note?.trim() || (isSunday(date) ? 'Sunday' : 'Closed'),
+  }))
 }
 
 /** From the earliest of today, the first update and every order date, to the latest of ex-factory and every stage date. */
@@ -113,7 +121,7 @@ export async function getOrderDetail(tx: Tx, ctx: Ctx, orderId: string, today: s
   const units = await tx.query<{ id: string; name: string }>('select id::text as id, name from unit')
   const unitName = new Map(units.map((u) => [u.id, u.name]))
 
-  const flagged = lowConfidenceStages(eventsBy.get(o.id) ?? [], onBehalf, today, settings.windowDays)
+  const flagged = lowConfidenceStages(eventsBy.get(o.id) ?? [], onBehalf, today, settings, calendarOfStages(stages, calendars))
   const detail: StageDetail[] = result.stages.map((r) => {
     const st = stages.find((s) => s.stage === r.stage)!
     return {

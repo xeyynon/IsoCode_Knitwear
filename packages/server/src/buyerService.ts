@@ -107,13 +107,24 @@ async function readBuyerView(tx: Tx, buyerId: string): Promise<BuyerView> {
     `select order_id::text as order_id, stage, status, buyer_text,
             to_char(confirmed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as since
        from warning where buyer_id = $1 and confirmed_by is not null and dismissed_at is null and resolved_at is null order by confirmed_at, id`, [buyerId])
+  // Each order's milestones, photos and warnings are picked out with one pass and a Map, not by filtering the whole list for
+  // every order (O-9). The rows arrive ordered by the queries above, and a group keeps that order.
+  const byOrder = <T extends { order_id: string }>(rows: T[]): Map<string, T[]> => {
+    const m = new Map<string, T[]>()
+    for (const r of rows) {
+      const list = m.get(r.order_id)
+      if (list) list.push(r); else m.set(r.order_id, [r])
+    }
+    return m
+  }
+  const msBy = byOrder(ms), photosBy = byOrder(photos), warnsBy = byOrder(warns)
   return {
     buyer: { name: buyer.name },
     orders: orders.map((o) => ({
       po: o.po, style: o.style, colour: o.colour, qty: o.qty, exFactory: o.ex_factory,
-      milestones: ms.filter((m) => m.order_id === o.id).map((m) => ({ stage: m.stage, plannedEnd: m.planned_end })),
-      photos: photos.filter((p) => p.order_id === o.id).map((p) => ({ id: p.id, stage: p.stage, takenOn: p.taken_on })),
-      warnings: warns.filter((w) => w.order_id === o.id).map((w) => ({
+      milestones: (msBy.get(o.id) ?? []).map((m) => ({ stage: m.stage, plannedEnd: m.planned_end })),
+      photos: (photosBy.get(o.id) ?? []).map((p) => ({ id: p.id, stage: p.stage, takenOn: p.taken_on })),
+      warnings: (warnsBy.get(o.id) ?? []).map((w) => ({
         stage: w.stage, severity: w.status === 'red' ? 'late_risk' as const : 'attention' as const, text: w.buyer_text, since: w.since,
       })),
     })),

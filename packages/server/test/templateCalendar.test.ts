@@ -49,7 +49,7 @@ const saveTwoUnitTemplate = async (name = 'Two units') => {
     { stage: 'knitting', workingDaysBefore: 6, unitId: ID.unit1 },
     { stage: 'linking', workingDaysBefore: 5, unitId: ID.unit2 },
   ] })
-  expect(res.statusCode, res.body).toBe(200)
+  expect(res.statusCode, res.body).toBe(201)   // BE-026: a new template is a create
   return res.json().id as string
 }
 const order = (templateId: string, over: object = {}) => ({ buyerId: ID.buyerB, po: 'CAL-1', style: 'polo', colour: 'white', sizes: { S: 100 }, exFactory: '2026-11-20', templateId, ...over })
@@ -92,7 +92,7 @@ describe('a saved template is never refused at order setup for calendar reasons'
       const stages = Array.from({ length: 4 }, (_, i) => ({ stage: `s${i}`, workingDaysBefore: 12 - i * (1 + rnd(3)), unitId: rnd(2) ? ID.unit1 : ID.unit2 }))
         .filter((s, i, all) => i === 0 || s.workingDaysBefore <= all[i - 1]!.workingDaysBefore)
       const saved = await post('/api/templates', { name: `T${round}`, stages })
-      if (saved.statusCode !== 200) continue                       // Setup refused it: nothing to prove
+      if (saved.statusCode !== 201) continue                       // Setup refused it: nothing to prove
       for (let k = 0; k < 4; k++) {
         const exFactory = `2026-1${rnd(2)}-${String(10 + rnd(18)).padStart(2, '0')}`
         const preview = await post('/api/orders/preview', { templateId: saved.json().id, exFactory })
@@ -107,11 +107,11 @@ describe('a saved template is never refused at order setup for calendar reasons'
     expect(accepted).toBeGreaterThan(10)
   }, 120_000)   // about 26 s alone: well over half the default 30 s, so it failed on a busy machine
 
-  it('a template whose OFFSETS are wrong is still refused at Setup and at order setup, with the same words', async () => {
+  it('a template whose OFFSETS are wrong is still refused at Setup and at order setup', async () => {
     const bad = [{ stage: 'a', workingDaysBefore: 2, unitId: ID.unit1 }, { stage: 'b', workingDaysBefore: 8, unitId: ID.unit1 }]
     const saved = await post('/api/templates', { name: 'Bad', stages: bad })
     expect(saved.statusCode).toBe(400)
-    expect(saved.json().error.message).toMatch(/"b" would finish .* before "a"/)
+    expect(saved.json().error.message).toMatch(/"b" would finish before "a"/)   // BE-017: Setup speaks in offsets; order setup names the real dates
     await pg.query(`insert into tna_template (id, name, offsets) values ('00000000-0000-0000-0000-0000000000f9', 'Bad', $1::jsonb)`,
       [JSON.stringify(bad.map((s, i) => ({ stage: s.stage, sequence: i + 1, working_days_before: s.workingDaysBefore, unit_id: s.unitId })))])
     const res = await post('/api/orders', order('00000000-0000-0000-0000-0000000000f9'))

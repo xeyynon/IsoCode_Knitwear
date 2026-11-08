@@ -18,7 +18,7 @@ const event = (order: string, buyer: string, stage: string, unit: string) => asS
 const note = (order: string, buyer: string, stage: string | null, unit: string) => asSup(
   `insert into note (order_id, buyer_id, stage, unit_id, text_en) values ($1, $2, $3, $4, 'x')`, [order, buyer, stage, unit])
 const photo = (order: string, buyer: string, stage: string | null, unit: string) => asSup(
-  `insert into photo (order_id, buyer_id, stage, unit_id, storage_key) values ($1, $2, $3, $4, 'k')`, [order, buyer, stage, unit])
+  `insert into photo (order_id, buyer_id, stage, unit_id, storage_key) values ($1, $2, $3, $4, 'photos/k.jpg')`, [order, buyer, stage, unit])
 
 describe('supervisor write policies bind the row to its own stage', () => {
   it('allows a row that matches the stage', async () => {

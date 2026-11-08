@@ -37,7 +37,7 @@ describe('an order turning red', () => {
     const rows = await outbox()
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ channel: 'whatsapp', recipient_kind: 'merchandiser', recipient: 'Merchandisers', order_id: ID.orderRed })
-    expect(rows[0].subject).toBe('PO B-PO-88240: sewing is red')
+    expect(rows[0].subject).toBe('PO B-PO-88240: Sewing is red')
     expect(rows[0].body).toMatch(/^Sewing for PO B-PO-88240 has turned red\./)
     expect(rows[0].recipient).not.toMatch(/@|\d{5}/)
   })

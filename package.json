@@ -9,11 +9,12 @@
   "scripts": {
     "test": "vitest run",
     "test:pg": "vitest run packages/server",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check": "node scripts/check_repo.mjs && node scripts/check_docs.mjs && node scripts/check_contrast.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json && tsc --noEmit -p tsconfig.scripts.json",
+    "check": "node scripts/check_repo.mjs && node scripts/check_docs.mjs && node scripts/check_contrast.mjs && node scripts/check_bugs.mjs",
     "verify": "npm run check && npm run typecheck && npm test",
     "dev:api": "tsx packages/server/src/dev.ts",
     "migrate": "tsx packages/server/src/migrate.ts",
+    "start:api": "tsx packages/server/src/server.ts",
     "build": "npm run build -w @isocode/web",
     "e2e": "tsx scripts/e2e_offline.ts",
     "snapshots": "tsx scripts/snapshots.ts",
@@ -23,6 +24,9 @@
     "phone": "tsx scripts/phone_keyboard.ts",
     "diff": "tsx scripts/snapshot_diff.ts"
   },
+  "dependencies": {
+    "tsx": "^4.23.15"
+  },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",
     "@testing-library/dom": "^10.4.2",
@@ -31,7 +35,6 @@
     "axe-core": "^4.10.2",
     "jsdom": "^25.0.1",
     "playwright-core": "^1.64.1",
-    "tsx": "^4.23.15",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

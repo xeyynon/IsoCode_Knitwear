@@ -36,7 +36,16 @@ export function diskStore(dir: string): MediaStore {
   }
   return {
     async put(key, bytes) { const f = file(key); await mkdir(path.dirname(f), { recursive: true }); await writeFile(f, bytes) },
-    async get(key) { const f = file(key); try { return await readFile(f) } catch { return null } },   // a bad key is an error; a file that is not there is null
+    async get(key) {
+      const f = file(key)
+      try { return await readFile(f) } catch (e) {
+        // Only "there is no such file" is null. A folder where the file should be, no permission, too many open files or a disk fault are
+        // errors: the route answers 500 and the server logs the cause, instead of every photo quietly reading as gone.
+        const code = (e as NodeJS.ErrnoException | null)?.code
+        if (code === 'ENOENT' || code === 'ENOTDIR') return null
+        throw e
+      }
+    },   // a bad key is an error; a file that is not there is null
     async delete(key) { await rm(file(key), { force: true }) },
   }
 }

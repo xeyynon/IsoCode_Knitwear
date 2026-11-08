@@ -17,7 +17,9 @@ export interface OutboxRow {
 
 export async function writeOutbox(tx: Tx, row: OutboxRow): Promise<void> {
   await tx.query(
-    `insert into outbox (channel, recipient_kind, recipient, subject, body, order_id) values ($1, $2, $3, $4, $5, $6)`,
+    // clock_timestamp(), not the default now(): now() is the start of the transaction, so every alert one refresh writes would share
+    // a time and "newest first" would be left to chance. This is the moment of writing, so the order of writing is the order of the list.
+    `insert into outbox (channel, recipient_kind, recipient, subject, body, order_id, created_at) values ($1, $2, $3, $4, $5, $6, clock_timestamp())`,
     [row.channel, row.recipientKind, row.recipient, row.subject, row.body, row.orderId])
 }
 

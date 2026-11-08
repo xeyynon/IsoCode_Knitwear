@@ -2,14 +2,46 @@ name: release
 on:
   push:
     tags:
-      - 'build-*'
+      # A build tag only (build-1008). InBul tags are not releases and start nothing.
+      - 'build-[0-9]*'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  # Nothing is released unless the checks CI runs also pass on the tagged commit. The banned-terms guard is required
+  # here: a tag is pushed from this repository, so the secret exists, and an empty list is a failure.
+  verify:
+    name: Checks before release
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags and commit titles are checked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Repo checks, Markdown links, colour contrast, bug log
+        run: npm run check
+        env:
+          BANNED_TERMS: ${{ secrets.BANNED_TERMS }}
+          REQUIRE_BANNED_TERMS: ${{ vars.REQUIRE_BANNED_TERMS == '1' && '1' || '' }}   # opt in with the repository variable, once the BANNED_TERMS secret exists
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Publish a GitHub Release from the build report
@@ -18,8 +50,14 @@ jobs:
         # bash (not the default) turns on pipefail, so a missing report fails the step.
         shell: bash
         run: |
+          report="docs/builds/${GITHUB_REF_NAME}.md"
+          # The report is the public release note: refuse one that still holds the text scripts/changelog.mjs writes for
+          # a part nobody has written. (The same list is PLACEHOLDER in scripts/buildInfo.mjs; a test keeps them equal.)
+          for p in '(write one or two plain sentences)' '(why this was done)' '(how it was verified, honestly; say what was not checked)' '(what to improve next)'; do
+            if grep -qF -- "$p" "$report"; then echo "::error::$report still holds placeholder text: $p"; exit 1; fi
+          done
           # Public notes: only the "What changed" paragraph, never the why or the file list.
-          awk '/^## What changed/{f=1;next} /^## /{f=0} f' "docs/builds/${GITHUB_REF_NAME}.md" | sed '/./,$!d' > notes.txt
-          test -s notes.txt || { echo "::error::docs/builds/${GITHUB_REF_NAME}.md has no 'What changed' text"; exit 1; }
+          awk '/^## What changed/{f=1;next} /^## /{f=0} f' "$report" | sed '/./,$!d' > notes.txt
+          test -s notes.txt || { echo "::error::$report has no 'What changed' text"; exit 1; }
           gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file notes.txt
       # Add the container/static build here once the app exists.

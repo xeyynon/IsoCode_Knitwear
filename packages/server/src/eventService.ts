@@ -1,4 +1,4 @@
-import { compareDates } from '@isocode/engine/dates'
+import { addDays, compareDates } from '@isocode/engine/dates'
 import { badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { isIsoDate, isStageName } from './today.js'
@@ -14,6 +14,19 @@ export interface EventInput {
   /** A reason and/or a few words. Created by the server together with the update; a caller can never point at an existing note. */
   note?: NoteInput
 }
+
+/**
+ * How far back an update or a photo may be dated, in days (BE-047). A phone with a wrong clock, or a typo (2002 for 2026), used to be
+ * accepted for any past date and then counted toward the stage. A year is more than any real catch-up; the day exactly this many days
+ * back is still accepted, the day before it is not.
+ */
+export const MAX_DAYS_IN_PAST = 366
+
+/** The oldest date accepted when today is `today` (both factory calendar dates, YYYY-MM-DD). */
+export const earliestAllowedDate = (today: string): string => addDays(today, -MAX_DAYS_IN_PAST)
+
+/** The one refusal for a date that is too old; plain words, no internals. */
+export const tooOld = () => badRequest(`date is more than ${MAX_DAYS_IN_PAST} days in the past`)
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_QTY = 1_000_000
@@ -32,8 +45,9 @@ export async function submitEvent(
   if (ctx.role !== 'supervisor' && !isStaff(ctx)) throw forbidden()
   // A null body or batch item must be a 400 / one rejected item, not a TypeError that sinks the whole request.
   if (typeof input !== 'object' || input === null) throw badRequest('Invalid update')
-  if (!UUID.test(input.clientUuid)) throw badRequest('clientUuid must be a UUID')
-  if (!UUID.test(input.orderId)) throw badRequest('orderId must be a UUID')
+  // typeof first: a regular expression turns a one-item list into its text and lets it through, and a list has no toLowerCase().
+  if (typeof input.clientUuid !== 'string' || !UUID.test(input.clientUuid)) throw badRequest('clientUuid must be a UUID')
+  if (typeof input.orderId !== 'string' || !UUID.test(input.orderId)) throw badRequest('orderId must be a UUID')
   if (typeof input.stage !== 'string' || !input.stage.trim()) throw badRequest('stage is required')
   if (!isStageName(input.stage)) throw badRequest('stage is not a valid stage name')
   if (!Number.isInteger(input.qty) || input.qty < 0 || input.qty > MAX_QTY) {
@@ -42,6 +56,7 @@ export async function submitEvent(
   if (!isIsoDate(input.date)) throw badRequest('date must be YYYY-MM-DD')
   // A phone with a wrong clock must not post into the future; the engine would ignore it anyway.
   if (compareDates(input.date, today) > 0) throw badRequest('date is in the future')
+  if (compareDates(input.date, earliestAllowedDate(today)) < 0) throw tooOld()
 
   // Check the note BEFORE anything is written, so a malformed note refuses the whole update cleanly.
   // (A reason that has merely left the list is not malformed: parseNote files it as 'other' and the pieces are kept.)
@@ -53,11 +68,12 @@ export async function submitEvent(
     [input.orderId, input.stage],
   )
   const m = stage[0]
-  if (!m) throw notFound('No such stage for your unit')
+  // A supervisor may be asking about a stage another unit runs, so they are told only about their unit; staff see every stage, so for them it is a plain miss.
+  if (!m) throw notFound(isStaff(ctx) ? 'No such stage on this order' : 'No such stage for your unit')
 
   // A photo must be one this caller can see (their own unit's) for THIS order, not just any id.
   if (input.photoId !== undefined && input.photoId !== null) {
-    if (!UUID.test(String(input.photoId))) throw badRequest('photoId must be a UUID')
+    if (typeof input.photoId !== 'string' || !UUID.test(input.photoId)) throw badRequest('photoId must be a UUID')
     const mine = await tx.query('select 1 from photo where id = $1 and order_id = $2', [input.photoId, input.orderId])
     if (!mine.length) throw badRequest('That photo is not available for this order')
   }
