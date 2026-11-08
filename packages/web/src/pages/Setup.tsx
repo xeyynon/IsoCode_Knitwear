@@ -4,9 +4,12 @@ import { ApiError, apiFetch, getClaims } from '../api/session'
 import { AlertsTab } from '../setup/AlertsTab'
 import { DaysTab } from '../setup/DaysTab'
 import { PeopleTab } from '../setup/PeopleTab'
+import type { SetupTab } from '../setup/setupChecklist'
 import { purgeDays } from '../setup/setupLogic'
 import { TemplatesTab } from '../setup/TemplatesTab'
+import { useSetupChecklist } from '../setup/useSetupChecklist'
 import { AppBar } from '../ui/AppBar'
+import { SetupChecklist } from '../ui/organisms/SetupChecklist'
 
 const TABS = [['people', 'People'], ['days', 'Closed days'], ['templates', 'Templates'], ['alerts', 'Alerts'], ['housekeeping', 'Housekeeping']] as const
 type Tab = (typeof TABS)[number][0]
@@ -19,22 +22,31 @@ export default function Setup() {
   // Plain buttons with aria-current, not the ARIA tabs pattern: each section is a page of its own with its own h2.
   // After a change focus moves to that h2, so a keyboard or screen-reader user lands on the new section, never on <body>.
   const panel = useRef<HTMLDivElement>(null)
-  const changed = useRef(false)
+  // A request to move focus names the section it is for, and waits for it: the route can catch up a render after the click, and a
+  // focus request that fires on the old section would be lost when that section goes. A checklist link can also name a part of the
+  // section (the unit form on People): focus goes there, else to the section's heading.
+  const pending = useRef<{ tab: Tab; anchor: string | null } | null>(null)
+  const [jumps, setJumps] = useState(0)
+  const checklist = useSetupChecklist(tab)
   useEffect(() => {
-    if (!changed.current) return
-    changed.current = false
-    const h = panel.current?.querySelector<HTMLElement>('h2')
-    if (h) { h.tabIndex = -1; h.focus() }
-  }, [tab])
+    const p = pending.current
+    if (!p || p.tab !== tab) return
+    pending.current = null
+    const target = p.anchor ? document.getElementById(p.anchor) : null
+    const h = target ?? panel.current?.querySelector<HTMLElement>('h2')
+    if (h) { h.tabIndex = -1; h.focus(); if (target) target.scrollIntoView({ block: 'start' }) }
+  }, [tab, jumps])
+  const goTo = (section: SetupTab, at?: string) => { pending.current = { tab: section, anchor: at ?? null }; setJumps((n) => n + 1) }
 
   return (
     <>
       <AppBar title="Setup" />
       <main className="page page--form">
+        <SetupChecklist result={checklist.result} failure={checklist.failure} onRetry={checklist.reload} onGo={goTo} />
         <nav className="seg seg--tabs" aria-label="Setup sections">
           {TABS.map(([id, label]) => (
             <button key={id} type="button" aria-current={tab === id ? 'true' : undefined} className="seg__btn"
-              onClick={() => { if (id !== tab) { changed.current = true; setParams({ tab: id }) } }}>{label}</button>
+              onClick={() => { if (id !== tab) { pending.current = { tab: id, anchor: null }; setParams({ tab: id }) } }}>{label}</button>
           ))}
         </nav>
         <div ref={panel}>
