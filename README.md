@@ -59,6 +59,31 @@ The order's colour is its worst stage. Thresholds live in a settings table. Ever
 
 *A deliberate departure from the first written spec:* slipping past a stage milestone is not red by itself, because otherwise the amber band could never be reached. Red needs the order to be projected past ex-factory. This is recorded as a decision and should be confirmed with the business.
 
+## The look (UI/UX 2.0)
+Plan and log: `audit/POA-UIUX.md` and `audit/PROGRESS.md`; the rules a screen must keep: `frontendskill.md` section 2; the components: `packages/web/src/ui/README.md`.
+
+- **One light theme, one action colour.** The action colour is Pantone Violet, `#6E5BB1` (sampled from pantone-colours.com; 5.53:1 against white), with a soft wash of it, `--accent-soft #EEEBF7`, for hero cards and selected surfaces. The page is a faint lavender (`--page #F6F5F9`), borders and labels are violet-grey (`--border #8A85A0`, `--muted #5A5670`), text is `--ink #1F2328`. All of it lives in `packages/design/tokens.css`; `scripts/check_contrast.mjs` checks every pair, and a test fails on a literal colour anywhere else. Red, amber and green keep their meaning (order status) and are unchanged.
+- **A status is a ruled stamp.** Every status on the board, order page, review, timeline and the buyer page is drawn by `StatusBadge` as a level, double-ruled rectangle at least 79 x 24 px, in capitals, with the icon and the word, the colour on the rule and the text, and no fill (`ui/StatusStamp.css`). It reads the same in greyscale.
+- **Neutral surfaces.** Cards, tiles and rows are white with a neutral border; a status colour is never a background. A form error is ink with a drawn "!" mark, not red (red is for order status only).
+- **Supervisor phone:** Today opens on a hero card (a progress ring, "N of M updated today", the date the counts go to, the sync chip) above large stage cards (pieces done against planned with a bar, due date, one full-width Update button). Update opens on a hero with the order, a ring, "today so far" and "left", then a large number field; Send sits in a bar pinned above the keyboard.
+- **Merchandiser desktop:** the board's status filter is a row of tiles on wide screens (a phone keeps compact chips and a Filters button); the order page is a bento (key-fact tiles, then the timeline and the stage cards side by side); Board, Review and Setup are tabs in the app bar; Setup opens on a pilot checklist and has one "Add a person" form and an account Activity list.
+- **Numbers and dates:** piece counts are grouped one way everywhere (`1,750`, `1,25,000`); a date field reads its date back in words under it.
+- **Loading:** a ring in `index.html` fills the first seconds before the app starts, and Today's list shows grey blocks while it loads. Both were added only after `npm run load` measured the wait.
+
+**Not verified:** none of this has been seen on a real phone in daylight (soft tints can wash out in glare), on an iPhone, or with a screen reader; floor supervisors have not read the new Tamil (`audit/TAMIL-REVIEW.md`).
+
+Look at it and measure it:
+```bash
+npm run dev:api                  # terminal 1
+npm run dev -w @isocode/web      # terminal 2
+npm run snapshots                # pictures of every screen into uiux/2.0 (the earlier set is kept in uiux/2.0/previous/)
+npm run diff                     # compare two picture sets pixel by pixel, reading only
+npm run ux                       # overflow and tap-size audit: 10 screens at 5 widths, touch emulation on phones
+npm run a11y                     # axe on every screen
+npm run load                     # load times on an emulated slow network and processor (emulation, not a real phone)
+npm run phone                    # the keyboard check on a real Android phone over USB (adb)
+```
+
 ## Architecture
 ```mermaid
 flowchart LR
