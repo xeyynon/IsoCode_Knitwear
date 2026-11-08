@@ -1014,7 +1014,7 @@ describe('check_bugs: bug.md, bugfixed.md and the tests they name agree', { time
     expect(ok.stdout).toContain('check_bugs: ok')
   })
 
-  it('it is part of npm run check, and the real bug.md and bugfixed.md agree', () => {
+  it('it is part of npm run check, and the repository passes it (with no bug log present, there is nothing to check)', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
     expect(pkg.scripts.check).toContain('scripts/check_bugs.mjs')
     const r = run(path.join(ROOT, 'scripts', 'check_bugs.mjs'), ROOT)

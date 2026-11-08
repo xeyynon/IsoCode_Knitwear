@@ -88,7 +88,7 @@ An early build, **tested but not yet tried in production**. The calculation engi
 
 Not yet verified: a production-size Postgres server (the demo runs on Neon's free plan), a real S3 bucket, real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
 
-Quality is tracked in the open: [`bug.md`](bug.md) lists every reproduced bug, [`bugfixed.md`](bugfixed.md) how each was fixed and the test that keeps it fixed, and [`optimised.md`](optimised.md) what was made cheaper to run, with measurements. The research behind those is in [`docs/optimisation-research.md`](docs/optimisation-research.md).
+Every bug found by an audit has a regression test named after its id (`BE-nnn`), and [`optimised.md`](optimised.md) records what was made cheaper to run, with measurements. The research behind those is in [`docs/optimisation-research.md`](docs/optimisation-research.md).
 
 ## Architecture
 ```mermaid
@@ -118,7 +118,8 @@ packages/
 scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser tools
 docs/        status.md, optimisation-research.md, and builds/ (one report per numbered build)
 uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) and 2.0
-bug.md, bugfixed.md, optimised.md   The bug log, the fix log and the speed-and-cost log
+optimised.md  The speed-and-cost log
+deployment.md How to run it locally, how it is deployed, and the demo logins
 .github/     CI, release and Dependabot configuration
 ```
 
@@ -300,7 +301,7 @@ git push origin main --tags
 - The scripts act on the repository that holds them, wherever you start them from.
 - `CHANGELOG.md` and `build-info.json` are generated. Never edit them by hand. `node scripts/changelog.mjs --regenerate` rebuilds both from `docs/builds` without making a new build; `--pending` does the same as part of a build.
 - **The app shows the build.** `build-info.json` is imported into the web bundle (`packages/web/src/release/buildInfo.ts`), so the label ("Build 1006 - 3 Nov 2026") is the build that was shipped. It is at the foot of the app menu on every screen and on the public status page. Merchandisers also get **What's new** in the menu: a dialog with the title, date and summary of the last three builds. The summary is the whole "What changed" paragraph of the build report, so write it as release wording a merchandiser can read: plain, public, no budgets, rates or client detail. `build-info.json` keeps the last 10 builds. Date and label formatting is `release/releaseInfo.ts`; the file written by the script is shaped in `scripts/buildInfo.mjs` (both tested in `packages/web/test/releaseInfo.test.ts`). Supervisors do not get the dialog (it is English only), only the label.
-- **Bugs:** a bug found by an audit gets an id (`BE-nnn`) in `bug.md`. When it is fixed, `bugfixed.md` gets an entry that starts with the id and names its test on a line `Test: <file> :: <start of the test's name>`. `scripts/check_bugs.mjs` (part of `npm run check`) fails when a fixed bug has no entry, an entry's id is not in `bug.md`, or a named test file or test does not exist.
+- **Bugs:** a bug found by an audit gets an id (`BE-nnn`) and a regression test whose name starts with that id. `scripts/check_bugs.mjs` (part of `npm run check`) checks a bug log against those tests whenever a `bug.md` is present; the working logs are kept out of the repository.
 - Never put "(Build N)" in a title, move a tag, or add attribution lines to commits.
 - Build reports in `docs/builds` are public. They say what changed and how it was checked, never budgets, rates or client detail.
 - Run `npm run verify` before every commit. Pull requests use the template in `.github`.

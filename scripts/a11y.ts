@@ -9,7 +9,7 @@
 // that stays: the buyer link it needs is cancelled again at the end, and no update is ever sent.
 //
 // axe cannot judge everything (reading order, whether an alt text is useful, how a screen reader sounds). A clean
-// run is a floor, not a pass: still try the screens with NVDA or TalkBack (frontendskill.md section 8.5).
+// run is a floor, not a pass: still try the screens with NVDA or TalkBack (a manual check).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
