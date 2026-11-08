@@ -8,7 +8,7 @@ import type { SetupTab } from '../setup/setupChecklist'
 import { purgeDays } from '../setup/setupLogic'
 import { TemplatesTab } from '../setup/TemplatesTab'
 import { useSetupChecklist } from '../setup/useSetupChecklist'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { Button } from '../ui/atoms/Button'
 import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
@@ -44,9 +44,7 @@ export default function Setup() {
   const goTo = (section: SetupTab, at?: string) => { pending.current = { tab: section, anchor: at ?? null }; setJumps((n) => n + 1) }
 
   return (
-    <>
-      <AppBar title="Setup" />
-      <main className="page page--form">
+    <MerchandiserShell title="Setup" form>
         <SetupChecklist result={checklist.result} failure={checklist.failure} onRetry={checklist.reload} onGo={goTo} />
         <nav className="seg seg--tabs" aria-label="Setup sections">
           {TABS.map(([id, label]) => (
@@ -61,8 +59,7 @@ export default function Setup() {
           {tab === 'alerts' && <AlertsTab />}
           {tab === 'housekeeping' && <Housekeeping />}
         </div>
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }
 

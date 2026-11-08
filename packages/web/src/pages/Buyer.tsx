@@ -8,6 +8,7 @@ import { exportFileName } from '../review/exportLogic'
 import { readBuyerToken, severityWord, type Severity } from '../review/reviewLogic'
 import { AuthImage } from '../ui/AuthImage'
 import { Button } from '../ui/atoms/Button'
+import { PublicShell } from '../ui/templates/PublicShell'
 import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { LoadFailed } from '../ui/LoadFailed'
@@ -89,7 +90,7 @@ export default function Buyer() {
   const heading = <h1>{view ? view.buyer.name : problem === 'invalid' ? 'This link is not valid' : problem === 'unreachable' ? 'Cannot load right now' : 'Order status'}</h1>
 
   return (
-    <main className="page page--form buyer">
+    <PublicShell className="buyer">
       {view && <p className="sub">Order status</p>}
       {!problem && heading}
       {!view && !problem && <Loading label="Loading your orders" />}
@@ -151,6 +152,6 @@ export default function Buyer() {
           </ul>
         </>
       )}
-    </main>
+    </PublicShell>
   )
 }

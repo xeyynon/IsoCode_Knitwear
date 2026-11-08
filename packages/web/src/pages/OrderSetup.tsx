@@ -13,7 +13,7 @@ import { Input, Select } from '../ui/atoms/Input'
 import { TextLink } from '../ui/atoms/TextLink'
 import { Field } from '../ui/molecules/Field'
 import { isRealDate, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 
@@ -96,9 +96,7 @@ export default function OrderSetup() {
   const problemList = Object.values(errors)
 
   return (
-    <>
-      <AppBar title="New order" />
-      <main className="page page--form">
+    <MerchandiserShell title="New order" form>
         <TextLink className="back" to="/board">← Order board</TextLink>
         {!opts && !loadError && <Loading label="Loading" />}
         {loadError && <LoadFailed unreachable={loadError.unreachable} message={loadError.message} onRetry={loadOptions} />}
@@ -188,7 +186,6 @@ export default function OrderSetup() {
             <Button variant="primary" size="big" disabled={busy || blocked}>{busy ? 'Creating…' : 'Create order'}</Button>
           </form>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

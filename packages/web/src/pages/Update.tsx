@@ -11,7 +11,7 @@ import { nextStage } from '../stages/dayProgress'
 import { stageFromParam, stageHref } from '../stages/stageLink'
 import { stagesErrorText, useReasons, useStages } from '../stages/useStages'
 import { MAX_NOTE, noteToSend, reasonLabel, toggleReason } from '../notes/reasons'
-import { AppBar } from '../ui/AppBar'
+import { SupervisorShell } from '../ui/templates/SupervisorShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { Banner } from '../ui/atoms/Banner'
@@ -133,9 +133,7 @@ function UpdateStage() {
   }
 
   return (
-    <>
-      <AppBar title={stageName ? stageLabel(lang, stageName).replace(/^./, (c) => c.toUpperCase()) : t('sup.title')} plainTitle={!!stage} />
-      <main className="page page--narrow">
+    <SupervisorShell title={stageName ? stageLabel(lang, stageName).replace(/^./, (c) => c.toUpperCase()) : t('sup.title')} plainTitle={!!stage}>
         {/* One row: the way back and the sync chip. Two rows pushed the number field behind the bar when the keyboard is up (phase 8A). */}
         <div className="update__bar">
           <TextLink className="back back--arrow" to="/today"><svg className="back__arrow" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16 10H4M9.5 4.5 4 10l5.5 5.5" /></svg> <span className="back__text">{t('sup.title')}</span></TextLink>
@@ -220,7 +218,6 @@ function UpdateStage() {
             </Card>
           </form>
         )}
-      </main>
-    </>
+    </SupervisorShell>
   )
 }

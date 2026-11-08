@@ -7,7 +7,7 @@ import { readStorageFacts, storageWarningKey } from '../queue/storageStatus'
 import { stageHref } from '../stages/stageLink'
 import { dayProgress } from '../stages/dayProgress'
 import { stagesErrorText, useStages, type Stage } from '../stages/useStages'
-import { AppBar } from '../ui/AppBar'
+import { SupervisorShell } from '../ui/templates/SupervisorShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Banner } from '../ui/atoms/Banner'
 import { Card } from '../ui/atoms/Card'
@@ -51,9 +51,7 @@ export default function Today() {
   const finished = st.stages?.filter((s) => s.complete) ?? []
 
   return (
-    <>
-      <AppBar title={t('sup.title')} />
-      <main className="page page--narrow" ref={main} tabIndex={-1}>
+    <SupervisorShell title={t('sup.title')} ref={main} tabIndex={-1}>
         {/* The day at a glance (phase 8A): a ring, the sentence and the date the counts go to, with the sync chip inside. With no day to
             show (loading, or nothing to update) the chip stands alone, as before. */}
         {progress ? (
@@ -128,7 +126,6 @@ export default function Today() {
             <ul className="plain">{finished.map((s) => <li key={`${s.orderId}/${s.stage}`}><b className="mono">{s.po}</b> · {stageLabel(lang, s.stage)}</li>)}</ul>
           </details>
         )}
-      </main>
-    </>
+    </SupervisorShell>
   )
 }

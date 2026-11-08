@@ -7,7 +7,7 @@ import { exportFileName } from '../review/exportLogic'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { oneAtATime } from '../queue/oneAtATime'
 import { activeLinkCount, afterRevoke, buyerLinkUrl, emptyLine, linkStatus, offersNoReason, parseDays, reviewSummary, sectionAnchor, sectionTitle, type ReviewSectionId } from '../review/reviewLogic'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
@@ -171,9 +171,7 @@ export default function Review() {
   const sec = (count: number) => (count === 0 ? 'rvsec rvsec--empty' : 'rvsec')
 
   return (
-    <>
-      <AppBar title="Review" />
-      <main className="page page--form">
+    <MerchandiserShell title="Review" form>
         <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
         {!data && !error && <Loading label="Loading" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
@@ -343,7 +341,6 @@ export default function Review() {
             </section>
           </>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

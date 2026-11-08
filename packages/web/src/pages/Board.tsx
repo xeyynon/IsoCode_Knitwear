@@ -11,7 +11,7 @@ import { pieces } from '../numberFormat'
 import { orderLink } from '../orders/orderDetailLogic'
 import { lowConfidenceText } from '../orders/visitEntry'
 import { useLang } from '../i18n'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { LowConfidence } from '../ui/LowConfidence'
@@ -134,9 +134,7 @@ export default function Board() {
   const removeApplied = (key: 'buyer' | 'unit' | 'week' | 'sort') => setParams(key === 'sort' ? withSort(params, 'status') : withFilter(params, key, null))
 
   return (
-    <>
-      <AppBar title={t('board.title')} />
-      <main className="page">
+    <MerchandiserShell title={t('board.title')}>
         {rows === null && !error && <Loading label="Loading orders" />}
         {rows === null && error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
 
@@ -311,7 +309,6 @@ export default function Board() {
             )}
           </>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

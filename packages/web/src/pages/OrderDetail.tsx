@@ -20,7 +20,7 @@ import { KeyFacts } from '../ui/organisms/KeyFacts'
 import { BentoCell, OrderBento } from '../ui/organisms/OrderBento'
 import { dateInWords } from '../dateWords'
 import { reasonById, usableReasons, type Reason } from '../notes/reasons'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { LowConfidence } from '../ui/LowConfidence'
@@ -90,9 +90,7 @@ export default function OrderDetail() {
   const last = d?.stages[d.stages.length - 1]
 
   return (
-    <>
-      <AppBar title={d ? d.order.po : 'Order'} plainTitle={!!d} />
-      <main className="page page--form page--bento">
+    <MerchandiserShell title={d ? d.order.po : 'Order'} plainTitle={!!d} form bento>
         <TextLink className="back" to={boardPath}>← Order board</TextLink>
         {!d && !error && <Loading label="Loading order" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
@@ -218,7 +216,6 @@ export default function OrderDetail() {
             />
           </>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

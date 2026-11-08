@@ -5,6 +5,7 @@ import { homeFor, signInMessage, type SignInFailure } from '../api/sessionRules'
 import { setLang, useLang } from '../i18n'
 import { autofocusFirstField, initialLoginMode, readLastRole, rememberRole, type LoginMode } from '../loginRules'
 import { Button } from '../ui/atoms/Button'
+import { AuthShell } from '../ui/templates/AuthShell'
 import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input } from '../ui/atoms/Input'
@@ -51,7 +52,7 @@ export default function Login() {
   }
 
   return (
-    <main className="login">
+    <AuthShell>
       <Card as="form" className="login__card" onSubmit={submit} noValidate>
         <h1>{t('login.title')}</h1>
         <div className="seg" role="group" aria-label={t('login.who')}>
@@ -85,6 +86,6 @@ export default function Login() {
           <button type="button" className="seg__btn" lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>{t('nav.toEnglish')}</button>
         </div>
       </Card>
-    </main>
+    </AuthShell>
   )
 }
