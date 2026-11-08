@@ -537,6 +537,13 @@ The deferred bug (BE-038) has an entry with no test line.
 - Before the fix: the workflow files had none of these rules (the tests read the workflow YAML).
 - Guard: the repository secret `BANNED_TERMS` must exist, otherwise pushes to `main` and build tags now fail on purpose. Requiring the tagged commit to be on `main` was not done (a build was once tagged on a branch before the merge).
 
+## BE-063 A build tag from another branch failed the repo check everywhere
+- Root cause: `check_repo.mjs` demanded `docs/builds/<tag>.md` for every `build-N` tag in the repository, but a tag lives in the whole repository while the report lives on the branch that made the release. The UI release tag reached the remote before its branch was merged, so `main` and every other branch failed.
+- Fix: the report is required only when the tagged commit is part of the checked-out history (`git merge-base --is-ancestor`). Only a definite "not in this history" skips the check; when git cannot tell (a shallow clone, an error) the tag is treated as reachable, the strict way.
+- Test: packages/server/test/toolingScripts.test.ts :: BE-063: a tag on another branch is ignored
+- Before the fix: `FAIL tag build-1000: no report docs/builds/build-1000.md` for a tag that only exists on another branch.
+- Guard: BE-050 and the existing tag-without-report test still fail a tag on this history with no report (checked in the same test: `build-1001` on this history still fails).
+
 ## Open questions
 
 Where a report and the code differ, the code was trusted. Nothing below changes a status in `bug.md`; every listed id is marked fixed unless said otherwise.
