@@ -56,6 +56,12 @@ export function accountState(a: { disabled: boolean; locked: boolean }): { text:
 export const dayKind = (working: boolean): string => (working ? 'Worked (extra day)' : 'Closed')
 
 /** What "Back to normal" sends: the row's own unit, never the unit selected now (the list may be another unit's). */
+/** What to send when a day is saved. A blank note on a day that already has one keeps the old note instead of wiping it (FE-M-19). */
+export function dayBody(d: { unitId: string; date: string; working: boolean; note: string; existing?: { note: string | null } }): { unitId: string; date: string; working: boolean; note: string } {
+  const typed = d.note.trim()
+  return { unitId: d.unitId, date: d.date, working: d.working, note: typed || d.existing?.note || '' }
+}
+
 export const clearDayBody = (d: { unitId: string; date: string }): { unitId: string; date: string } => ({ unitId: d.unitId, date: d.date })
 
 /** Each start() returns a check that stays true only until the next start(): a late answer to an older request is dropped. */

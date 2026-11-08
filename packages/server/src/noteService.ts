@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { AppError, badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
+import { stripBidi } from './textRules.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const MAX_NOTE_CHARS = 500
@@ -18,7 +19,7 @@ export async function loadReasons(tx: Tx): Promise<Reason[]> {
 export const detectLanguage = (text: string): 'ta' | 'en' => (/[஀-௿]/.test(text) ? 'ta' : 'en')
 
 /** Strip control characters and tidy spaces, so pasted text cannot carry anything odd into a report or a page. */
-export const cleanNote = (raw: string): string => raw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/[ \t]+/g, ' ').trim()
+export const cleanNote = (raw: string): string => stripBidi(raw).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/[ \t]+/g, ' ').trim()
 
 export interface NoteInput { text?: unknown; category?: unknown }
 export interface ParsedNote { text: string | null; category: string | null; language: 'ta' | 'en' | null }

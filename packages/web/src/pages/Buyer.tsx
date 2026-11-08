@@ -126,7 +126,7 @@ export default function Buyer() {
           {view.orders.length === 0 && <Card as="div"><p>There are no orders to show yet.</p></Card>}
           {view.orders.length > 0 && (
             <div className="actions buyer__save">
-              <Button disabled={saving} onClick={() => void saveExcel()}>{saving ? 'Preparing the file…' : 'Download (Excel)'}</Button>
+              <Button disabled={saving} onClick={() => void saveExcel()}>{saving ? 'Preparing the file…' : 'Download (CSV, opens in Excel)'}</Button>
               <span className="sub">Your orders and planned dates as a spreadsheet.</span>
               {saveError && <ErrorText>{saveError}</ErrorText>}
             </div>

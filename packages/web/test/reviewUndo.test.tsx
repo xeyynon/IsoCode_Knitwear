@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { readFileSync } from 'node:fs'
@@ -12,6 +12,15 @@ import Review from '../src/pages/Review'
 import { ApiError } from '../src/api/session'
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
+
+// jsdom has no <dialog> behaviour; this is the small part of it the confirmation uses (showModal opens it, close(value) answers and fires close).
+const dialogProto = window.HTMLDialogElement.prototype as unknown as Record<string, unknown>
+const realDialog = { showModal: dialogProto.showModal, close: dialogProto.close }
+beforeAll(() => {
+  dialogProto.showModal = function (this: HTMLDialogElement) { this.setAttribute('open', '') }
+  dialogProto.close = function (this: HTMLDialogElement, value?: string) { this.returnValue = value ?? ''; this.removeAttribute('open'); this.dispatchEvent(new Event('close')) }
+})
+afterAll(() => { dialogProto.showModal = realDialog.showModal; dialogProto.close = realDialog.close })
 
 interface W { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
 const warn = (id: string, po: string): W => ({ id, orderId: `o-${id}`, po, buyerName: 'Buyer B', stage: 'sewing', status: 'red', buyerText: `Words for ${po}`, maths: 'Need 467/day', state: 'open' })
@@ -78,6 +87,11 @@ describe('Review: undo for "Don\'t show"', () => {
   it('"Hide from buyer" on a confirmed warning offers NO undo', async () => {
     mount()
     fireEvent.click(await screen.findByRole('button', { name: 'Hide from buyer' }))
+    // FE-M-04: it asks first, and nothing is sent until the answer is yes
+    expect(calls).not.toContain('POST /api/warnings/c1/dismiss')
+    await waitFor(() => expect(document.querySelector('dialog[open]')).not.toBeNull())
+    expect(document.querySelector('dialog')!.textContent).toMatch(/cannot be undone from here/)
+    fireEvent.click(document.querySelector('dialog .confirm__actions button:last-child') as HTMLElement)
     await waitFor(() => expect(calls).toContain('POST /api/warnings/c1/dismiss'))
     await screen.findByRole('heading', { level: 2, name: /Warnings visible to buyers now \(0\)/ })
     expect(screen.queryByRole('button', { name: /Undo/ })).toBeNull()

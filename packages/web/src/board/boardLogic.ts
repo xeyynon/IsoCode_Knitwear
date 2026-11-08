@@ -82,12 +82,12 @@ export function withSort(params: URLSearchParams, sort: Sort): URLSearchParams {
 // Composed and decomposed forms of the same letter must match; toLocaleLowerCase leaves Tamil alone.
 const fold = (s: string): string => s.normalize('NFC').toLocaleLowerCase()
 
-/** Every word of the query must appear in the PO, the buyer or the style, in any order. */
+/** Every word of the query must appear in the PO, the buyer, the style or the colour, in any order. */
 export function searchRows(rows: BoardRow[], q: string): BoardRow[] {
   const words = fold(q).split(/\s+/).filter(Boolean)
   if (words.length === 0) return rows
   return rows.filter((r) => {
-    const hay = fold(`${r.po} ${r.buyerName} ${r.style}`)
+    const hay = fold(`${r.po} ${r.buyerName} ${r.style} ${r.colour ?? ''}`)
     return words.every((w) => hay.includes(w))
   })
 }
@@ -253,6 +253,12 @@ export function preview(rows: BoardRow[], showAll: boolean): { shown: BoardRow[]
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** "2026-11-20" -> "20 Nov". Date-only: no Date object, so no time zone can shift the day. */
+/** "12 Nov 2026": the short date with its year, for places where the year matters (history, closed days). "-" for anything that is not a date. */
+export function dateWithYear(iso: string): string {
+  const d = shortDate(iso)
+  return d === '-' ? '-' : `${d} ${iso.slice(0, 4)}`
+}
+
 export function shortDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (!m) return '-'

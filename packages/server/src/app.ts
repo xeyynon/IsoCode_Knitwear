@@ -1,4 +1,4 @@
-import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify'
+import Fastify, { LogController, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import { verifyToken, type TokenClaims } from './auth.js'
 import { login, type LoginInput } from './authService.js'
 import { getBoard } from './boardService.js'
@@ -22,7 +22,7 @@ import { buyerExportCsv, exportFileName } from './buyerExport.js'
 import { listOutbox } from './outboxService.js'
 import { listAudit } from './auditService.js'
 import { isStageName, istDate } from './today.js'
-import { createLoginLimiter, type LoginLimiter } from './loginLimiter.js'
+import { LOGIN_ADDRESS_BUDGET, createLoginLimiter, loginScope, type LoginLimiter } from './loginLimiter.js'
 import { AUTH_CACHE_MS, createAuthCache, type AccountState, type AuthCache } from './authCache.js'
 import { registerHttpCache } from './httpCache.js'
 import { DEMO_READ_ONLY_MESSAGE, isDemoMode } from './demoMode.js'
@@ -118,7 +118,19 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   }
   // A log controller that logs no request: the two default lines per request ("incoming request", "request completed", about 366 bytes together) are
   // replaced by the one line below (O-11).
-  const app = Fastify({ logger, trustProxy, logController: new LogController({ disableRequestLogging: true }), requestTimeout: opts.requestTimeoutMs ?? 120_000 })
+  const app = Fastify({
+    logger, trustProxy, logController: new LogController({ disableRequestLogging: true }), requestTimeout: opts.requestTimeoutMs ?? 120_000,
+    // BE-080: an address Fastify itself refuses (a broken percent-escape, an id over its length limit) is answered in the app's one error shape.
+    // Its own body names the code and echoes the path; this says nothing about the address.
+    frameworkErrors: (_err, _req, reply) => (reply as unknown as FastifyReply).code(400).send({ error: { code: 'bad_request', message: 'Invalid request' } }),
+  })
+  // BE-079: every reply under /api is private unless a route says otherwise (most set no-store themselves; /api/me did not, and a host then
+  // adds "public, max-age=0, must-revalidate"). One hook, so a route added later cannot forget it. The two probes are not private.
+  app.addHook('onSend', async (req, reply, payload) => {
+    const path = req.url.split('?')[0]!
+    if (path.startsWith('/api/') && path !== '/api/health' && path !== '/api/status' && !reply.hasHeader('cache-control')) reply.header('Cache-Control', 'no-store')
+    return payload
+  })
   app.addHook('onResponse', async (req, reply) => {
     const route = req.is404 ? 'unmatched' : (req.routeOptions?.url ?? 'unmatched')   // the pattern, never the address as written
     if ((route === '/api/health' || route === '/api/status') && reply.statusCode < 400) return   // probe traffic is not worth a line
@@ -231,18 +243,27 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   // The sign-in budget (loginLimiter.ts): keyed on req.ip, which with a trusted-proxy setting is the address the nearest trusted proxy
   // saw. Bounded, swept on a timer that does not keep the process alive, and no entry for a try that spends nothing.
-  const limiter = createLoginLimiter()
+  // BE-081: two budgets. `limiter` counts failures per address (all accounts together, a high ceiling: a factory shares one address);
+  // `accountLimiter` counts them per address AND account (10), so one person's mistakes stop that person, not everyone behind the address.
+  const limiter = createLoginLimiter(LOGIN_ADDRESS_BUDGET)
+  const accountLimiter = createLoginLimiter()
   app.decorate('loginLimiter', limiter)
   const stopSweep = limiter.start(() => clock().getTime())
-  app.addHook('onClose', async () => { stopSweep() })
+  const stopAccountSweep = accountLimiter.start(() => clock().getTime())
+  app.addHook('onClose', async () => { stopSweep(); stopAccountSweep() })
   app.post('/api/auth/login', async (req, reply) => {
     const now = clock()
-    if (limiter.blocked(req.ip, now.getTime())) throw new AppError(429, 'rate_limited', 'Too many attempts. Please wait and try again.')
+    const tooMany = () => new AppError(429, 'rate_limited', 'Too many attempts. Please wait and try again.')
+    if (limiter.blocked(req.ip, now.getTime())) throw tooMany()
     const body = req.body
     if (typeof body !== 'object' || body === null) throw badRequest('Invalid request')
-    // Spend the budget before the await and give it back if this try does not count, so a burst
-    // of requests in flight together cannot all pass the check above.
-    const spent = limiter.spend(req.ip, now.getTime())
+    const scope = loginScope(body)
+    if (accountLimiter.blocked(req.ip, now.getTime(), scope)) throw tooMany()
+    // Spend the budgets before the await and give them back if this try does not count, so a burst
+    // of requests in flight together cannot all pass the checks above.
+    const spentAddress = limiter.spend(req.ip, now.getTime())
+    const spentAccount = accountLimiter.spend(req.ip, now.getTime(), scope)
+    const spent = { refund() { spentAddress.refund(); spentAccount.refund() } }
     try {
       const result = await login(opts.db, body as LoginInput, opts.tokenSecret, now, demo ? { neverLock: isDemoLoginName } : {})
       // A successful sign-in does not spend the budget, but it does not refund failures already spent either.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { downloadFile } from '../api/download'
 import { ApiError, apiFetch } from '../api/session'
+import { useConfirm } from '../ui/ConfirmDialog'
 import { shortDateIn } from '../board/boardLogic'
 import { istDate } from '../dates'
 import { exportFileName } from '../review/exportLogic'
@@ -13,7 +14,7 @@ import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
 import { reasonById, type Reason } from '../notes/reasons'
-import { AI_REST_MS, aiLine, defaultMeaning, defaultReason, disagreement, MAX_AI_ROUNDS, reasonSource, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
+import { AI_REST_MS, aiLine, defaultMeaning, defaultReason, disagreement, MAX_AI_ROUNDS, reasonSource, showAiTag, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
 import { Banner } from '../ui/atoms/Banner'
@@ -66,6 +67,7 @@ export default function Review() {
   const [made, setMade] = useState<{ id: string; url: string; copied: boolean } | null>(null)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const { confirm, dialog } = useConfirm()
   const [showPast, setShowPast] = useState(false)   // the cancelled and expired links are folded until asked for
   const making = useRef(false)
 
@@ -134,6 +136,12 @@ export default function Review() {
   // 'dismiss-waiting' is "Don't show" on a warning still waiting for review; 'dismiss' is "Hide from buyer" on one that was confirmed. Both call the same
   // route, but only the first can be undone: a confirmed warning may already have been seen by a buyer (rule 18).
   async function decide(item: Item, action: 'confirm' | 'dismiss-waiting' | 'dismiss', heading: React.RefObject<HTMLHeadingElement | null>) {
+    // "Hide from buyer" on a confirmed warning has no undo (rule 18), so it asks first (FE-M-04). "Don't show" can be undone and does not ask.
+    if (action === 'dismiss' && !(await confirm({
+      title: 'Hide this from the buyer?',
+      body: 'The buyer will not see this warning any more. It cannot be undone from here: showing it again needs a fresh confirmation, because the buyer may already have seen it.',
+      confirmLabel: 'Hide from buyer', cancelLabel: 'Keep it shown', destructive: true,
+    }))) return
     setBusy(item.id); setActionError(null)
     try {
       const text = edits[item.id]
@@ -243,7 +251,13 @@ export default function Review() {
     catch { document.getElementById('link-url')?.focus(); (document.getElementById('link-url') as HTMLInputElement | null)?.select() }   // no clipboard access: select it so Ctrl+C works
   }
 
-  async function revoke(id: string) {
+  async function revoke(link: LinkRow) {
+    const id = link.id
+    if (!(await confirm({
+      title: 'Cancel this link?',
+      body: `Anyone who has this link for ${link.buyerName} will not be able to open it any more. A cancelled link cannot be turned back on: you would make a new one, and the buyer gets a new address.`,
+      confirmLabel: 'Cancel the link', cancelLabel: 'Keep the link', destructive: true,
+    }))) return
     try {
       await apiFetch(`/api/buyer-links/${id}/revoke`, { method: 'POST', body: '{}' })
       const next = afterRevoke(made, id)      // a cancelled link must not stay on offer for copying
@@ -338,7 +352,7 @@ export default function Review() {
                           {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
                           {line && (
                             <div className={`ai-box ai-box--${line.kind}`} role="status" aria-live="polite">
-                              <span className="lang-tag">AI</span>{' '}
+                              {showAiTag(line.text) && <><span className="lang-tag">AI</span>{' '}</>}
                               <span>{line.text}</span>
                               {'detail' in line && line.detail && <p className="sub ai-box__why">Why: {line.detail}</p>}
                               {clash && <p className="ai-box__clash">{clash}</p>}
@@ -455,8 +469,8 @@ export default function Review() {
                           <tr key={l.id}>
                             <td data-label="Buyer">{l.buyerName}</td><td data-label="For">{l.label ?? '-'}</td><td data-label="State">{s.text}</td>
                             <td className="links__actions">
-                              <Button size="small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</Button>
-                              {s.active && <Button size="small" onClick={() => void revoke(l.id)}>Cancel link</Button>}
+                              <Button size="small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (CSV, opens in Excel)</Button>
+                              {s.active && <Button size="small" onClick={() => void revoke(l)}>Cancel link</Button>}
                             </td>
                           </tr>
                         )
@@ -471,6 +485,7 @@ export default function Review() {
             </section>
           </>
         )}
+      {dialog}
     </MerchandiserShell>
   )
 }

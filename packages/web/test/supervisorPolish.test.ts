@@ -47,7 +47,7 @@ describe('1.5 the number field points at the "more than is left" question', () =
     expect(update).toMatch(/aria-describedby=\{confirming \? 'hint toomany' : 'hint'\}/)
   })
   it('the field is not marked invalid for it: more than is left is allowed (over-production is real)', () => {
-    expect(update).toMatch(/aria-invalid=\{notWholeNumber\(raw\)\}/)
+    expect(update).toMatch(/aria-invalid=\{notWholeNumber\(raw, 0\)\}/) // zero is allowed on this screen since FE-S-02: the same promise, with the minimum spelled out
     expect(update).not.toMatch(/aria-invalid=\{[^}]*confirming/)
   })
   it('the field gets an ink edge, never a status colour (red means order status)', () => {

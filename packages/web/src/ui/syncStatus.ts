@@ -8,6 +8,9 @@ export function syncChipStatus(state: QueueState, t: T): { text: string; tone: '
   if (!online && pending > 0) return { text: t('sync.offlineWaiting', { n: pending }), tone: 'wait' }
   if (!online) return { text: t('sync.offline'), tone: 'wait' }
   if (syncing) return { text: t('sync.sendingWaiting', { n: pending }), tone: 'wait' }
+  // The first failure is usually a reply lost on the way back, and the phone is already trying again: say so calmly. From the second one
+  // in a row it is worth the honest "could not send" (FE-S-06).
+  if (pending > 0 && error && (state.failedTries ?? 0) < 2) return { text: t('sync.retrying', { n: pending }), tone: 'wait' }
   if (pending > 0 && error) return { text: t('sync.waitingFailed', { n: pending }), tone: 'problem' }
   if (pending > 0) return { text: t('sync.waitingN', { n: pending }), tone: 'wait' }
   // A refused update is not waiting, but it was not sent either: never "All sent" while one is left.

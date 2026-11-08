@@ -20,6 +20,10 @@ const en = {
   // Shared: the menu, loading, the reload card
   'nav.menu': 'Menu',
   'nav.signOut': 'Sign out',
+  'nav.signOutWaitingTitle': 'Updates are still waiting',
+  'nav.signOutWaiting': 'Updates waiting to send from this phone: {n}. They stay saved here and send when you sign in again.',
+  'nav.signOutStay': 'Stay here',
+  'login.waiting': 'Updates waiting to send from this phone: {n}. They send after you sign in.',
   'nav.toTamil': 'தமிழ்',
   'nav.toEnglish': 'English',
   'common.loading': 'Loading',
@@ -148,6 +152,7 @@ const en = {
   'sync.offlineWaiting': 'Offline · {n} waiting',
   'sync.sendingWaiting': 'Sending… {n} waiting',
   'sync.waitingFailed': '{n} waiting · could not send',
+  'sync.retrying': '{n} waiting · trying again',
   'sync.refusedCount': 'Not accepted · {n}',
   'sync.refusedGeneric': 'The server could not accept this update.',
   'sync.photoGeneric': 'The photo was not accepted.',
@@ -171,6 +176,8 @@ const en = {
   'stage.mending': 'Mending',
   'stage.washing': 'Washing',
   'stage.sewing': 'Sewing',
+  'stage.stitching': 'Stitching',
+  'stage.printing': 'Printing',
   'stage.cutting': 'Cutting',
   'stage.trimming': 'Trimming',
   'stage.ironing': 'Ironing',
@@ -178,8 +185,6 @@ const en = {
   'stage.checking': 'Checking',
   'stage.packing': 'Packing',
   'stage.dispatch': 'Dispatch',
-  'stage.stitching': 'Stitching',
-  'stage.printing': 'Printing',
 } as const
 export type Key = keyof typeof en
 
@@ -205,6 +210,10 @@ const ta: Partial<Record<Key, string>> = {
   'app.updateLater': 'பிறகு',
   'nav.menu': 'மெனு',
   'nav.signOut': 'வெளியேறு',
+  'nav.signOutWaitingTitle': 'பதிவுகள் இன்னும் காத்திருக்கின்றன', // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'nav.signOutWaiting': 'இந்த ஃபோனிலிருந்து அனுப்பக் காத்திருக்கும் பதிவுகள்: {n}. அவை இங்கேயே சேமிக்கப்பட்டிருக்கும்; மீண்டும் உள்நுழைந்ததும் அனுப்பப்படும்.', // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'nav.signOutStay': 'இங்கேயே இருக்கவும்', // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'login.waiting': 'இந்த ஃபோனிலிருந்து அனுப்பக் காத்திருக்கும் பதிவுகள்: {n}. உள்நுழைந்ததும் அனுப்பப்படும்.', // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'common.loading': 'ஏற்றுகிறது',
   'common.tryAgain': 'மீண்டும் முயற்சி',
   'common.ok': 'சரி',
@@ -291,6 +300,7 @@ const ta: Partial<Record<Key, string>> = {
   'sync.offlineWaiting': 'இணைப்பு இல்லை · {n} காத்திருக்கிறது',
   'sync.sendingWaiting': 'அனுப்புகிறது… {n} காத்திருக்கிறது',
   'sync.waitingFailed': '{n} காத்திருக்கிறது · அனுப்ப முடியவில்லை',
+  'sync.retrying': '{n} காத்திருக்கிறது · மீண்டும் அனுப்புகிறது', // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'sync.refusedCount': 'ஏற்கப்படவில்லை · {n}',
   'sync.refusedGeneric': 'இந்தப் பதிவை சர்வர் ஏற்கவில்லை.',
   'sync.photoGeneric': 'புகைப்படம் ஏற்கப்படவில்லை.',

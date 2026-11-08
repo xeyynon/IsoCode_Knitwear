@@ -77,6 +77,9 @@ export function aiLine(n: NoteForAi, reasons: Reason[], aiEnabled: boolean, stat
   return { kind: 'suggested', text: `AI suggests "${label}" (${pct(a.confidence)} sure).`, detail: a.why }
 }
 
+/** Whether the little "AI" tag goes in front of an AI line: not when the sentence already says AI, which printed "AI AI is not sure" (FE-D-14). */
+export const showAiTag = (text: string): boolean => !/\bAI\b/.test(text)
+
 /** Where the reason in the picker came from, said beside its label. */
 export function reasonSource(n: NoteForAi, picked: string | undefined): string {
   if (picked) return ''

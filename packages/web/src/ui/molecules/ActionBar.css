@@ -19,5 +19,7 @@
 .actionbar .saved, .actionbar .error, .actionbar .banner { margin: 0 0 var(--space-2); }
 .actionbar .saved { font-size: 15px; }
 .actionbar .banner { padding: var(--space-2) var(--space-3); }
-/* a focused field must never end up behind the bar: the browser leaves this much room when it scrolls to it */
-html:has(.actionbar) { scroll-padding-bottom: 160px; }
+/* a focused field must never end up behind a bar: the browser leaves this much room when it scrolls to it. At the top the sticky app bar
+   (its real height is measured into --appbar-h), at the bottom this bar. Without the top value a short visible area (a phone with the
+   keyboard up) scrolled the field half under the app bar (FE-S-03). */
+html:has(.actionbar) { scroll-padding-top: calc(var(--appbar-h, 56px) + var(--space-2)); scroll-padding-bottom: 160px; }

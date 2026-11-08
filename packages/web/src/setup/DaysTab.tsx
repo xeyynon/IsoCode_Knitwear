@@ -7,10 +7,11 @@ import { DateWords } from '../ui/atoms/DateWords'
 import { Input, Select } from '../ui/atoms/Input'
 import { Field } from '../ui/molecules/Field'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
-import { shortDate } from '../board/boardLogic'
+import { dateWithYear } from '../board/boardLogic'
 import { isRealDate } from '../orders/orderForm'
 import { LoadFailed } from '../ui/LoadFailed'
-import { clearDayBody, dayKind, latestRequest } from './setupLogic'
+import { useConfirm } from '../ui/ConfirmDialog'
+import { clearDayBody, dayBody, dayKind, latestRequest } from './setupLogic'
 
 interface Unit { id: string; name: string }
 interface Day { unitId: string; date: string; working: boolean; note: string | null }
@@ -27,6 +28,7 @@ export function DaysTab() {
   const [error, setError] = useState<string | null>(null)
   const [loadFail, setLoadFail] = useState<LoadFailure | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const { confirm, dialog } = useConfirm()
 
   const loadUnits = useCallback(() => {
     apiFetch<{ units: Unit[] }>('/api/units').then((r) => { setUnits(r.units); setUnitId((cur) => cur || r.units[0]?.id || ''); setLoadFail(null) })
@@ -45,13 +47,19 @@ export function DaysTab() {
     e.preventDefault(); setError(null); setNotice(null)
     if (!isRealDate(date)) return setError('Choose a real date.')
     try {
-      await apiFetch('/api/calendar', { method: 'POST', body: JSON.stringify({ unitId, date, working, note }) })
-      setNotice(`${shortDate(date)} is now ${working ? 'a worked day' : 'closed'} for this unit. Orders already created keep their planned dates; the board uses the new working days from now on.`)
+      await apiFetch('/api/calendar', { method: 'POST', body: JSON.stringify(dayBody({ unitId, date, working, note, existing: days?.find((x) => x.date === date) })) })
+      setNotice(`${dateWithYear(date)} is now ${working ? 'a worked day' : 'closed'} for this unit. Orders already created keep their planned dates; the board uses the new working days from now on.`)
       setDate(''); setNote(''); await load()
     } catch (err) { setError(msg(err)) }
   }
   async function clear(d: Day) {
-    try { await apiFetch('/api/calendar/clear', { method: 'POST', body: JSON.stringify(clearDayBody(d)) }); setNotice(`${shortDate(d.date)} is back to the normal week.`); await load() } catch (err) { setError(msg(err)) }
+    // The working days behind every board rate change with this, so it asks (FE-M-04).
+    if (!(await confirm({
+      title: 'Back to the normal week?',
+      body: `${dateWithYear(d.date)} stops being a special day for this unit. Orders keep their planned dates, but the board counts the working days again, so the daily rates it shows can change.`,
+      confirmLabel: 'Back to normal', cancelLabel: 'Keep this day', destructive: true,
+    }))) return
+    try { await apiFetch('/api/calendar/clear', { method: 'POST', body: JSON.stringify(clearDayBody(d)) }); setNotice(`${dateWithYear(d.date)} is back to the normal week.`); await load() } catch (err) { setError(msg(err)) }
   }
 
   return (
@@ -80,11 +88,12 @@ export function DaysTab() {
         <table className="plan">
           <thead><tr><th scope="col">Date</th><th scope="col">Setting</th><th scope="col">Note</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
           <tbody>{days.map((d) => (
-            <tr key={d.date}><td className="mono">{shortDate(d.date)} {d.date.slice(0, 4)}</td><td>{dayKind(d.working)}</td><td>{d.note ?? '-'}</td>
+            <tr key={d.date}><td className="mono">{dateWithYear(d.date)}</td><td>{dayKind(d.working)}</td><td>{d.note ?? '-'}</td>
               <td><Button size="small" onClick={() => void clear(d)}>Back to normal</Button></td></tr>
           ))}</tbody>
         </table>
       )}
+      {dialog}
     </>
   )
 }

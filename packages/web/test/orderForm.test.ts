@@ -15,9 +15,9 @@ describe('parseSizes', () => {
     expect(p.total).toBe(2500)
     expect(p.errors).toEqual([])
   })
-  it('ignores blank rows, trims names, accepts a zero for one size', () => {
+  it('ignores blank rows, trims names, and a zero for one size means it is not ordered (FE-M-18)', () => {
     const p = parseSizes(rows(['', ''], [' M ', ' 40 '], ['XL', '0']))
-    expect(p.sizes).toEqual({ M: 40, XL: 0 })
+    expect(p.sizes).toEqual({ M: 40 })
     expect(p.total).toBe(40)
     expect(p.errors).toEqual([])
   })

@@ -13,8 +13,12 @@
 // (Photoshop IRB, MPF, Ducky, JFXX thumbnails and so on) and COM comments. Anything after the final EOI is dropped too: it is not part of the
 // picture, and a trailer is a place to hide a second copy of the metadata.
 //
-// It never throws and refuses nothing: a buffer it cannot walk (not a JPEG, truncated, a length that runs past the end, no EOI) is returned
-// unchanged, and so is one with nothing to remove (the very same object).
+// `stripJpegMetadata` never throws and refuses nothing: a buffer it cannot walk (not a JPEG, truncated, a length that runs past the end, no EOI)
+// is returned unchanged, and so is one with nothing to remove (the very same object).
+//
+// `stripJpegMetadataOrNull` (BE-076) is the one the upload uses. It answers null for a buffer it cannot walk, so the caller can refuse the file:
+// a crafted file that the walker cannot read would otherwise be stored with its Exif (a GPS position) intact. A JPEG the phone app makes
+// (a canvas redraw) is always walkable.
 
 const APP0 = 0xe0, APP2 = 0xe2, APP14 = 0xee, COM = 0xfe, SOS = 0xda, EOI = 0xd9, SOI = 0xd8
 
@@ -34,38 +38,53 @@ function keepSegment(m: number, b: Buffer, at: number, end: number): boolean {
 }
 
 export function stripJpegMetadata(input: Buffer): Buffer {
+  return stripJpegMetadataOrNull(input) ?? input
+}
+
+/**
+ * Does the buffer hold the start of a segment the walker would have removed (APP1 to APP15, or a comment): FF E1 to FF EF, or FF FE? In real
+ * picture data an FF is always followed by 00, a restart marker or a true marker, so such a pair anywhere is a metadata segment. The upload uses
+ * this on a file it could not walk (BE-076): it must not be stored while it may still carry Exif.
+ */
+export function hasMetadataMarker(b: Buffer): boolean {
+  for (let i = 0; i + 1 < b.length; i++) if (b[i] === 0xff && ((b[i + 1]! >= 0xe1 && b[i + 1]! <= 0xef) || b[i + 1] === 0xfe)) return true
+  return false
+}
+
+/** The cleaned bytes, the same object when there was nothing to remove, or null when the file could not be walked (never throws). */
+export function stripJpegMetadataOrNull(input: Buffer): Buffer | null {
   try {
     return strip(input)
   } catch {
-    return input
+    return null
   }
 }
 
-function strip(b: Buffer): Buffer {
+function strip(b: Buffer): Buffer | null {
   const n = b.length
-  if (n < 4 || b[0] !== 0xff || b[1] !== SOI) return b
+  if (n < 4 || b[0] !== 0xff || b[1] !== SOI) return null
   const kept: Buffer[] = []
   let from = 0            // start of the bytes not yet copied to `kept`
   let changed = false
   let i = 2
   for (;;) {
     // at a marker: FF, then any number of FF fill bytes, then the marker code
-    if (i >= n || b[i] !== 0xff) return b
+    if (i >= n || b[i] !== 0xff) return null
     let j = i + 1
     while (j < n && b[j] === 0xff) j++
-    if (j >= n) return b
+    if (j >= n) return null
     const m = b[j]!
-    if (m === 0x00) return b                       // FF 00 outside a scan is not a marker
+    if (m === 0x00) return null                       // FF 00 outside a scan is not a marker
     if (m === EOI) {
       const end = j + 1
       if (end < n) { kept.push(b.subarray(from, end)); changed = true; from = n }   // a trailer after the picture is dropped
       break
     }
     if (m === 0x01 || (m >= 0xd0 && m <= 0xd7) || m === SOI) { i = j + 1; continue }  // markers with no length
-    if (j + 2 >= n) return b
+    if (j + 2 >= n) return null
     const len = (b[j + 1]! << 8) | b[j + 2]!
     const segEnd = j + 1 + len                     // the length counts its own two bytes
-    if (len < 2 || segEnd > n) return b
+    if (len < 2 || segEnd > n) return null
     if (!keepSegment(m, b, j + 3, segEnd)) {
       kept.push(b.subarray(from, i))
       from = segEnd
@@ -75,11 +94,11 @@ function strip(b: Buffer): Buffer {
     if (m === SOS) {
       // the scan: entropy-coded bytes up to the next real marker
       for (;;) {
-        if (i >= n) return b                        // the picture never ended
+        if (i >= n) return null                        // the picture never ended
         if (b[i] !== 0xff) { i++; continue }
         let k = i + 1
         while (k < n && b[k] === 0xff) k++
-        if (k >= n) return b
+        if (k >= n) return null
         const c = b[k]!
         if (c === 0x00 || (c >= 0xd0 && c <= 0xd7)) { i = k + 1; continue }
         i = k - 1                                   // the FF just before the marker code

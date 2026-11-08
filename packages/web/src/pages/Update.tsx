@@ -90,7 +90,7 @@ function UpdateStage() {
   const todayTotal = (stage?.todayQty ?? 0) + extra
   const done = (stage?.produced ?? 0) + extra
   const left = stage ? remainingPieces(stage.qty, done) : 0
-  const qty = parsePieces(raw)
+  const qty = parsePieces(raw, 0) // 0 is a real day: no output, with a reason (FE-S-02)
   // More than is left is possible (over-production), but it is far more often a typing slip: ask once.
   const overLeft = qty !== null && stage !== undefined && qty > left
   // What became of the last update: "Sent." only once the server confirmed THAT update.
@@ -128,7 +128,7 @@ function UpdateStage() {
     if (!file) return
     setPhotoError(null); setPreparing(true)
     try { const blob = await resizeToJpeg(file); photoFocus.current = true; setPhoto({ blob, url: URL.createObjectURL(blob) }) }
-    catch (err) { retaking.current = false; setPhotoError(err instanceof PhotoError ? err.key : 'photo.unusable') }
+    catch (err) { retaking.current = false; photoFocus.current = true; setPhoto(null); setPhotoError(err instanceof PhotoError ? err.key : 'photo.unusable') }   // the earlier photo goes too: an error beside "Photo ready" left it unclear which picture would be sent (FE-S-05)
     setPreparing(false)
   }
 
@@ -152,10 +152,10 @@ function UpdateStage() {
             <Card as="div" className="update__body">
             <Field label={t('sup.pieces')}>
               <Input ref={input} big mono asking={confirming} inputMode="numeric" pattern="[0-9]*" autoComplete="off"
-                value={raw} aria-describedby={confirming ? 'hint toomany' : 'hint'} aria-invalid={notWholeNumber(raw)} onChange={(e) => { setRaw(e.target.value); setConfirming(false) }} />
+                value={raw} aria-describedby={confirming ? 'hint toomany' : 'hint'} aria-invalid={notWholeNumber(raw, 0)} onChange={(e) => { setRaw(e.target.value); setConfirming(false) }} />
             </Field>
             <p id="hint" className="sub">{t('update.hint')}</p>
-            {notWholeNumber(raw) && <ErrorText>{t('sup.wholeNumber')}</ErrorText>}
+            {notWholeNumber(raw, 0) && <ErrorText>{t('sup.wholeNumber')}</ErrorText>}
 
             <fieldset className="reasons">
               <legend>{t('sup.reason')}</legend>

@@ -8,6 +8,8 @@ import { WhatsNewDialog } from './WhatsNewDialog'
 import { NavTabs } from './molecules/NavTabs'
 import { useDocumentTitle } from './useDocumentTitle'
 import { useReviewCount } from './useReviewCount'
+import { useConfirm } from './ConfirmDialog'
+import { useQueue } from '../queue/instance'
 
 /**
  * One bar, one menu. Language and Sign out live in a single menu rather than a row of
@@ -24,6 +26,10 @@ export function AppBar({ title, plainTitle = false }: { title: string; plainTitl
   const merchandiser = role === 'merchandiser'
   // The language switch is for supervisors: a merchandiser's screens are English only, so offering Tamil would only turn a few fragments of them.
   const canSwitch = role !== 'merchandiser'
+  // A supervisor with updates still on the phone is asked before signing out (FE-S-07): they stay saved and send after the next sign-in.
+  const { state: queueState } = useQueue()
+  const waiting = queueState?.pending ?? 0
+  const { confirm, dialog: confirmDialog } = useConfirm()
   // A merchandiser's Board, Review and Setup are tabs in this bar; the Review tab shows how many wait (slice 3.3).
   const reviewCount = useReviewCount(merchandiser)
   const bar = useRef<HTMLElement>(null)
@@ -81,11 +87,16 @@ export function AppBar({ title, plainTitle = false }: { title: string; plainTitl
               <button role="menuitem" className="menu__item" onClick={() => { setOpen(false); setNews(true) }}>{t('release.whatsNew')}</button>
             )}
             <div role="separator" className="menu__sep" />
-            <button role="menuitem" className="menu__item" onClick={() => signOut()}>{t('nav.signOut')}</button>
+            <button role="menuitem" className="menu__item" onClick={async () => {
+              setOpen(false)   // the menu closes before the question opens, so it is not left hanging behind the dialog
+              if (!merchandiser && waiting > 0 && !(await confirm({ title: t('nav.signOutWaitingTitle'), body: t('nav.signOutWaiting', { n: waiting }), confirmLabel: t('nav.signOut'), cancelLabel: t('nav.signOutStay'), destructive: true }))) { close(); return }
+              signOut()
+            }}>{t('nav.signOut')}</button>
             {BUILD_LABEL && <div role="none" className="menu__build">{BUILD_LABEL}</div>}
           </div>
         )}
       </div>
+      {confirmDialog}
       {news && <WhatsNewDialog onClose={() => { setNews(false); button.current?.focus() }} />}
     </header>
   )

@@ -54,8 +54,10 @@ describe('searching orders', () => {
     expect(pos(searchRows(rows, 'crew southgate'))).toEqual([])
     expect(pos(searchRows(rows, '  northwind    po-1001 '))).toEqual(['PO-1001'])
   })
-  it('does not search the colour or the working, which are not what a merchandiser looks orders up by', () => {
-    expect(searchRows([row({ colour: 'Maroon', maths: 'Need 5/day' })], 'maroon')).toEqual([])
+  // FE-M-06 (final bug cycle): the colour is part of how a style is spoken ("men's crew neck tee, navy"), so it is searched. The working is not.
+  it('searches the colour, but not the working', () => {
+    expect(searchRows([row({ colour: 'Maroon', maths: 'Need 5/day' })], 'maroon')).toHaveLength(1)
+    expect(searchRows([row({ colour: 'Maroon', maths: 'Need 5/day' })], 'need')).toEqual([])
   })
   it('finds Tamil and mixed-script text, and treats composed and decomposed forms alike', () => {
     const ta = [row({ po: 'PO-9', buyerName: 'சென்னை Knits' }), row({ po: 'PO-8', buyerName: 'Other' })]

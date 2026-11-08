@@ -25,6 +25,23 @@ export function backToBoard(carried: string | null): string {
   return q ? `/board?${q}` : '/board'
 }
 
+/**
+ * The date-change history as a reader expects it (FE-M-13): changes that were saved in the same second belong to one change, and in it the
+ * ex-factory row comes first, then the stages in the order the server sent them. The order between changes is left as it came.
+ */
+export function historyOrder<T extends { at: string; what: string }>(rows: T[]): T[] {
+  const out: T[] = []
+  for (let i = 0; i < rows.length; ) {
+    const key = rows[i]!.at.slice(0, 19)
+    let j = i
+    while (j < rows.length && rows[j]!.at.slice(0, 19) === key) j++
+    const run = rows.slice(i, j)
+    out.push(...run.filter((r) => r.what.startsWith('Ex-factory')), ...run.filter((r) => !r.what.startsWith('Ex-factory')))
+    i = j
+  }
+  return out
+}
+
 export interface TimelineStage {
   stage: string; sequence: number; status: Status; complete: boolean; plannedEnd: string; projectedEnd: string | null
 }

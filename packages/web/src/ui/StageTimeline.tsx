@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { shortDate } from '../board/boardLogic'
 import { timelineRows } from '../orders/orderDetailLogic'
 import { buildTimeline, closedLabel, type CalendarUnit, type LayoutStage, type Marker } from '../orders/timelineLayout'
@@ -22,6 +22,12 @@ const at = (m: Pick<Marker, 'pct'>): CSSProperties => ({ ['--x' as string]: `${m
  */
 export function StageTimeline({ stages, exFactory, calendar }: Props) {
   const t = buildTimeline({ stages, exFactory, from: calendar.from, to: calendar.to, units: calendar.units })
+  // A period too long for the box scrolls inside it, and starts at the ex-factory end, so the line that matters is in view (FE-M-01). The stage names stay put (sticky).
+  const scroller = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scroller.current
+    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = el.scrollWidth
+  }, [t.days, exFactory])
   if (!t.rows.length) return <p className="sub">This order has no stages.</p>
 
   const closedSummary = (
@@ -36,7 +42,7 @@ export function StageTimeline({ stages, exFactory, calendar }: Props) {
   return (
     <>
       <div className="tlc">
-        <div className="tlc__scroll" role="region" aria-label="Stage timeline, scrolls sideways when the period is long" tabIndex={0}>
+        <div ref={scroller} className="tlc__scroll" role="region" aria-label="Stage timeline, scrolls sideways when the period is long" tabIndex={0}>
           <div className="tlc__grid" style={{ ['--days' as string]: t.days }}>
             <div className="tlc__row tlc__row--axis" aria-hidden="true">
               <div className="tlc__label" />

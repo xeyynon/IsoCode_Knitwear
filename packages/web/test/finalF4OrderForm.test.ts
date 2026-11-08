@@ -7,10 +7,16 @@ let id = 0
 const one = (qty: string): SizeRow[] => [{ id: ++id, size: 'M', qty }]
 
 describe('W-12: a quantity typed the way people write numbers', () => {
-  it.each([['1,000', 1000], ['1 000', 1000], ['1,00,000', 100000], ['12 500', 12500], [' 500 ', 500], ['0', 0]])('W-12: "%s" is %i', (text, n) => {
-    const p = parseSizes(one(text === '0' ? '0' : text).concat(text === '0' ? [{ id: ++id, size: 'L', qty: '5' }] : []))
+  it.each([['1,000', 1000], ['1 000', 1000], ['1,00,000', 100000], ['12 500', 12500], [' 500 ', 500]])('W-12: "%s" is %i', (text, n) => {
+    const p = parseSizes(one(text))
     expect(p.errors).toEqual([])
     expect(p.sizes.M).toBe(n)
+  })
+  it('W-12: "0" is accepted without an error, and the size is simply not ordered (FE-M-18: a size of 0 is not stored)', () => {
+    const p = parseSizes(one('0').concat([{ id: ++id, size: 'L', qty: '5' }]))
+    expect(p.errors).toEqual([])
+    expect(p.sizes.M).toBeUndefined()
+    expect(p.sizes.L).toBe(5)
   })
   it('W-12: reads every form the Update screen reads, to the same number', () => {
     for (const t of ['1,000', '1 000', '1,00,000', '250', '40,000']) expect(parseSizes(one(t)).sizes.M).toBe(parsePieces(t))

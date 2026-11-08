@@ -5,6 +5,7 @@ import { AppError, badRequest, forbidden, notFound, orDuplicate } from './errors
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { isIsoDate, isStageName } from './today.js'
 import { recordAudit } from './auditService.js'
+import { hasUnsafeText } from './textRules.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const staffOnly = (ctx: Ctx) => { if (!isStaff(ctx)) throw forbidden('Only merchandisers can do this') }
@@ -12,6 +13,7 @@ const uuid = (v: unknown, what: string): string => { if (typeof v !== 'string' |
 const text = (v: unknown, what: string, max: number): string => {
   if (typeof v !== 'string' || !v.trim()) throw badRequest(`${what} is required`)
   const t = v.trim().replace(/\s+/g, ' ')
+  if (hasUnsafeText(t)) throw badRequest(`${what} has a character that is not allowed`)   // BE-078 (a tab or newline became a space above; any other control or a bidi override is refused)
   if (t.length > max) throw badRequest(`${what} must be at most ${max} characters`)
   return t
 }
@@ -30,10 +32,25 @@ export function weakPin(pin: string): string | null {
   return null
 }
 
+/**
+ * The commonest passwords, as the letters only (so "Password123!" and "password2026" both read as "password"). A password whose letters are
+ * exactly one of these is refused whatever digits or marks are added to it (BE-077). Short on purpose: it catches the guesses a person tries
+ * first, and the sign-in lock and rate limit do the rest. A passphrase of ordinary words is never caught by it.
+ */
+const COMMON_LETTERS = new Set([
+  'password', 'passwort', 'passw', 'pass', 'qwerty', 'qwertyuiop', 'qwert', 'asdfghjkl', 'asdfgh', 'zxcvbnm', 'abc', 'abcd', 'abcde', 'abcdefghij', 'abcdefghijk',
+  'letmein', 'welcome', 'iloveyou', 'admin', 'administrator', 'changeme', 'login', 'master', 'dragon', 'monkey', 'football', 'baseball', 'sunshine', 'princess',
+  'trustno', 'secret', 'knitwear', 'tiruppur', 'merchandiser', 'supervisor', 'ordertracking', 'orders',
+])
+
+const TOO_EASY = 'That password is too easy to guess. Use a few ordinary words that are not common, with numbers if you like'
+
 export function weakPassword(pw: string, email: string): string | null {
   if (typeof pw !== 'string' || pw.length < 10) return 'The password must be at least 10 characters'
   if (pw.length > 200) return 'That password is too long'
   if (pw.toLowerCase() === email.toLowerCase() || /^(.)\1+$/.test(pw)) return 'That password is too easy to guess'
+  if (/^\d+$/.test(pw)) return TOO_EASY                                                 // 1234567890, 0000000001
+  if (COMMON_LETTERS.has(pw.toLowerCase().replace(/[^a-z]/g, ''))) return TOO_EASY      // Password123!, qwerty123456, Knitwear2026
   return null
 }
 

@@ -1,9 +1,11 @@
 // OPT-LANE C: the sign-in limiter in app.ts (BE-044, BE-045; audit O-12).
+// Final bug cycle (BE-081): the flood from one address, across many accounts, is limited by the per-address ceiling (LOGIN_ADDRESS_BUDGET); the
+// per-account budget (LOGIN_BUDGET) is tested in bugfixFinalLimiter.test.ts. The promise here is unchanged: a flood from one address is refused.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
 import type { FastifyInstance } from 'fastify'
 import { buildApp, type Db } from '../src/index.js'
-import { LOGIN_BUDGET, LOGIN_WINDOW_MS, createLoginLimiter, limiterKey } from '../src/loginLimiter.js'
+import { LOGIN_ADDRESS_BUDGET, LOGIN_BUDGET, LOGIN_WINDOW_MS, createLoginLimiter, limiterKey } from '../src/loginLimiter.js'
 import { CREDS, migratedDb, pgliteDb, resetAndSeed } from './helpers.js'
 
 const SECRET = 'x'.repeat(40)
@@ -33,7 +35,7 @@ describe('BE-044: the caller is the address the nearest trusted proxy saw', () =
     const a = make(1)
     const proxy = '10.0.0.1'
     // The real caller is 203.0.113.7: the proxy appends it after whatever the caller wrote.
-    for (let i = 0; i < LOGIN_BUDGET; i++) expect(await wrong(a, proxy, `198.51.100.${i + 1}, 203.0.113.7`)).toBe(401)
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET; i++) expect(await wrong(a, proxy, `198.51.100.${i + 1}, 203.0.113.7`)).toBe(401)
     expect(await wrong(a, proxy, '198.51.100.200, 203.0.113.7')).toBe(429)
     expect(await wrong(a, proxy, '203.0.113.7')).toBe(429)
     expect(await wrong(a, proxy, '1.2.3.4, 5.6.7.8, 203.0.113.7')).toBe(429)
@@ -41,23 +43,23 @@ describe('BE-044: the caller is the address the nearest trusted proxy saw', () =
   })
   it('BE-044: another real caller behind the same proxy has a budget of their own', async () => {
     const a = make(1)
-    for (let i = 0; i < LOGIN_BUDGET; i++) await wrong(a, '10.0.0.1', '203.0.113.7')
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET; i++) await wrong(a, '10.0.0.1', '203.0.113.7')
     expect(await wrong(a, '10.0.0.1', '203.0.113.7')).toBe(429)
     expect(await wrong(a, '10.0.0.1', '203.0.113.8')).toBe(401)
   })
   it('BE-044: with no proxy trusted, X-Forwarded-For is ignored altogether', async () => {
     const a = make()
-    for (let i = 0; i < LOGIN_BUDGET; i++) expect(await wrong(a, '10.0.0.9', `198.51.100.${i + 1}`)).toBe(401)
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET; i++) expect(await wrong(a, '10.0.0.9', `198.51.100.${i + 1}`)).toBe(401)
     expect(await wrong(a, '10.0.0.9', '198.51.100.99')).toBe(429)
   })
   it('BE-044: `true` means one proxy, not "believe the first address in the header"', async () => {
     const a = make(true)
-    for (let i = 0; i < LOGIN_BUDGET; i++) expect(await wrong(a, '10.0.0.1', `198.51.100.${i + 1}, 203.0.113.7`)).toBe(401)
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET; i++) expect(await wrong(a, '10.0.0.1', `198.51.100.${i + 1}, 203.0.113.7`)).toBe(401)
     expect(await wrong(a, '10.0.0.1', '198.51.100.250, 203.0.113.7')).toBe(429)
   })
   it('BE-044: a list of proxy addresses works the same way (the proxy is trusted, the caller in front of it is not)', async () => {
     const a = make(['10.0.0.0/8'])
-    for (let i = 0; i < LOGIN_BUDGET; i++) expect(await wrong(a, '10.1.2.3', `198.51.100.${i + 1}, 203.0.113.7`)).toBe(401)
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET; i++) expect(await wrong(a, '10.1.2.3', `198.51.100.${i + 1}, 203.0.113.7`)).toBe(401)
     expect(await wrong(a, '10.1.2.3', '198.51.100.250, 203.0.113.7')).toBe(429)
   })
   it('BE-044: one address cannot have many budgets by writing it in other spellings of the same address', () => {
@@ -116,7 +118,7 @@ describe('BE-045: the limiter map stays small', () => {
       vi.advanceTimersByTime(61_000)
       expect(a.loginLimiter.size).toBe(0)
       await a.close()
-      expect(vi.getTimerCount()).toBe(before - 1)
+      expect(vi.getTimerCount()).toBe(before - 2)   // two sweeps now: the per-address limiter and the per-account one
       spy.mockRestore()
     } finally { vi.useRealTimers() }
   })

@@ -18,13 +18,13 @@ const ROLES: { id: PersonRole; label: string; sub: string }[] = [
  * `onAdd` sends it and resolves true when it was saved (the fields are then cleared, the unit kept for the next supervisor); a refusal
  * from the server is shown by the caller, and `onSubmit` lets it clear that refusal whenever the form is sent again. A unit is not a person: "Add a unit" stays a separate form.
  */
-export function AddPersonForm({ units, onAdd, onSubmit }: { units: { id: string; name: string }[]; onAdd: (role: PersonRole, fields: PersonFields) => Promise<boolean>; onSubmit?: () => void }) {
+export function AddPersonForm({ units, onAdd, onSubmit, onEdit }: { units: { id: string; name: string }[]; onAdd: (role: PersonRole, fields: PersonFields) => Promise<boolean>; onSubmit?: () => void; /** Called when a field is touched, so the caller can clear a refusal it is showing from the server (FE-M-11). */ onEdit?: () => void }) {
   const uid = useId()
   const [role, setRole] = useState<PersonRole>('supervisor')
   const [f, setF] = useState<PersonFields>(EMPTY_PERSON)
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const set = (patch: Partial<PersonFields>) => setF((cur) => ({ ...cur, ...patch }))
+  const set = (patch: Partial<PersonFields>) => { setF((cur) => ({ ...cur, ...patch })); setProblem(null); onEdit?.() }   // an old complaint goes when the field is touched (FE-M-11)
   const label = role === 'supervisor' ? 'supervisor' : 'merchandiser'
 
   async function submit(e: React.FormEvent) {
@@ -54,7 +54,7 @@ export function AddPersonForm({ units, onAdd, onSubmit }: { units: { id: string;
           ))}
         </fieldset>
         <div className="grid2">
-          <Field label="Name"><Input value={f.label} maxLength={80} autoComplete="off" onChange={(e) => set({ label: e.target.value })} /></Field>
+          <Field label="Name"><Input value={f.label} maxLength={60} autoComplete="off" onChange={(e) => set({ label: e.target.value })} /></Field>
           {role === 'supervisor' ? (
             <>
               <Field label="Phone number"><Input mono inputMode="tel" autoComplete="off" value={f.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>

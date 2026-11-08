@@ -221,7 +221,7 @@ export default function Board() {
                 <label className="strip__search">
                   <span className="visually-hidden">Search by PO, buyer or style</span>
                   <Input type="search" enterKeyHint="search" autoComplete="off" spellCheck={false}
-                    placeholder="Search PO, buyer or style" value={text} onChange={(e) => onType(e.target.value)} />
+                    placeholder="Search PO, buyer, style or colour" value={text} onChange={(e) => onType(e.target.value)} />
                 </label>
               )
               const tools = (

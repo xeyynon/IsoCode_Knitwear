@@ -96,7 +96,7 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
             const self = a.id === meId
             return (
               <tr key={a.id}>
-                <td data-label="Name">{a.label || '(no name)'}{self ? ' (you)' : ''}</td>
+                <td data-label="Name" className="people__name">{a.label || '(no name)'}{self ? ' (you)' : ''}</td>
                 <td data-label="Role" className="people__nowrap">{a.role === 'supervisor' ? 'Supervisor' : 'Merchandiser'}</td>
                 <td data-label="Sign-in" className="mono">{a.email ?? `phone ending ${a.phoneEnd}`}</td>
                 <td data-label="Unit" className="people__nowrap">{a.unitName ?? '-'}</td>
@@ -120,7 +120,7 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
         </table>
       )}
 
-      <AddPersonForm units={units} onAdd={addPerson} onSubmit={() => { setError(null); setNotice(null) }} />
+      <AddPersonForm units={units} onAdd={addPerson} onSubmit={() => { setError(null); setNotice(null) }} onEdit={() => setError(null)} />
 
       <h2 id="add-unit" tabIndex={-1}>Add a unit</h2>
       <Card as="form" className="change" onSubmit={addUnit} noValidate>

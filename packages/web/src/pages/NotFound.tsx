@@ -15,7 +15,7 @@ import { SupervisorShell } from '../ui/templates/SupervisorShell'
 export default function NotFound() {
   useSyncExternalStore(subscribe, snapshot)
   const role = getClaims()?.role
-  const { t } = useLang()
+  const { t, lang } = useLang()
   if (role === 'supervisor') {
     return (
       <SupervisorShell title={t('err.notFoundTitle')}>
@@ -33,10 +33,12 @@ export default function NotFound() {
     )
   }
   return (
-    <PublicShell narrow title="Page not found">
-      <h1>Page not found</h1>
-      <p>That page does not exist.</p>
-      <p><ButtonLink to="/login">Go to sign in</ButtonLink></p>
+    <PublicShell narrow title={t('err.notFoundTitle')}>
+      {/* Someone who is not signed in may have chosen Tamil on the sign-in screen: the same words as a signed-in supervisor sees (FE-S-08).
+          The language is English unless a choice was made, so a merchandiser or a buyer still reads English. */}
+      <h1>{t('err.notFoundTitle')}</h1>
+      <p>{t('err.notFound')}</p>
+      <p><ButtonLink to="/login">{lang === 'ta' ? t('login.title') : 'Go to sign in'}</ButtonLink></p>
     </PublicShell>
   )
 }

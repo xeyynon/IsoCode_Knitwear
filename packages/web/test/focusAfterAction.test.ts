@@ -12,7 +12,7 @@ describe('focus after a control is removed', () => {
     expect(s).toMatch(/ref=\{removePhoto\}/)
     expect(s).toMatch(/ref=\{retakePhoto\}/)
     expect(s).toMatch(/\(photo \? \(retaking\.current \? retakePhoto : removePhoto\) : addPhoto\)\.current\?\.focus\(\)/)   // a retake keeps focus on Retake
-    expect(s.match(/photoFocus\.current = true/g)?.length).toBe(2)       // after the pick and on Remove
+    expect(s.match(/photoFocus\.current = true/g)?.length).toBe(3)       // after the pick, on Remove, and after a failed pick (FE-S-05)
   })
   it('Today: Remove on a refused update focuses the box heading, or the first stage once the box is gone', () => {
     const s = src('pages/Today.tsx')

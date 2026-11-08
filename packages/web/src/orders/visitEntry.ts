@@ -25,7 +25,7 @@ export interface VisitEntryBody {
 }
 export type VisitEntryCheck =
   | { ok: true; body: VisitEntryBody }
-  | { ok: false; field: 'stage' | 'date' | 'pieces'; error: string }
+  | { ok: false; field: 'stage' | 'date' | 'pieces'; error: string; /** True when the entry is allowed if the person confirms it (more than is left, but not more than the whole stage). */ confirm?: boolean }
 
 /**
  * The same rules the supervisor's field uses (a whole number; "-5" is refused, never read as 5),
@@ -33,15 +33,30 @@ export type VisitEntryCheck =
  * `clientUuid` is made once per entry and kept until it is accepted, so a retry is never counted twice.
  */
 export function checkVisitEntry(
-  f: VisitEntryForm, ctx: { today: string; stages: string[]; orderId: string; clientUuid: string },
+  f: VisitEntryForm,
+  ctx: {
+    today: string; stages: string[]; orderId: string; clientUuid: string
+    /** Pieces still to make in the chosen stage and the stage's whole quantity: when given, a count above what is left asks first (FE-M-02). */
+    left?: number; stageQty?: number
+    /** The person has already answered "add it anyway". */
+    confirmed?: boolean
+  },
 ): VisitEntryCheck {
   if (!ctx.stages.includes(f.stage)) return { ok: false, field: 'stage', error: 'Choose the stage.' }
   if (!isRealDate(f.date)) return { ok: false, field: 'date', error: 'Choose the date of the count.' }
   if (f.date > ctx.today) return { ok: false, field: 'date', error: 'That date has not come yet.' }
   if (f.pieces.trim() === '') return { ok: false, field: 'pieces', error: 'Enter how many pieces were made.' }
+  if (/^[\s,]*0[\s0,]*$/.test(f.pieces)) return { ok: false, field: 'pieces', error: 'Enter at least 1 piece. A day with no output is not an update.' }
   const qty = parsePieces(f.pieces)
   if (qty === null) {
     return { ok: false, field: 'pieces', error: notWholeNumber(f.pieces) ? 'Enter a whole number of pieces, such as 300. Minus signs, letters and decimals are not accepted.' : 'Enter how many pieces were made.' }
+  }
+  const stage = cap(f.stage)
+  if (ctx.stageQty !== undefined && qty > ctx.stageQty) {
+    return { ok: false, field: 'pieces', error: `That is more than the whole ${stage} quantity (${pieces(ctx.stageQty)} pieces). Check the number.` }
+  }
+  if (ctx.left !== undefined && qty > ctx.left && !ctx.confirmed) {
+    return { ok: false, field: 'pieces', confirm: true, error: `That is more than the ${pieces(ctx.left)} pieces left on ${stage}. Press Add anyway if the number is right.` }
   }
   const note = noteToSend(f.note, null)
   return { ok: true, body: { clientUuid: ctx.clientUuid, orderId: ctx.orderId, stage: f.stage, date: f.date, qty, ...(note ? { note } : {}) } }

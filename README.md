@@ -86,11 +86,13 @@ The order's colour is its worst stage. Thresholds live in a settings table. Ever
 
 ## Status
 
-An early build, **tested but not yet tried in production**. The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (about 2,400, including a real Postgres 16 run in CI). AI suggestions for notes from the floor (an English meaning and a reason, and what happens when the AI is unsure or wrong) are built and tested; voice notes are **not built**. A demo runs at **https://isocode-knitwear.vercel.app** (free plans; how it is deployed and the demo logins: [deployment.md](deployment.md)).
+**Live on free plans and working end to end, but not yet piloted on a real factory floor.** The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (2,693 passing in `npm test`, plus a real Postgres 16 run in CI). AI suggestions for notes from the floor (an English meaning and a reason, and what happens when the AI is unsure or wrong) are built and tested; voice notes are **not built**. A demo runs at **https://isocode-knitwear.vercel.app** (free plans; how it is deployed and the demo logins: [deployment.md](deployment.md)).
 
-Not yet verified: a production-size Postgres server (the demo runs on Neon's free plan), a real S3 bucket, real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
+Checked on a real device: the supervisor's daily update flow on one real Android phone over USB (keyboard open with Send above it, sign-in, Tamil rendering). Everything else, including the offline checks, ran in a desktop browser at phone size with touch emulation. Not yet verified: a production-size Postgres server (the demo runs on Neon's free plan), a real S3 bucket, an iPhone, a low-end phone, a screen reader, and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
 
 Every bug found by an audit has a regression test named after its id (`BE-nnn`), and [`optimised.md`](optimised.md) records what was made cheaper to run, with measurements. The research behind those is in [`docs/optimisation-research.md`](docs/optimisation-research.md).
+
+**History.** `main` is squashed: one commit per pull request, so a working day shows as a few large commits. The full earlier history is kept under tags in this repository: `git log build-1008` lists 75 commits, and the tags `InBul11` to `InBul18`, `build-1007` and `build-1008` mark its steps. `CHANGELOG.md` and `docs/builds/` say what each build changed.
 
 ## Architecture
 ```mermaid
@@ -120,7 +122,7 @@ packages/
 scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser and measuring tools (e2e, a11y, snapshots, ux, load, phone, diff: see Testing)
 docs/        status.md, optimisation-research.md, and builds/ (one report per numbered build)
 uiux/        Screenshots of every screen on the test fixture data: 1.0 (frozen, build 1006) and 2.0
-audit/       The UI/UX audits, the plan of action and its progress log, design direction, and the Tamil wording to review
+audit/       The design-audit trail: audit reports, plans, progress notes and screenshots (see audit/README.md)
 optimised.md  The speed-and-cost log
 deployment.md How to run it locally, how it is deployed, and the demo logins
 .github/     CI, release and Dependabot configuration
@@ -134,12 +136,16 @@ npm ci                # on a clean clone: installs exactly what package-lock.jso
 npm run verify        # static checks, typecheck and every test (not the web build: CI also runs npm run build)
 ```
 
+`npm install` (or `npm ci`) ends with a vulnerability summary such as "6 vulnerabilities". All of it is development tooling (Vitest, Vite and their helpers) that is not shipped: `npm audit --omit=dev`, which covers what runs in production, reported 0 vulnerabilities on 9 November 2026.
+
 **Run the whole app locally on demo data** (an in-memory database loaded with the brief's sample POs and four illustrative orders from `packages/server/src/demoSeed.ts`; today is fixed to 6 Nov 2026 so the figures line up):
 
 ```bash
 npm run dev:api                 # terminal 1: API on http://127.0.0.1:8787
 npm run dev -w @isocode/web     # terminal 2: app on http://localhost:5173
 ```
+
+Open the app as `http://localhost:5173`. On some Windows machines Vite listens on IPv6 only, so `http://127.0.0.1:5173` is refused; to listen on IPv4 add `-- --host 127.0.0.1` (this machine only) or `-- --host` (every address, for example to reach it from a phone on your network). The dev API is always on port 8787, and the app's dev proxy points there.
 
 | Demo account | Sign in with |
 | --- | --- |
@@ -156,7 +162,7 @@ These are throwaway demo credentials. Never reuse them anywhere real. Set `GROQ_
 ```bash
 VITE_API_BASE=https://api.example.com npm run build
 ```
-The build deliberately fails without `VITE_API_BASE`: the value is baked into the bundle, and a missing one would silently point production at the wrong place.
+The build deliberately fails without `VITE_API_BASE`: the value is baked into the bundle, and a missing one would silently point production at the wrong place. Use `VITE_API_BASE=same-origin npm run build` when the API is served from the same address as the app. `npm run build:vercel` (what Vercel runs) sets it for you.
 
 ## Configuration
 **API** (`packages/server/.env.example`)
@@ -271,7 +277,7 @@ npm run diff           # compare two sets of pictures (2.0 with the set kept bef
 - **Database:** the SQL assertions in `packages/server/db/tests/rls.test.sql` run on PGlite under `npm test`, once as a non-superuser table owner so FORCE RLS binds the owner too, and are plain Postgres so they also run under `psql`.
 - **Mutation-checked:** the security and engine rules were each deliberately broken once to confirm a test fails. A test that has never failed has not been shown to test anything.
 - **Contrast:** `check_contrast.mjs` measures every colour pair against WCAG AA.
-- **Offline, in a real browser:** `npm run e2e` builds the app, starts the API and the app, and drives Edge (or Chrome with `E2E_BROWSER=chrome`). It loads the app, goes offline, enters 20 updates, restarts the app while still offline, reconnects, and checks that each update arrived exactly once and the totals add up. It also loses a server reply on purpose to prove a retry never double-counts. Set `E2E_SHOTS=<folder>` to save screenshots.
+- **Offline, in a real browser:** `npm run e2e` builds the app, starts the API and the app, and drives Edge (or Chrome with `E2E_BROWSER=chrome`). It loads the app, goes offline, enters 20 updates, restarts the app while still offline, reconnects, and checks that each update arrived exactly once and the totals add up. It also loses a server reply on purpose to prove a retry never double-counts. Set `E2E_SHOTS=<folder>` to save screenshots. It starts its own demo API on port 8787, the same port as `npm run dev:api`, so stop the dev API first, or set `E2E_API_PORT=8799` (any free port) to run it beside the dev API.
 - **Accessibility, in a real browser:** `npm run a11y` (with `npm run dev:api` and `npm run dev -w @isocode/web` running) drives Edge through every screen at 390x844 touch and 1280x900 (sign-in both tabs, board with the menu open, order setup with and without errors, an order detail, review, each Setup section, status, a buyer page opened with a link made through the API and cancelled again at the end, and the supervisor's list and update screen with a reason, a note and the "too many pieces" question open, in English and Tamil). It injects axe-core (WCAG 2.0 to 2.2 A and AA plus best practice, no rule switched off), also requires exactly one `h1` per screen, exits with an error on any serious or critical violation and lists the moderate and minor ones grouped by screen. Set `API=<url>` to use a spare API when the demo one has locked the sign-in. A clean run is a floor: a screen-reader pass (NVDA, TalkBack) is still needed.
 
 <details>

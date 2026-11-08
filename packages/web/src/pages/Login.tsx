@@ -11,6 +11,7 @@ import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input } from '../ui/atoms/Input'
 import { Field } from '../ui/molecules/Field'
+import { useQueue } from '../queue/instance'
 
 // The demo logins are shown only in a build made for the hosted review demo; a real deployment never shows a password.
 // The flag is compared literally so the build can fold it away, and the panel (with the demo logins and buyer-link tokens)
@@ -41,6 +42,9 @@ export default function Login() {
   // The kind, so the message follows the language switch; the English text as the server worded it.
   const [error, setError] = useState<{ kind: SignInFailure; message: string } | null>(null)
   const first = useRef<HTMLInputElement>(null)
+  // Updates left on this phone (a sign-out or an expired sign-in): they send after the next sign-in, and the screen says so (FE-S-07).
+  const { state: queueState } = useQueue()
+  const pending = queueState?.pending ?? 0
   const second = useRef<HTMLInputElement>(null)
   const failed = useRef(false)
 
@@ -87,6 +91,7 @@ export default function Login() {
         </Field>
 
         {error && <ErrorText>{lang === 'en' ? error.message : signInMessage(error.kind, error.message, lang)}</ErrorText>}
+        {pending > 0 && <p className="sub" role="status">{t('login.waiting', { n: pending })}</p>}
         <Button variant="primary" block disabled={busy || !a.trim() || !b}>
           {busy ? t('login.signingIn') : t('login.title')}
         </Button>

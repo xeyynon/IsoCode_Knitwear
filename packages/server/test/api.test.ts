@@ -3,6 +3,7 @@ import type { PGlite } from '@electric-sql/pglite'
 import type { FastifyInstance } from 'fastify'
 import { buildApp, cleanOrigin, parseOrigins, signToken, verifyToken, hashSecret, verifySecret, normalisePhone, LOCK_MINUTES, MAX_FAILED_ATTEMPTS, type Db } from '../src/index.js'
 import { CREDS, ID, migratedDb, pgliteDb, resetAndSeed } from './helpers.js'
+import { LOGIN_ADDRESS_BUDGET } from '../src/loginLimiter.js'
 
 const SECRET = 'x'.repeat(40)
 // 2026-11-04 10:00 in India: the "today" the seed data is built around
@@ -140,12 +141,13 @@ describe('signing in', () => {
   })
   it('limits sign-in attempts per address', async () => {
     let last = 0
-    for (let i = 0; i < 11; i++) last = (await signIn({ email: `x${i}@example.test`, password: 'nope' })).res.statusCode
+    // BE-081: a flood across many accounts from one address is stopped at the per-address ceiling (one account's own budget is in bugfixFinalLimiter.test.ts)
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET + 1; i++) last = (await signIn({ email: `x${i}@example.test`, password: 'nope' })).res.statusCode
     expect(last).toBe(429)
     expect((await signIn({ email: CREDS.email, password: CREDS.password })).res.statusCode).toBe(429)
   })
   it('a successful sign-in does not give back failures the address has already spent', async () => {
-    for (let i = 0; i < 9; i++) expect((await signIn({ email: `x${i}@example.test`, password: 'nope' })).res.statusCode).toBe(401)
+    for (let i = 0; i < LOGIN_ADDRESS_BUDGET - 1; i++) expect((await signIn({ email: `x${i}@example.test`, password: 'nope' })).res.statusCode).toBe(401)
     expect((await signIn({ email: CREDS.email, password: CREDS.password })).res.statusCode).toBe(200)
     expect((await signIn({ email: 'y@example.test', password: 'nope' })).res.statusCode).toBe(401)
     expect((await signIn({ email: 'z@example.test', password: 'nope' })).res.statusCode).toBe(429)
@@ -182,11 +184,11 @@ describe('signing in', () => {
   it('a burst of wrong sign-ins from one address cannot all slip past the per-address limit', async () => {
     const slow: Db = { tx: async (ctx, fn) => { await new Promise((r) => setTimeout(r, 30)); return db.tx(ctx, fn) } }
     const a = buildApp({ db: slow, tokenSecret: SECRET, clock: () => now })
-    const codes = await Promise.all(Array.from({ length: 30 }, (_, i) =>
+    const codes = await Promise.all(Array.from({ length: LOGIN_ADDRESS_BUDGET + 30 }, (_, i) =>
       a.inject({ method: 'POST', url: '/api/auth/login', payload: { email: `x${i}@example.test`, password: 'nope' } })
         .then((r) => r.statusCode)))
-    expect(codes.filter((c) => c === 401)).toHaveLength(10)
-    expect(codes.filter((c) => c === 429)).toHaveLength(20)
+    expect(codes.filter((c) => c === 401)).toHaveLength(LOGIN_ADDRESS_BUDGET)
+    expect(codes.filter((c) => c === 429)).toHaveLength(30)
   })
 })
 

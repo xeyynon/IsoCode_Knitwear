@@ -1,4 +1,5 @@
 import net from 'node:net'
+import { normalisePhone } from './authService.js'
 
 // The sign-in budget per caller address (BE-044, BE-045, O-12).
 //
@@ -9,8 +10,16 @@ import net from 'node:net'
 // HOW MUCH memory: an entry exists only while a failed try is on record, it is removed when its window ends (a sweep on a timer that
 // does not keep the process alive) or when the last failure is given back, and the map has a hard size cap.
 
-/** Failed sign-ins per address per window. */
+/**
+ * Failed sign-ins per address AND account per window (BE-081). One person's mistakes stop that person from this address, not everyone behind
+ * it: a factory on one router or one mobile NAT address shares an address, and ten fumbled PINs across a shift used to lock them all out.
+ */
 export const LOGIN_BUDGET = 10
+/**
+ * Failed sign-ins per address, all accounts together, per window (BE-081). Much higher than one account's budget, so that a shared address
+ * is not shut by ordinary mistakes, while one address still cannot try accounts without limit (each account is also locked on its own).
+ */
+export const LOGIN_ADDRESS_BUDGET = 60
 export const LOGIN_WINDOW_MS = 15 * 60_000
 /** Most addresses remembered at once. About 200 bytes each, so 10,000 is about 2 MB at the very most. */
 export const LOGIN_MAX_ENTRIES = 10_000
@@ -55,10 +64,10 @@ function expandV6(a: string): string[] | null {
 interface Slot { count: number; resetAt: number }
 
 export interface LoginLimiter {
-  /** True when this address has used its budget in the current window. Creates nothing. */
-  blocked(ip: string, nowMs: number): boolean
+  /** True when this address (and, if given, this account's `scope`) has used its budget in the current window. Creates nothing. */
+  blocked(ip: string, nowMs: number, scope?: string): boolean
   /** Spend one try BEFORE the work starts (so a burst in flight together cannot all pass `blocked`). Returns what to give back. */
-  spend(ip: string, nowMs: number): Spent
+  spend(ip: string, nowMs: number, scope?: string): Spent
   /** Entries held right now (for tests and for the operator). */
   readonly size: number
   /** Drop every entry whose window has ended. Returns how many went. */
@@ -71,6 +80,8 @@ export interface LoginLimiter {
 export interface Spent { refund(): void }
 
 export function createLoginLimiter(budget = LOGIN_BUDGET, windowMs = LOGIN_WINDOW_MS, maxEntries = LOGIN_MAX_ENTRIES): LoginLimiter {
+  /** The tidied address, plus the account's scope when there is one (the address part never holds a bar, so the two cannot be confused). */
+  const keyOf = (ip: string, scope?: string): string => (scope === undefined ? limiterKey(ip) : `${limiterKey(ip)}|${scope.slice(0, 100)}`)
   const slots = new Map<string, Slot>()   // insertion order = least recently spent first, so the cap drops the stalest
 
   const sweep = (nowMs: number): number => {
@@ -82,12 +93,12 @@ export function createLoginLimiter(budget = LOGIN_BUDGET, windowMs = LOGIN_WINDO
   return {
     get size() { return slots.size },
     sweep,
-    blocked(ip, nowMs) {
-      const s = slots.get(limiterKey(ip))
+    blocked(ip, nowMs, scope) {
+      const s = slots.get(keyOf(ip, scope))
       return !!s && s.resetAt > nowMs && s.count >= budget
     },
-    spend(ip, nowMs) {
-      const key = limiterKey(ip)
+    spend(ip, nowMs, scope) {
+      const key = keyOf(ip, scope)
       let slot = slots.get(key)
       if (!slot || slot.resetAt <= nowMs) {
         if (!slot && slots.size >= maxEntries) {
@@ -115,4 +126,15 @@ export function createLoginLimiter(budget = LOGIN_BUDGET, windowMs = LOGIN_WINDO
       return () => clearInterval(timer)
     },
   }
+}
+
+/**
+ * Which account a sign-in is for, as the limiter counts it (BE-081): an email in lower case, or a phone number as its ten digits (so
+ * "90000 10001", "9000010001" and "+91 90000-10001" are one account). A body that names neither counts under one shared scope.
+ */
+export function loginScope(body: unknown): string {
+  const b = (typeof body === 'object' && body !== null ? body : {}) as { email?: unknown; phone?: unknown }
+  if (typeof b.email === 'string') return `e:${b.email.trim().toLowerCase()}`
+  if (typeof b.phone === 'string') return `p:${normalisePhone(b.phone) ?? b.phone.replace(/\D/g, '')}`
+  return '-'
 }

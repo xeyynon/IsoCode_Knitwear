@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
-import { shortDate, shortDateIn, type Status } from '../board/boardLogic'
-import { BACK_PARAM, backToBoard } from '../orders/orderDetailLogic'
+import { dateWithYear, shortDate, shortDateIn, type Status } from '../board/boardLogic'
+import { BACK_PARAM, backToBoard, historyOrder } from '../orders/orderDetailLogic'
 import type { CalendarUnit } from '../orders/timelineLayout'
-import { isRealDate, slipText } from '../orders/orderForm'
+import { exFactoryRule, isRealDate, sizeEntries, slipText } from '../orders/orderForm'
 import { LOW_CONFIDENCE } from '../orders/visitEntry'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
@@ -63,9 +63,9 @@ export default function OrderDetail() {
   useEffect(() => {
     if ((location.state as { created?: boolean } | null)?.created) navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
   }, [location, navigate])
-  const { confirm, dialog } = useConfirm()
   const boardPath = backToBoard(useSearchParams()[0].get(BACK_PARAM))
   const [d, setD] = useState<Detail | null>(null)
+  const { confirm, dialog } = useConfirm()
   const [error, setError] = useState<LoadFailure | null>(null)
   const [missing, setMissing] = useState(false)   // the server says there is no such order: retrying cannot help
   const [date, setDate] = useState('')
@@ -88,8 +88,11 @@ export default function OrderDetail() {
     setChangeError(null); setMoved(null)
     if (!isRealDate(date)) return setChangeError('Choose the new ex-factory date.')
     if (!reason.trim()) return setChangeError('Give a reason for the change.')
-    // A date that has already gone is allowed (an order can be rebooked after the fact) but never by accident: say which day, and ask.
+    // A date far from today is refused (FE-M-03): a slip of the keyboard (2099, 1999) would rewrite every stage date and add permanent history rows.
     const today = d?.today ?? istDate()
+    const rule = exFactoryRule(date, today)
+    if (rule?.kind === 'refuse') return setChangeError(rule.text)
+    // A date that has already gone is allowed (an order can be rebooked after the fact) but never by accident: say which day, and ask.
     if (date < today && !(await confirm({
       title: 'Move ex-factory to a day that has passed?',
       body: `${shortDateIn(date, today)} is before today (${shortDateIn(today, today)}). The stage dates move with it and may show as late.`,
@@ -138,7 +141,7 @@ export default function OrderDetail() {
                 // The last stage's projected finish, from the server's own projection; no tile when there is none yet (nothing is guessed here).
                 ...(last && !last.complete && last.projectedEnd ? [{ label: 'Projected finish', value: shortDate(last.projectedEnd), hint: slipText(last.plannedEnd, last.projectedEnd) ?? undefined, wideOnly: true }] : []),
               ]} />
-              <p className="sub mono summary__sizes">{Object.entries(d.order.sizes).map(([s, q]) => `${s} ${pieces(q)}`).join(' · ')}</p>
+              <p className="sub mono summary__sizes">{sizeEntries(d.order.sizes).map(([s, q]) => `${s} ${pieces(q)}`).join(' · ')}</p>
               {d.history[0] && (
                 <p className="sub summary__last">Last date change: {when(d.history[0].at)} by {d.history[0].by ?? 'a person not recorded'}. <a className="link" href="#history">See the history</a></p>
               )}
@@ -181,7 +184,7 @@ export default function OrderDetail() {
               }
               actions={
                 <>
-            {d.stages.length > 0 && <VisitEntryForm key={d.order.id} orderId={d.order.id} stages={d.stages.map((s) => s.stage)} today={d.today ?? istDate()} onAdded={load} />}
+            {d.stages.length > 0 && <VisitEntryForm key={d.order.id} orderId={d.order.id} stages={d.stages.map((s) => s.stage)} left={Object.fromEntries(d.stages.map((s) => [s.stage, s.remaining]))} stageQty={Object.fromEntries(d.stages.map((s) => [s.stage, s.qty]))} today={d.today ?? istDate()} onAdded={load} />}
 
             <Card>
               <details open={moved !== null || changeError !== null}>
@@ -205,11 +208,11 @@ export default function OrderDetail() {
             <h2 id="history" tabIndex={-1}>History of date changes{d.history.length > 0 ? ` (${d.history.length})` : ''}</h2>
             {d.history.length === 0 ? <p className="sub">No dates have been changed on this order.</p> : (
               <ol className="plain historylist">
-                {d.history.map((h, i) => (
+                {historyOrder(d.history).map((h, i) => (
                   <li key={i} className="historyitem">
                     <div className="historyitem__top">
                       <b>{h.what}</b>
-                      <span className="mono">{h.from ? shortDate(h.from) : '-'} → {h.to ? shortDate(h.to) : '-'}</span>
+                      <span className="mono">{h.from ? dateWithYear(h.from) : '-'} → {h.to ? dateWithYear(h.to) : '-'}</span>
                     </div>
                     <p className="sub">{h.by ?? 'Person not recorded'} · {when(h.at)}</p>
                     {h.reason && <p className="historyitem__reason">Reason: {h.reason}</p>}

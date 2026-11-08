@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
+import { cleanLine } from './textRules.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const TOKEN_PREFIX = 'bl_'
@@ -18,7 +19,8 @@ export async function createBuyerLink(tx: Tx, ctx: Ctx, input: { buyerId: string
   if (!UUID.test(String(input.buyerId))) throw badRequest('Choose a buyer')
   const days = input.days ?? DEFAULT_LINK_DAYS
   if (!Number.isInteger(days) || days < 1 || days > MAX_LINK_DAYS) throw badRequest(`A link can last from 1 to ${MAX_LINK_DAYS} days`)
-  const label = typeof input.label === 'string' ? input.label.trim().slice(0, 80) : ''
+  // BE-078: optional text, so it is cleaned (bidi controls out, control characters to a space) and not refused
+  const label = typeof input.label === 'string' ? cleanLine(input.label).slice(0, 80) : ''
   if (!(await tx.query('select 1 from buyer where id = $1', [input.buyerId])).length) throw notFound('No such buyer')
   const token = TOKEN_PREFIX + randomBytes(24).toString('base64url')
   const expires = new Date(now.getTime() + days * 86_400_000)

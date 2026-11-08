@@ -25,10 +25,10 @@ describe('OrderBento', () => {
 })
 
 describe('OrderBento.css', () => {
-  it('is one column until there is room, then the timeline and the stage cards sit side by side', () => {
+  it('is one column until there is room, then the timeline has the whole row and the stage cards sit under it (FE-M-01: side by side left the timeline scrolling)', () => {
     expect(css).toMatch(/@media \(min-width: 1000px\)/)
     const wide = /@media \(min-width: 1000px\)\s*\{([\s\S]*)\}\s*$/.exec(css)?.[1] ?? ''
-    expect(wide).toMatch(/grid-template-areas:[^;]*"timeline stages"/)
+    expect(wide).toMatch(/grid-template-areas:[^;]*"timeline timeline"[^;]*"stages stages"/)
   })
   it('lets the cards inside use the width of their area, and uses tokens only', () => {
     expect(css).toMatch(/\.bento \.card\s*\{[^}]*max-width:\s*none/)

@@ -16,6 +16,8 @@ export interface QueueState {
   online: boolean
   /** Why the last sync stopped early, or null. */
   error: SyncError
+  /** How many syncs in a row stopped early for a reason that is not a sign-in (a lost reply, no signal, a server fault). 0 after one succeeds. */
+  failedTries?: number
   lastSyncedAt: number | null
   /** The queue is memory-only: updates would be lost if the app closes. Must be shown to the user. */
   durable: boolean
@@ -33,6 +35,8 @@ export interface ControllerDeps {
   now?: () => number
   uuid?: () => string
   isOnline?: () => boolean
+  /** Waits before the 1st, 2nd, 3rd... automatic retry after a failed sync (the last one repeats). Default 3 s, 8 s, 20 s (FE-S-06). */
+  retryDelaysMs?: number[]
 }
 
 export function createQueueController(deps: ControllerDeps) {
@@ -49,8 +53,18 @@ export function createQueueController(deps: ControllerDeps) {
   // update is still its author's, never left ownerless for whoever signs in next.
   let lastOwner: string | null = null
   const owner = () => { const w = deps.getOwner?.() ?? null; if (w) lastOwner = w; return w }
-  let state: QueueState = { pending: 0, foreign: 0, rejected: [], foreignRejected: 0, syncing: false, online: isOnline(), error: null, lastSyncedAt: null, durable: deps.store.durable }
+  let state: QueueState = { pending: 0, foreign: 0, rejected: [], foreignRejected: 0, syncing: false, online: isOnline(), error: null, failedTries: 0, lastSyncedAt: null, durable: deps.store.durable }
   const listeners = new Set<() => void>()
+  // After a failed sync the phone tries again by itself within seconds, not only on the 30 s timer: a reply lost on the way back is the
+  // common case, and the server already has the update (the same id is stored once), so the quick second try only confirms it (FE-S-06).
+  const retryDelays = deps.retryDelaysMs && deps.retryDelaysMs.length ? deps.retryDelaysMs : [3_000, 8_000, 20_000]
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  const stopRetry = () => { if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null } }
+  const scheduleRetry = () => {
+    if (retryTimer !== null) return
+    const ms = retryDelays[Math.min(state.failedTries ?? 0, retryDelays.length) - 1] ?? retryDelays[retryDelays.length - 1]!
+    retryTimer = setTimeout(() => { retryTimer = null; void syncNow() }, ms)
+  }
 
   const publish = (patch: Partial<QueueState>) => {
     state = { ...state, ...patch }
@@ -108,10 +122,13 @@ export function createQueueController(deps: ControllerDeps) {
         // waiting. That is not a problem to show; start again for whoever is signed in now. (Only
         // signed out: the 'auth' stop stands, and the next sign-in starts a sync.)
         again = owner() !== who && owner() !== null
-        publish({ syncing: false, error: again ? null : out.error, lastSyncedAt: out.error ? state.lastSyncedAt : now() })
+        const failed = !again && out.error !== null && out.error !== 'auth'
+        publish({ syncing: false, error: again ? null : out.error, failedTries: failed ? (state.failedTries ?? 0) + 1 : 0, lastSyncedAt: out.error ? state.lastSyncedAt : now() })
+        if (failed && state.pending > 0) scheduleRetry(); else stopRetry()
       } catch {
         await refresh()
-        publish({ syncing: false, error: 'server' })
+        publish({ syncing: false, error: 'server', failedTries: (state.failedTries ?? 0) + 1 })
+        if (state.pending > 0) scheduleRetry()
       }
     })().finally(() => { inFlight = null; if (again) void syncNow() })
     return inFlight

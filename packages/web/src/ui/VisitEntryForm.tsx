@@ -18,13 +18,15 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
  * The entry keeps one id until it is accepted, so pressing the button again after a lost answer
  * cannot count the pieces twice; changing anything makes it a new entry.
  */
-export function VisitEntryForm({ orderId, stages, today, onAdded }: { orderId: string; stages: string[]; today: string; onAdded: () => Promise<void> }) {
+export function VisitEntryForm({ orderId, stages, today, onAdded, left, stageQty }: { orderId: string; stages: string[]; today: string; onAdded: () => Promise<void>; left?: Record<string, number>; stageQty?: Record<string, number> }) {
   const uid = useId()
   const [f, setF] = useState<Fields>({ stage: stages[0] ?? '', date: today, pieces: '', note: '' })
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<{ field: 'stage' | 'date' | 'pieces' | 'send'; text: string } | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  // More than is left on the stage: the first press asks, the second adds it (the same step the supervisor's screen has). Any edit asks again.
+  const [confirming, setConfirming] = useState(false)
   const entryId = useRef<string | null>(null)
   const pieces = useRef<HTMLInputElement>(null)
   const stage = useRef<HTMLSelectElement>(null)
@@ -36,15 +38,16 @@ export function VisitEntryForm({ orderId, stages, today, onAdded }: { orderId: s
   useEffect(() => { setUnsentInput('visit-entry', unsent) }, [unsent])
   useEffect(() => () => setUnsentInput('visit-entry', false), [])
 
-  const set = (patch: Partial<Fields>) => { setF((x) => ({ ...x, ...patch })); entryId.current = null; setProblem(null) }
+  const set = (patch: Partial<Fields>) => { setF((x) => ({ ...x, ...patch })); entryId.current = null; setProblem(null); setConfirming(false) }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (sending.current) return
     setDone(null)
     entryId.current ??= crypto.randomUUID()
-    const c = checkVisitEntry(f, { today, stages, orderId, clientUuid: entryId.current })
+    const c = checkVisitEntry(f, { today, stages, orderId, clientUuid: entryId.current, left: left?.[f.stage], stageQty: stageQty?.[f.stage], confirmed: confirming })
     if (!c.ok) {
+      setConfirming(c.confirm === true)
       setProblem({ field: c.field, text: c.error })
       ;(c.field === 'stage' ? stage : c.field === 'date' ? date : pieces).current?.focus()
       return
@@ -52,7 +55,7 @@ export function VisitEntryForm({ orderId, stages, today, onAdded }: { orderId: s
     sending.current = true; setBusy(true); setProblem(null)
     try {
       const r = await apiFetch<{ duplicate: boolean }>('/api/events', { method: 'POST', body: JSON.stringify(c.body) })
-      entryId.current = null
+      entryId.current = null; setConfirming(false)
       setF((x) => ({ ...x, pieces: '', note: '' }))
       setDone(r.duplicate ? 'That entry was already recorded. It was not counted twice.' : visitEntryDone(c.body.stage, c.body.qty, c.body.date))
       await onAdded()
@@ -82,7 +85,7 @@ export function VisitEntryForm({ orderId, stages, today, onAdded }: { orderId: s
           <Field label="Note (optional)">
             <Input value={f.note} maxLength={MAX_NOTE} onChange={(e) => set({ note: e.target.value })} /></Field>
           {problem && <ErrorText id={`${uid}-err`}>{problem.text}</ErrorText>}
-          <Button variant="primary" disabled={busy}>{busy ? 'Adding…' : 'Add update'}</Button>
+          <Button variant="primary" disabled={busy}>{busy ? 'Adding…' : confirming ? 'Add anyway' : 'Add update'}</Button>
         </form>
       </details>
       {done && <p className="notice-box" role="status">{done}</p>}

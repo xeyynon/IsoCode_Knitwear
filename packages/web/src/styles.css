@@ -272,7 +272,7 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
    A phone gets the vertical list above instead, and the page never scrolls sideways. */
 .tlc { margin: 0 0 8px; }
 .tlc__scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.tlc__grid { min-width: calc(140px + max(520px, var(--days) * 26px)); }
+.tlc__grid { min-width: calc(140px + max(520px, var(--days) * 20px)); }   /* a day is at least 20 px: a five-stage order fits a 1024 px window (FE-M-01) */
 .tlc__rows { margin: 0; }
 .tlc__row { display: grid; grid-template-columns: 140px 1fr; border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
 .tlc__rows .tlc__row:last-child { border-bottom: 0; }
@@ -431,6 +431,9 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 }
 .people__actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 /* A word stays whole here: the shared .plan td rule lets any word break anywhere, which split "Merchandiser" and "Active" in the middle. */
+/* a very long name wraps inside its cell instead of widening the table (FE-M-10) */
+.people td.people__name { overflow-wrap: anywhere; min-width: 9rem; max-width: 18rem; }   /* two classes: it must beat the .people td rule below */
+.people td[data-label='Sign-in'] { overflow-wrap: anywhere; min-width: 12ch; }   /* an email breaks in two lines, not one letter to a line */
 .people td, .people th { overflow-wrap: normal; word-break: normal; }
 .people td.mono { overflow-wrap: anywhere; }   /* an email address may break */
 .people__nowrap { white-space: nowrap; }

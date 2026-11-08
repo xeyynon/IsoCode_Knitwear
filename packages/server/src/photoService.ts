@@ -4,7 +4,7 @@ import { AppError, badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Db, type Tx } from './db.js'
 import type { MediaStore } from './mediaStore.js'
 import { isIsoDate, isStageName } from './today.js'
-import { stripJpegMetadata } from './jpegMeta.js'
+import { hasMetadataMarker, stripJpegMetadataOrNull } from './jpegMeta.js'
 import { earliestAllowedDate, tooOld } from './eventService.js'
 import { photoAlertBody, writeOutbox } from './outboxService.js'
 import { DEMO_MEDIA_BYTES_CAP, DEMO_PHOTOS_PER_DAY, DEMO_QUOTA_MESSAGE } from './demoMode.js'
@@ -66,7 +66,12 @@ export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: Phot
   if (compareDates(input.date, earliestAllowedDate(today)) < 0) throw tooOld()
   if (!Buffer.isBuffer(input.bytes) || input.bytes.length > MAX_PHOTO_BYTES) throw new AppError(413, 'photo_too_large', 'That photo is too large')   // 413 here and in the error handler: the phone reads any 4xx but 429 as "never going to work"; a stable code says why
   if (!looksLikeJpeg(input.bytes)) throw new AppError(400, 'not_a_photo', 'That file is not a JPEG photo')
-  const bytes = stripJpegMetadata(input.bytes)   // BE-068: the phone app already drops the camera's EXIF; a scripted upload did not, and its location would reach the buyer
+  // BE-068: the phone app already drops the camera's EXIF; a scripted upload did not, and its location would reach the buyer.
+  // BE-076: a file the walker cannot read AND that carries a metadata segment is REFUSED (it used to be stored as it was, GPS text included).
+  // The app's own canvas JPEGs always walk; an unreadable file with no metadata segment has nothing the walker would have removed.
+  const cleaned = stripJpegMetadataOrNull(input.bytes)
+  if (!cleaned && hasMetadataMarker(input.bytes)) throw new AppError(400, 'not_a_photo', 'That photo could not be read safely. Please take it again')
+  const bytes = cleaned ?? input.bytes
 
   // 1. The stage (row-level security filters it to the caller's unit) and the photo already stored under this clientUuid, in one query.
   const found = (await db.tx(ctx, (tx) => tx.query<{ buyer_id: string; unit_id: string; photo_id: string | null; photo_order: string | null }>(

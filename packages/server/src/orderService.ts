@@ -3,6 +3,7 @@ import { workingDaysBack } from '@isocode/engine/dates'
 import { badRequest, forbidden, notFound, orDuplicate, AppError } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { isIsoDate } from './today.js'
+import { hasUnsafeText } from './textRules.js'
 
 export interface NewOrder {
   buyerId: string
@@ -34,6 +35,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const MAX_ORDER_TEXT_CHARS = 200
 const text = (v: unknown, name: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw badRequest(`${name} is required`)
+  if (hasUnsafeText(v.trim())) throw badRequest(`${name} has a character that is not allowed`)   // BE-078: tab, newline, bidi override
   // Refused, never cut: two different POs that share their first 200 characters must not turn into one.
   if (v.trim().length > MAX_ORDER_TEXT_CHARS) throw badRequest(`${name} must be at most ${MAX_ORDER_TEXT_CHARS} characters`)
   return v.trim()
@@ -53,7 +55,7 @@ export function normaliseSizes(sizes: unknown): { sizes: Record<string, number>;
     const size = raw.trim()
     if (!size) throw badRequest('A size has no name')
     if (size.length > MAX_SIZE_NAME_CHARS) throw badRequest(`A size name can be at most ${MAX_SIZE_NAME_CHARS} characters`)
-    if (/[\u0000-\u001F\u007F]/.test(size)) throw badRequest('A size name has a character that is not allowed')
+    if (hasUnsafeText(size)) throw badRequest('A size name has a character that is not allowed')   // BE-078: also the bidi controls
     if (Object.hasOwn(out, size)) throw badRequest(`The size ${size} is listed twice`)
     if (!Number.isInteger(q) || (q as number) < 0 || (q as number) > MAX_QTY_PER_SIZE) throw badRequest(`Size ${size.slice(0, 20)}: quantity must be a whole number from 0 to ${MAX_QTY_PER_SIZE}`)
     out[size] = q as number
@@ -225,6 +227,7 @@ export async function changeExFactory(
   if (typeof reason !== 'string' || !reason.trim()) throw badRequest('Give a reason for the change')
   // Same cap as the form; written once per moved row into an append-only table.
   if (reason.trim().length > 300) throw badRequest('Keep the reason to 300 characters')
+  if (hasUnsafeText(reason.trim())) throw badRequest('The reason has a character that is not allowed')   // BE-078
   if (!isIsoDate(newDate)) throw badRequest('Ex-factory date must be a real date (YYYY-MM-DD)')
   if (!UUID.test(String(orderId)) || !UUID.test(String(userId))) throw badRequest('Invalid request')
 

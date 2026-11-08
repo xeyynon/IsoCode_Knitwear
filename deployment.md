@@ -32,8 +32,10 @@ The sign-in screen of the live app has an **Evaluator access** panel with these 
 git clone https://github.com/xeyynon/IsoCode_Knitwear.git
 cd IsoCode_Knitwear
 npm ci                          # install exactly what the lock file says
-npm run verify                  # optional: repo checks, typecheck and all about 2,400 tests (a few minutes)
+npm run verify                  # optional: repo checks, typecheck and all 2,693 tests (a few minutes)
 ```
+
+`npm ci` ends with a vulnerability summary such as "6 vulnerabilities (3 moderate, 1 high, 2 critical)". All of it is development tooling (Vitest, Vite and their helpers) and none of it is shipped: `npm audit --omit=dev`, which covers what runs in production, reported **0 vulnerabilities** on 9 November 2026.
 
 Start the API and the app in two terminals:
 
@@ -42,7 +44,7 @@ npm run dev:api                 # terminal 1: API on http://127.0.0.1:8787, load
 npm run dev -w @isocode/web     # terminal 2: the app on http://localhost:5173
 ```
 
-Open http://localhost:5173 and sign in with the logins above (the local terminal prints them too). The local buyer pages are `http://localhost:5173/buyer#bl_demoCompanyB_readonly_2026` and `...#bl_demoCompanyC_readonly_2026`.
+Open http://localhost:5173 (use `localhost`: on some Windows machines Vite listens on IPv6 only, so `http://127.0.0.1:5173` is refused; to listen on IPv4 start terminal 2 with `npm run dev -w @isocode/web -- --host 127.0.0.1`, or with `-- --host` to reach it from a phone on your network) and sign in with the logins above (the local terminal prints them too). Ports used: the API on 8787 and the app on 5173; `npm run e2e` serves its production build on 4173. The local buyer pages are `http://localhost:5173/buyer#bl_demoCompanyB_readonly_2026` and `...#bl_demoCompanyC_readonly_2026`.
 
 **AI suggestions locally (optional, free):** create a key at https://console.groq.com (API Keys), then start terminal 1 with it set. Nothing is written to a file.
 
@@ -55,7 +57,7 @@ $env:GROQ_API_KEY = "gsk_..."; npm run dev:api
 GROQ_API_KEY=gsk_... npm run dev:api
 ```
 
-Without a key the app runs the same; the review queue says AI suggestions are off and the merchandiser translates and picks the reason by hand.
+**With no AI key** the app runs the same: the review queue says AI suggestions are off, and the merchandiser translates the note and picks the reason by hand. Nothing is guessed.
 
 **Other local commands**
 
@@ -65,6 +67,8 @@ Without a key the app runs the same; the review queue says AI suggestions are of
 | `npm run typecheck` | TypeScript, all packages |
 | `npm run check` | Repository guards: no secrets or private files, docs, colour contrast, bug list |
 | `npm run build:vercel` | Builds exactly what Vercel deploys, into `.vercel/output` (skips the database step locally) |
+| `VITE_API_BASE=same-origin npm run build` | Only the web app. A plain `npm run build` stops with "VITE_API_BASE is not set" on purpose: the address is baked into the bundle (`build:vercel` sets it for you) |
+| `npm run e2e` | The offline test in a real browser (22 checks). It starts its own demo API on port 8787, so stop `npm run dev:api` first, or set `E2E_API_PORT=8799` (any free port) |
 | `DEMO_DATA=fixture npm run dev:api` | The small test fixture instead of the demo data (the a11y and screenshot scripts check against it) |
 
 ---
@@ -114,10 +118,22 @@ Names only. Values live in Vercel's encrypted settings (secrets marked sensitive
 | `GROQ_API_KEY` | yes | Groq key for AI suggestions on notes |
 | `AI_PROVIDER` | no | `groq` (also `gemini`, `anthropic`) |
 | `MEDIA_STORE` | no | `db`: photo bytes in Postgres |
-| `DEMO_TODAY` | no | `2026-11-06`: the demo's fixed factory day. Also turns on the Evaluator access panel. Not set in a real deployment |
+| `DEMO_TODAY` | no | `2026-11-06`: the demo's fixed factory day. In the hosted build it also turns on the Evaluator access panel (`scripts/vercel_build.mjs` sets `VITE_DEMO_ACCESS=1` when `DEMO_TODAY` is set; a local `npm run dev` shows no panel, and the local terminal prints the logins). Not set in a real deployment |
 | `SEED_DEMO` | no | `1`: load the demo data into an empty database on a production deploy |
 
 **Optional** (not set on the demo): `AI_MODEL`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `ALLOWED_ORIGINS` (the app and API share one address, so not needed), `TRUST_PROXY` (defaults to 1 on Vercel), `LOG_LEVEL`, `DB_POOL_MAX` (2 here, 5 elsewhere), `DB_STATEMENT_TIMEOUT_MS`, `WARNING_FULL_REFRESH_MS` (0 here), `VITE_DEMO_ACCESS`, `VITE_API_BASE` (the build sets `same-origin`), and for a bucket instead of Postgres: `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE`, `S3_PREFIX`, `S3_SSE`.
+
+**Other variables the code reads** (all optional; names and defaults only)
+
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `MEDIA_DIR` | unset | Folder for uploaded photos when `MEDIA_STORE=disk`. With both unset, photos are off and the photo routes answer 503 |
+| `PORT` | `8787` | Port of the real server (`npm run start:api`). The local demo API (`npm run dev:api`) always uses 8787 |
+| `WARNING_FULL_REFRESH_MS` | `300000` (5 minutes) | How often the delay warnings are fully recomputed; `0` makes every refresh a full one |
+| `ALLOW_UNSAFE_DB_ROLE` | unset | `1` lets the server start with a database role that bypasses row-level security. Local development only; never set it in a deployment |
+| `DEMO_DATA` | demo data | `fixture` loads the small test fixture instead of the demo data (local only) |
+
+Used by scripts and tests only, never by the running app: `E2E_API_PORT`, `E2E_BROWSER`, `E2E_SHOTS`, `LOAD_API_PORT`, `SNAP_OUT`, `TEST_DATABASE_URL`, `SLOWEST_TESTS`, `BANNED_TERMS` and `REQUIRE_BANNED_TERMS`.
 
 **Added by the Neon integration** (prefixed `NEON_`): `NEON_DATABASE_URL`, `NEON_DATABASE_URL_UNPOOLED` and the other `NEON_*` connection parts. The app does not read them directly; they are where the owner connection above came from.
 

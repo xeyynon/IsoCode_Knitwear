@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate } from '../board/boardLogic'
+import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
 import { Banner } from '../ui/atoms/Banner'
 import { Button } from '../ui/atoms/Button'
@@ -12,7 +13,7 @@ import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input, Select } from '../ui/atoms/Input'
 import { TextLink } from '../ui/atoms/TextLink'
 import { Field } from '../ui/molecules/Field'
-import { isRealDate, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
+import { exFactoryRule, isRealDate, MAX_SIZE_ROWS, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
 import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
@@ -71,7 +72,7 @@ export default function OrderSetup() {
   }, [form.templateId, form.exFactory])
 
   const set = <K extends keyof OrderForm>(k: K, v: OrderForm[K]) => setForm((f) => ({ ...f, [k]: v }))
-  const errors: FormErrors = validateOrder(form)
+  const errors: FormErrors = validateOrder(form, istDate())
   const sizes = parseSizes(form.rows)
   const blocked = (preview?.problems.length ?? 0) > 0
 
@@ -145,7 +146,7 @@ export default function OrderSetup() {
                 ))}
               </div>
               <div className="sizes__foot">
-                <Button type="button" size="small" onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>Add a size</Button>
+                <Button type="button" size="small" disabled={form.rows.length >= MAX_SIZE_ROWS} onClick={() => set('rows', [...form.rows, { id: ++nextRow, size: '', qty: '' }])}>{form.rows.length >= MAX_SIZE_ROWS ? `At most ${MAX_SIZE_ROWS} sizes` : 'Add a size'}</Button>
                 <span className="mono" aria-live="polite">Total <b>{sizes.total > 0 ? pieces(sizes.total) : '–'}</b>{sizes.total > 0 ? ' pieces' : ''}</span>
               </div>
               {err('sizes')}
@@ -155,7 +156,7 @@ export default function OrderSetup() {
               <h2>Dates</h2>
               <div className="grid2">
                 <Field label="Ex-factory date" below={err('exFactory')}>
-                  <Input type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} /><DateWords iso={form.exFactory} /></Field>
+                  <Input type="date" value={form.exFactory} onChange={(e) => set('exFactory', e.target.value)} aria-invalid={showErrors && !!errors.exFactory} /><DateWords iso={form.exFactory} />{exFactoryRule(form.exFactory, istDate())?.kind === 'confirm' && <small className="sub" role="status">{exFactoryRule(form.exFactory, istDate())!.text}</small>}</Field>
                 <Field label="TNA template" below={err('templateId')}>
                   <Select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} aria-invalid={showErrors && !!errors.templateId}>
                     <option value="">Choose a template</option>

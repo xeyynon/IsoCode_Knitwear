@@ -9,10 +9,11 @@
 @media (min-width: 1000px) {
   .page.page--bento { max-width: 1240px; }
   .bento {
-    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);   /* the timeline needs about 740 px inside its cell before it scrolls sideways */
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);   /* the timeline has the whole row (a five-stage order needs about 860 px; FE-M-01) and the stage cards sit under it in columns */
     grid-template-areas:
       "head head"
-      "timeline stages"
+      "timeline timeline"
+      "stages stages"
       "actions actions"
       "log log";
     gap: var(--space-4);
@@ -21,6 +22,7 @@
   .bento__head { grid-area: head; }
   .bento__timeline { grid-area: timeline; }
   .bento__stages { grid-area: stages; }
+  .bento__stages .stagelist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4); }
   .bento__actions { grid-area: actions; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
   .bento__log { grid-area: log; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 
