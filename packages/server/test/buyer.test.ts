@@ -113,7 +113,7 @@ describe('a link opens the buyer view and nothing else', () => {
     ['GET', '/api/board'], ['GET', '/api/me'], ['GET', '/api/my/stages'], ['GET', '/api/review'], ['GET', '/api/buyer-links'],
     ['GET', '/api/orders/options'], ['GET', `/api/orders/${ID.orderGreen}`], ['GET', `/api/orders/${ID.orderRed}`],
     ['POST', '/api/orders/preview'], ['POST', '/api/orders'], ['POST', '/api/events'], ['POST', '/api/events/batch'],
-    ['POST', '/api/buyer-links'], ['POST', `/api/orders/${ID.orderRed}/ex-factory`], ['POST', '/api/warnings/00000000-0000-0000-0000-00000000dead/confirm'],
+    ['POST', '/api/buyer-links'], ['POST', `/api/orders/${ID.orderRed}/ex-factory`], ['POST', '/api/warnings/00000000-0000-0000-0000-00000000dead/confirm'], ['POST', '/api/warnings/00000000-0000-0000-0000-00000000dead/undo-dismiss'],
     ['POST', '/api/buyer-links/00000000-0000-0000-0000-00000000dead/revoke'], ['GET', '/api/anything-added-later'],
   ])('%s %s with a buyer link is refused', async (method, url) => {
     const { token } = await makeLink(ID.buyerB)

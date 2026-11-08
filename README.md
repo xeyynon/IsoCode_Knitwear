@@ -178,7 +178,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `POST /api/orders` | merchandiser | Create an order from a TNA template; stages are back-scheduled from ex-factory |
 | `POST /api/orders/:id/ex-factory` | merchandiser | Move ex-factory and re-schedule; every change is logged with a required reason (at most 300 characters) |
 | `GET /api/review` | merchandiser | Warnings waiting for review and those visible to buyers (also brings warnings up to date) |
-| `POST /api/warnings/:id/confirm`, `.../dismiss` | merchandiser | Confirm a warning for buyers (optionally rewording it), or hide it. A confirm sends the colour and wording that were shown and gets 409 if a refresh has changed them since |
+| `POST /api/warnings/:id/confirm`, `.../dismiss`, `.../undo-dismiss` | merchandiser | Confirm a warning for buyers (optionally rewording it), hide it, or undo hiding it. A confirm sends the colour and wording that were shown and gets 409 if a refresh has changed them since. Undo works only if the warning was still waiting for review; a confirmed one needs a fresh confirmation (409 `needs_confirmation`) |
 | `GET/POST /api/buyer-links`, `POST /api/buyer-links/:id/revoke` | merchandiser | Make, list and cancel a buyer's private link |
 | `GET /api/outbox` | merchandiser | The mocked alerts (nothing is sent): the latest 50, newest first, `Cache-Control: no-store`; 403 for a supervisor, 401 for a buyer link |
 | `GET /api/buyer/orders` | buyer link | The buyer's own orders, planned dates and confirmed warnings. A link opens only this |
