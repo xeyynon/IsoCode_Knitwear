@@ -552,6 +552,13 @@ The deferred bug (BE-038) has an entry with no test line.
 - Before the fix: `error TS2339: Property 'readConfigFile' does not exist` under TypeScript 7.0.2.
 - Guard: the same three BE-060 assertions pass unchanged on TypeScript 5.9 and 7.0.2. The other majors in that pull request (Vitest 5, `@types/node` 26) are not covered here: they stay open for a manual upgrade.
 
+## BE-065 A refresh test picked its warnings by chance
+- Root cause: the test took "the first two open warnings" ordered by a random uuid. With two stages on one order, both could be the same order, so scoping the refresh to it resolved both and the check "the other order is untouched" failed. It passed most runs, which is how it reached CI.
+- Fix: the test now takes one warning from each of two different orders.
+- Test: packages/server/test/refreshOpt.test.ts :: an order scope recomputes that order and leaves a stale warning on another order alone
+- Before the fix: `expected +0 to be 1` in the real-Postgres job of the setup-node pull request; it passed on the rerun and in other runs.
+- Guard: the other O-2 tests (unit scope, cheap refresh, equivalence over random sequences) are unchanged and pass.
+
 ## Open questions
 
 Where a report and the code differ, the code was trusted. Nothing below changes a status in `bug.md`; every listed id is marked fixed unless said otherwise.
