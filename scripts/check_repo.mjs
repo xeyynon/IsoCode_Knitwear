@@ -137,6 +137,7 @@ const tagNames = git('tag', '--list').split('\n').filter(Boolean)
  * has its report on that branch, not on this one, and must not fail this one (BE-063). Only a definite "no" (exit status 1)
  * skips the check: when git cannot tell (a shallow clone, an error) the tag is treated as reachable, the strict way.
  */
+/** @param {string} tag */
 const inHistory = (tag) => spawnSync('git', ['merge-base', '--is-ancestor', `refs/tags/${tag}`, 'HEAD'], { cwd: ROOT, stdio: 'ignore' }).status !== 1
 for (const t of tagNames) {
   const b = /^build-(\d+)$/.exec(t)
