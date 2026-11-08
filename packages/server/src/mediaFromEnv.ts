@@ -11,6 +11,24 @@ const REGION = /^[a-z0-9-]{2,40}$/
 const PREFIX = /^[A-Za-z0-9_][A-Za-z0-9/_.-]*$/
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 
+/**
+ * Is this host (as the URL parser writes it: numbers like 2852039166 or 0xa9fea9fe are already dotted, IPv6 is in brackets and compressed)
+ * the link-local range 169.254.0.0/16 or fe80::/10, or a cloud metadata name? That is where a cloud machine's metadata service answers with
+ * temporary credentials, and no object store lives there. Ordinary private ranges (10.x, 192.168.x, 172.16.x) are NOT refused: a MinIO on
+ * the factory's own network is legitimate.
+ */
+export function isMetadataHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(h)) return true
+  if (h === 'metadata.google.internal' || h === 'fd00:ec2::254') return true   // GCP's name for it, and AWS's IPv6 address for it
+  if (!h.includes(':')) return false
+  const first = /^([0-9a-f]{1,4}):/.exec(h)
+  if (first && (parseInt(first[1]!, 16) & 0xffc0) === 0xfe80) return true       // fe80::/10
+  const mapped = /^::ffff:(?:([0-9a-f]{1,4}):[0-9a-f]{1,4}|(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3})$/.exec(h)   // IPv4 written inside IPv6
+  if (mapped) return mapped[1] !== undefined ? parseInt(mapped[1], 16) === 0xa9fe : mapped[2] === '169' && mapped[3] === '254'
+  return false
+}
+
 /** Reads S3_* variables. Throws MediaConfigError naming the first problem; no secret or endpoint is ever echoed. */
 export function s3ConfigFromEnv(env: Env): S3Config {
   const get = (name: string): string | undefined => env[name]?.trim() || undefined
@@ -30,6 +48,7 @@ export function s3ConfigFromEnv(env: Env): S3Config {
     let u: URL
     try { u = new URL(endpoint) } catch { throw new MediaConfigError('S3_ENDPOINT is not a valid address') }
     if (u.username || u.password) throw new MediaConfigError('S3_ENDPOINT must not contain a user name or password')
+    if (isMetadataHost(u.hostname)) throw new MediaConfigError('S3_ENDPOINT must not be a link-local address (cloud metadata services answer there); use the address your storage provider gives you')
     if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOOPBACK.has(u.hostname))) {
       throw new MediaConfigError('S3_ENDPOINT must start with https:// (http:// is allowed only for localhost)')
     }

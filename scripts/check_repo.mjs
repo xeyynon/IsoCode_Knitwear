@@ -33,6 +33,8 @@ const lsFiles = (...a) => gitRaw('ls-files', '-z', ...a).split('\0').filter(Bool
 const FORBIDDEN_PATHS = [
   /(^|\/)\.env(\..+)?$/, /(^|\/)local_config\./, /\.log$/, /(^|\/)node_modules\//,
   /(^|\/)data\//, /(^|\/)recordings\//, /(^|\/)(media|uploads)\//, /\.(pem|key|p12)$/,
+  // database dumps and local database files hold real data (BE-073); .gitignore lists the same names.
+  /\.(dump|sqlite3?|db)$/,
   // .gitignore keeps these two private (budget, rates, pilot plans); a forced add must not get past this guard either.
   /^md\//, /^company-a-build-plan\.md$/,
 ]

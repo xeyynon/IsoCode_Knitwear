@@ -15,7 +15,11 @@ coverage/
 
 # logs and local data (all pilot data is real worker/buyer data: never commit)
 *.log
-data/
+/data/
+*.dump
+*.sqlite
+*.sqlite3
+*.db
 recordings/
 uploads/
 media/
@@ -29,6 +33,9 @@ Thumbs.db
 # internal docs and the client build plan stay on this machine (budget, rates, pilot plans)
 /md/
 /company-a-build-plan.md
+
+# local assistant settings
+.claude/settings.local.json
 
 # browser-driving tool output (accessibility snapshots, console logs) and TypeScript build info
 .playwright-mcp/

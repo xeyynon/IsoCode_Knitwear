@@ -202,8 +202,9 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET /api/buyers/:id/export.csv` | merchandiser | The file one buyer would get, for checking it or sending it on |
 | `GET /api/reasons` | signed in | The fixed list of reasons for a slow stage |
 | `POST /api/notes/:id/confirm` | merchandiser | Review a note: add the English meaning of a Tamil note and settle the reason |
-| `POST /api/photos` | supervisor | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). Checked to be a real JPEG, 1 KB to 3 MB |
-| `GET /api/photos/:id/file`, `POST /api/photos/:id/approve`, `.../reject` | merchandiser | View, approve or withdraw a photo |
+| `POST /api/photos` | supervisor, merchandiser | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). A supervisor can add one only for a stage of their own unit; a merchandiser can add one for any stage, on a supervisor's behalf. Checked to be a real JPEG, 1 KB to 3 MB; the camera's metadata (EXIF, including any location) is removed before the file is stored |
+| `GET /api/photos/:id/file` | merchandiser, supervisor | View a photo (a supervisor only their own unit's) |
+| `POST /api/photos/:id/approve`, `.../reject` | merchandiser | Approve or withdraw a photo |
 | `POST /api/photos/purge` | merchandiser | Delete the files of photos rejected more than N days ago (waiting and approved photos are never touched) |
 | `GET /api/accounts/audit` | merchandiser | Who added, reset, signed out, stopped or allowed an account, and when: the latest 100, newest first, optionally for one person (`?subject=`). Insert-only; never holds a PIN or password |
 | `GET/POST /api/units` | merchandiser | List and add units (your own floors and subcontractors) |

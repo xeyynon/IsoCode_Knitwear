@@ -229,7 +229,7 @@ export async function changeExFactory(
   if (!UUID.test(String(orderId)) || !UUID.test(String(userId))) throw badRequest('Invalid request')
 
   const order = (await tx.query<{ buyer_id: string; ex_factory: string }>(
-    'select buyer_id::text as buyer_id, ex_factory::text as ex_factory from orders where id = $1', [orderId]))[0]
+    'select buyer_id::text as buyer_id, ex_factory::text as ex_factory from orders where id = $1 for update', [orderId]))[0]   // BE-066: the row lock makes a second change wait, then read the date the first one wrote, so the history chains
   if (!order) throw notFound('No such order')
   if (order.ex_factory === newDate) throw badRequest('That is already the ex-factory date')
 
