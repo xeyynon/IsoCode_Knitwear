@@ -77,6 +77,9 @@ export async function createSupervisor(tx: Tx, ctx: Ctx, input: { phone?: unknow
   staffOnly(ctx)
   const phone = typeof input.phone === 'string' ? normalisePhone(input.phone) : null
   if (!phone) throw badRequest('Enter a 10-digit phone number')
+  // An Indian mobile number starts with 6, 7, 8 or 9. Only when an account is made: sign-in still takes any ten digits, so a
+  // supervisor who already has an account with another kind of number is never locked out by this rule.
+  if (!/^[6-9]/.test(phone)) throw badRequest('Enter an Indian mobile number: ten digits starting with 6, 7, 8 or 9')
   const pin = typeof input.pin === 'string' ? input.pin : ''
   const weak = weakPin(pin)
   if (weak) throw badRequest(weak)
