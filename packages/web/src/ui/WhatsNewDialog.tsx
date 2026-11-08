@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useLang } from '../i18n'
+import { Button } from './atoms/Button'
 import { keepFocusInside } from './ConfirmDialog'
 import { RECENT_BUILDS } from '../release/buildInfo'
 import { buildWhen } from '../release/releaseInfo'
@@ -43,7 +44,7 @@ export function WhatsNewDialog({ onClose }: { onClose: () => void }) {
           ))}
         </ol>}
         <div className="confirm__actions">
-          <button type="button" ref={closeButton} className="btn btn--primary" onClick={() => ref.current?.close()}>{t('release.close')}</button>
+          <Button type="button" ref={closeButton} variant="primary" onClick={() => ref.current?.close()}>{t('release.close')}</Button>
         </div>
       </div>
     </dialog>

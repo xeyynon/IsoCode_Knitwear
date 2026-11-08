@@ -361,3 +361,28 @@ No new colour pair, so `check_contrast` is unchanged.
 - **Removed:** the old pill rules and their status tints from `styles.css`. Tests: `statusStamp.test.tsx` (icon and word kept for all four statuses; min 79 x 24; capitals; double rule; no tilt, no fill, no tint; no pill shape left in the badge rules). The tilt guard was broken on purpose (a rotate added): it failed, then passed when removed.
 - **Merged** in the same step: `ui2-theme-sweep` (form errors now ink with a drawn mark, not red; the no-tint guard now reads every stylesheet) and `ui2-setup` (pilot checklist, one Add a person form, account activity).
 - **Not checked:** the stamp on a real phone in daylight; Tamil status words in a stamp on the supervisor screens (the stamp is not used on Today or Update today, so they were not affected).
+
+## Phase 2 and 6: the atoms and the page templates (8 Nov 2026, branch `ui2-atoms`)
+
+**What was done.** Pages and shared components no longer write a button, a field, a card, an error sentence or a page frame by hand. New in `ui/atoms`: `Button` and `ButtonLink` (primary, small, big, icon, block, strong), `TextLink` and `LinkButton`, `Input`, `Select` and `Textarea` (tall, big, mono, asking), `ErrorText`, `Banner`, `Card`, `Chip`, and `cx`; in `ui/molecules`: `Field`; in `ui/templates`: `SupervisorShell`, `MerchandiserShell`, `AuthShell`, `PublicShell`. Each draws exactly the markup that was written by hand (the rules stay in `styles.css`), so the refactor is meant to change nothing the eye or a screen reader can see. `test/atoms.test.tsx` and `test/templates.test.tsx` hold that promise case by case (old markup on the right of each assertion).
+
+| Slice | Replaced | Proof |
+| --- | --- | --- |
+| 2.1 | the atoms and Field; Login (card, two fields, error, Send) | 25 accessibility trees equal; pixel diff only the noise picture |
+| 2.2 | Today, Update, the stage card (banner, cards, link buttons, fields, photo buttons, Send, next stage) | trees equal; pictures as above |
+| 2.3 | Board (chips, five selects, search, refresh, New order, empty states, Show all) | trees equal; pictures as above |
+| 2.4a-d | order page and visit-entry form; Review; New order, buyer page, status page, Setup Housekeeping; Setup People, Closed days, Templates, Alerts and the Add-a-person form | trees equal (29, then 31 trees, with forms opened and their errors showing); pictures as above |
+| 2.5 | dialogs, load-failed card, error boundary, update bar, app-bar menu button, checklist and activity buttons | 36 trees equal apart from release text; menu, What's new, shortcuts help, a delete confirmation and a failed load included |
+| 6 | all ten pages onto a template (no `<main>` or `<AppBar>` left in a page) | 33 of 36 trees equal; the other 3 differ only in the build label and the release-note text |
+
+Done as one run of proof per slice, not one per page: the page-by-page commits are grouped (2.4 in four commits, the templates in one, because the ten frames changed together and one proof covers them).
+
+**Measured at the end of the branch** (private demo API and dev server, Edge, 390 px touch and 1280 px):
+- Pixel diff of all 31 screens against the picture set taken before the first change: 30 the same, 1 changed. The one is `15-update-offline-saved` (0.2% of pixels, in a 172 x 44 px box), the sync chip's own 1.6 s "noticed" ring caught at a different frame; the same picture differs between two runs of identical code, so it is the noise floor, not a change.
+- `npm run verify` 1688 tests passed (16 skipped), `npm run a11y` nothing serious on 48 screens, `npm run ux` 50 of 50 screen-widths clean (665 controls measured, 0 under the tap size), `E2E_API_PORT=8805 npm run e2e` 22 of 22, typecheck clean.
+
+**Source-text guards rewritten to check the same promise through the atom or template** (none deleted or loosened): `supervisorPolish` (sign-in fields `tall`), `actionBarGuards` (Send is the filled, full-width, big `Button`, never `type="button"`), `dayProgress` (next stage is a `ButtonLink block`), `supervisorPolish` (the field `asking`), `supervisorRedesign` (back link and sync chip share one row; the bottom bar stays inside the `Card`), `navRules` (New order is the one primary `ButtonLink`), `emptyStates` (the board offers a link to make the first order), `keyFacts` ("Change date" is a plain `Button`), `review` (Make link is the filled `Button`), `merchandiserPolish` (the status page back button), `focusAfterAction` (the PIN error is an `ErrorText` with the id the field points at), `setupPhase5` (one filled button in the person form, none in the tab), `orderBento` (the page asks the shell for `bento`).
+
+**Left as plain elements on purpose:** headings (`h1`, `h2`: guards and focus code look for them; a Heading atom adds nothing), the segmented control and menu items, table markup, the inline `field__error` span, and the `notice-box` paragraphs. No template for a bottom region: the pinned action stays with `ActionBar` and `bottomSlot`.
+
+**Not verified:** a real phone; the Buyer page in the tree comparison (it needs a valid link: its markup is covered by `atoms.test.tsx` and the picture set); the update bar and the error boundary on screen (their markup is covered by the atom tests); a screen reader; widths other than 390 and 1280 for the pictures. **A mistake to know about:** the tree script submits wrong sign-ins on purpose; on the shared dev API, whose clock is fixed, the 10-failures-per-address window never expires, so it locked every sign-in there (HTTP 429) until that API is restarted. The branch's checks ran against a private demo API; the shared one needs a restart by whoever owns it.

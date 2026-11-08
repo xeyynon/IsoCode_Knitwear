@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Button } from './atoms/Button'
 import { createAsker, type ConfirmRequest } from './confirmAsker'
 
 export type { ConfirmRequest }
@@ -60,8 +61,8 @@ export function ConfirmDialog({ title, body, confirmLabel, cancelLabel, destruct
         <h2 id="confirm-title" className="confirm__title">{title}</h2>
         <p id="confirm-body" className="confirm__body">{body}</p>
         <div className="confirm__actions">
-          <button type="button" ref={cancelRef} className="btn" onClick={() => ref.current?.close('cancel')}>{cancelLabel}</button>
-          <button type="button" ref={confirmRef} className={destructive ? 'btn btn--strong' : 'btn btn--primary'} onClick={() => ref.current?.close('confirm')}>{confirmLabel}</button>
+          <Button type="button" ref={cancelRef} onClick={() => ref.current?.close('cancel')}>{cancelLabel}</Button>
+          <Button type="button" ref={confirmRef} variant={destructive ? 'default' : 'primary'} strong={destructive} onClick={() => ref.current?.close('confirm')}>{confirmLabel}</Button>
         </div>
       </div>
     </dialog>

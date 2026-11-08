@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PhotoError, resizeToJpeg, sizeText } from '../photo/resize'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { istDate, notWholeNumber, parsePieces, remainingPieces } from '../dates'
 import { pieces } from '../numberFormat'
 import { dayMonth, savedText, serverWords, stageLabel, useLang, type Key } from '../i18n'
@@ -11,10 +11,17 @@ import { nextStage } from '../stages/dayProgress'
 import { stageFromParam, stageHref } from '../stages/stageLink'
 import { stagesErrorText, useReasons, useStages } from '../stages/useStages'
 import { MAX_NOTE, noteToSend, reasonLabel, toggleReason } from '../notes/reasons'
-import { AppBar } from '../ui/AppBar'
+import { SupervisorShell } from '../ui/templates/SupervisorShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
+import { Banner } from '../ui/atoms/Banner'
+import { Button, ButtonLink } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input, Textarea } from '../ui/atoms/Input'
+import { LinkButton, TextLink } from '../ui/atoms/TextLink'
 import { ActionBar } from '../ui/molecules/ActionBar'
+import { Field } from '../ui/molecules/Field'
 import { UpdateHero } from '../ui/organisms/UpdateHero'
 import { SyncChip } from '../ui/SyncChip'
 import { setUnsentInput } from '../ui/unsentInput'
@@ -126,32 +133,29 @@ function UpdateStage() {
   }
 
   return (
-    <>
-      <AppBar title={stageName ? stageLabel(lang, stageName).replace(/^./, (c) => c.toUpperCase()) : t('sup.title')} plainTitle={!!stage} />
-      <main className="page page--narrow">
+    <SupervisorShell title={stageName ? stageLabel(lang, stageName).replace(/^./, (c) => c.toUpperCase()) : t('sup.title')} plainTitle={!!stage}>
         {/* One row: the way back and the sync chip. Two rows pushed the number field behind the bar when the keyboard is up (phase 8A). */}
         <div className="update__bar">
-          <Link className="link back back--arrow" to="/today"><svg className="back__arrow" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16 10H4M9.5 4.5 4 10l5.5 5.5" /></svg> <span className="back__text">{t('sup.title')}</span></Link>
+          <TextLink className="back back--arrow" to="/today"><svg className="back__arrow" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16 10H4M9.5 4.5 4 10l5.5 5.5" /></svg> <span className="back__text">{t('sup.title')}</span></TextLink>
           {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
         </div>
 
         {!st.stages && !st.error && <Loading label={t('common.loading')} />}
         {st.error && !st.stages && <LoadFailed unreachable={st.error.unreachable} message={stagesErrorText(st.error, lang)} onRetry={() => void st.reload()} workSafe />}
-        {st.stages && !stage && <div className="card"><p>{t('update.notInList')}</p></div>}
+        {st.stages && !stage && <Card as="div"><p>{t('update.notInList')}</p></Card>}
 
         {stage && (
           <form className="update" onSubmit={(e) => { e.preventDefault(); void send() }}>
             <UpdateHero po={stage.po} meta={`${stage.style} · ${stage.colour} · ${t('update.due', { date: dayMonth(lang, stage.plannedEnd) })}`}
               done={done} qty={stage.qty} todaySoFar={todayTotal} left={left} labels={{ todaySoFar: t('update.todaySoFar'), left: t('update.left') }} />
 
-            <div className="card update__body">
-            <label className="field">
-              <span>{t('sup.pieces')}</span>
-              <input ref={input} className={`input input--big mono${confirming ? ' input--asking' : ''}`} inputMode="numeric" pattern="[0-9]*" autoComplete="off"
+            <Card as="div" className="update__body">
+            <Field label={t('sup.pieces')}>
+              <Input ref={input} big mono asking={confirming} inputMode="numeric" pattern="[0-9]*" autoComplete="off"
                 value={raw} aria-describedby={confirming ? 'hint toomany' : 'hint'} aria-invalid={notWholeNumber(raw)} onChange={(e) => { setRaw(e.target.value); setConfirming(false) }} />
-            </label>
+            </Field>
             <p id="hint" className="sub">{t('update.hint')}</p>
-            {notWholeNumber(raw) && <p className="error" role="alert">{t('sup.wholeNumber')}</p>}
+            {notWholeNumber(raw) && <ErrorText>{t('sup.wholeNumber')}</ErrorText>}
 
             <fieldset className="reasons">
               <legend>{t('sup.reason')}</legend>
@@ -166,27 +170,27 @@ function UpdateStage() {
                 ))}
               </div>
             </fieldset>
-            <label className="field"><span>{t('sup.note')}</span>
-              <textarea className="input textarea" rows={2} maxLength={MAX_NOTE} value={noteText} onChange={(e) => setNoteText(e.target.value)} /></label>
+            <Field label={t('sup.note')}>
+              <Textarea rows={2} maxLength={MAX_NOTE} value={noteText} onChange={(e) => setNoteText(e.target.value)} /></Field>
 
             <div className="photobox">
               <input ref={fileInput} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={pick} aria-label={t('photo.input')} tabIndex={-1} />
-              {!photo && <button ref={addPhoto} type="button" className="btn" disabled={preparing} onClick={() => fileInput.current?.click()}>{preparing ? t('photo.preparing') : t('photo.add')}</button>}
+              {!photo && <Button ref={addPhoto} type="button" disabled={preparing} onClick={() => fileInput.current?.click()}>{preparing ? t('photo.preparing') : t('photo.add')}</Button>}
               {photo && (
                 <div className="photobox__preview">
                   <img src={photo.url} alt={t('photo.alt')} />
                   <div className="photobox__actions"><span className="sub">{t('photo.ready', { size: sizeText(photo.blob.size) })}</span>
-                    <button ref={retakePhoto} type="button" className="btn" disabled={preparing} onClick={() => { retaking.current = true; fileInput.current?.click() }}>{preparing ? t('photo.preparing') : t('photo.retake')}</button>
-                    <button ref={removePhoto} type="button" className="link" onClick={() => { photoFocus.current = true; retaking.current = false; setPhoto(null) }}>{t('photo.remove')}</button></div>
+                    <Button ref={retakePhoto} type="button" disabled={preparing} onClick={() => { retaking.current = true; fileInput.current?.click() }}>{preparing ? t('photo.preparing') : t('photo.retake')}</Button>
+                    <LinkButton ref={removePhoto} type="button" onClick={() => { photoFocus.current = true; retaking.current = false; setPhoto(null) }}>{t('photo.remove')}</LinkButton></div>
                 </div>
               )}
-              {photoError && <p className="error" role="alert">{t(photoError)}</p>}
+              {photoError && <ErrorText>{t(photoError)}</ErrorText>}
             </div>
 
             {/* The action stays at the bottom of the screen while the form scrolls (slice 1.1). Reading order: a failure, what
                 happened to the last update, a question about this number, then the button. */}
             <ActionBar>
-              {saveError && <p className="error" role="alert">{t(saveError)}</p>}
+              {saveError && <ErrorText>{t(saveError)}</ErrorText>}
 
               {saved && (
                 <p className="saved" role="status" aria-live="polite">
@@ -199,22 +203,21 @@ function UpdateStage() {
               )}
 
               {next && (
-                <Link className="btn btn--block" to={stageHref(next.orderId, next.stage)}>
+                <ButtonLink block to={stageHref(next.orderId, next.stage)}>
                   {t('update.next', { po: next.po, stage: stageLabel(lang, next.stage).replace(/^./, (c) => c.toUpperCase()) })}
-                </Link>
+                </ButtonLink>
               )}
 
               {confirming && qty !== null && (
-                <p id="toomany" className="banner" role="alert">{t('update.tooMany', { qty, left })}</p>
+                <Banner id="toomany">{t('update.tooMany', { qty, left })}</Banner>
               )}
-              <button className="btn btn--primary btn--block btn--big" disabled={qty === null || !queue || busy}>
+              <Button variant="primary" block size="big" disabled={qty === null || !queue || busy}>
                 {confirming ? t('update.sendAnyway', { qty: qty ?? '' }) : t('sup.send')}
-              </button>
+              </Button>
             </ActionBar>
-            </div>
+            </Card>
           </form>
         )}
-      </main>
-    </>
+    </SupervisorShell>
   )
 }

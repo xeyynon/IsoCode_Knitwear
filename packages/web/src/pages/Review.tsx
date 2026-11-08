@@ -7,13 +7,19 @@ import { exportFileName } from '../review/exportLogic'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { oneAtATime } from '../queue/oneAtATime'
 import { activeLinkCount, afterRevoke, buyerLinkUrl, emptyLine, linkStatus, offersNoReason, parseDays, reviewSummary, sectionAnchor, sectionTitle, type ReviewSectionId } from '../review/reviewLogic'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
 import { reasonById, type Reason } from '../notes/reasons'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
+import { Banner } from '../ui/atoms/Banner'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input, Select, Textarea } from '../ui/atoms/Input'
+import { Field } from '../ui/molecules/Field'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
 interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null }
@@ -165,13 +171,11 @@ export default function Review() {
   const sec = (count: number) => (count === 0 ? 'rvsec rvsec--empty' : 'rvsec')
 
   return (
-    <>
-      <AppBar title="Review" />
-      <main className="page page--form">
+    <MerchandiserShell title="Review" form>
         <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
         {!data && !error && <Loading label="Loading" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
-        {actionError && <p className="banner" role="alert">{actionError}</p>}
+        {actionError && <Banner>{actionError}</Banner>}
 
         {data && (
           <>
@@ -197,12 +201,12 @@ export default function Review() {
                       <li key={w.id} className="stagecard">
                         <div className="stagecard__top"><b className="mono">{w.po}</b><span className="sub">{w.buyerName} · {cap(w.stage)}</span><StatusBadge status={w.status} /></div>
                         <p className="sub internal">Only you see this: {w.maths}</p>
-                        <label className="field"><span>What {w.buyerName} would read</span>
-                          <textarea className="input textarea" rows={2} maxLength={300} value={edits[w.id] ?? w.buyerText}
-                            onChange={(e) => setEdits({ ...edits, [w.id]: e.target.value })} /></label>
+                        <Field label={<>What {w.buyerName} would read</>}>
+                          <Textarea rows={2} maxLength={300} value={edits[w.id] ?? w.buyerText}
+                            onChange={(e) => setEdits({ ...edits, [w.id]: e.target.value })} /></Field>
                         <div className="actions">
-                          <button className="btn btn--primary" disabled={busy === w.id || !(edits[w.id] ?? w.buyerText).trim()} onClick={() => void decide(w, 'confirm', pendingHeading)}>Confirm for buyer</button>
-                          <button className="btn" disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', pendingHeading)}>Don't show</button>
+                          <Button variant="primary" disabled={busy === w.id || !(edits[w.id] ?? w.buyerText).trim()} onClick={() => void decide(w, 'confirm', pendingHeading)}>Confirm for buyer</Button>
+                          <Button disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', pendingHeading)}>Don't show</Button>
                         </div>
                       </li>
                     ))}
@@ -224,16 +228,16 @@ export default function Review() {
                           <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {n.takenOn}</span></div>
                           {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
                           {n.language === 'ta' && (
-                            <label className="field"><span>What it means, in English</span>
-                              <textarea className="input textarea" rows={2} maxLength={500} value={meaning[n.id] ?? ''} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></label>
+                            <Field label="What it means, in English">
+                              <Textarea rows={2} maxLength={500} value={meaning[n.id] ?? ''} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></Field>
                           )}
-                          <label className="field"><span>Reason{n.category && !noteReason[n.id] ? ' (chosen by the supervisor)' : ''}</span>
-                            <select className="input" value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
+                          <Field label={<>Reason{n.category && !noteReason[n.id] ? ' (chosen by the supervisor)' : ''}</>}>
+                            <Select value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
                               {offersNoReason(n.category) && <option value="">No reason chosen</option>}
                               {data.reasons.map((r) => <option key={r.id} value={r.id}>{r.en}</option>)}
                               {n.category && !data.reasons.some((r) => r.id === n.category) && <option value={n.category}>{reasonById(data.reasons, n.category)?.en}</option>}
-                            </select></label>
-                          <div className="actions"><button className="btn btn--primary" disabled={busy === n.id} onClick={() => void reviewNote(n, notesHeading)}>Mark as reviewed</button></div>
+                            </Select></Field>
+                          <div className="actions"><Button variant="primary" disabled={busy === n.id} onClick={() => void reviewNote(n, notesHeading)}>Mark as reviewed</Button></div>
                         </li>
                       )
                     })}
@@ -251,8 +255,8 @@ export default function Review() {
                       <AuthImage zoomable path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
                       <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
                       <div className="actions">
-                        <button className="btn btn--primary btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve', photosHeading)}>Approve for buyer</button>
-                        <button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', photosHeading)}>Reject</button>
+                        <Button variant="primary" size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve', photosHeading)}>Approve for buyer</Button>
+                        <Button size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', photosHeading)}>Reject</Button>
                       </div>
                     </li>
                   ))}
@@ -268,7 +272,7 @@ export default function Review() {
                     <li key={p.id} className="stagecard">
                       <AuthImage zoomable path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
                       <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
-                      <div className="actions"><button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', approvedHeading)}>Withdraw from buyer</button></div>
+                      <div className="actions"><Button size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', approvedHeading)}>Withdraw from buyer</Button></div>
                     </li>
                   ))}
                 </ul>
@@ -283,7 +287,7 @@ export default function Review() {
                     <li key={w.id} className="stagecard">
                       <div className="stagecard__top"><b className="mono">{w.po}</b><span className="sub">{w.buyerName} · {cap(w.stage)}</span><StatusBadge status={w.status} /></div>
                       <p className="why">{w.buyerText}</p>
-                      <div className="actions"><button className="btn btn--small" disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', confirmedHeading)}>Hide from buyer</button></div>
+                      <div className="actions"><Button size="small" disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', confirmedHeading)}>Hide from buyer</Button></div>
                     </li>
                   ))}
                 </ul>
@@ -292,31 +296,31 @@ export default function Review() {
 
             <section className="rvsec" aria-labelledby={sectionAnchor('links')}>
               <h2 id={sectionAnchor('links')} tabIndex={-1} ref={linksHeading}>{sectionTitle('Buyer links', active, 'working')}</h2>
-              <form className="card change" onSubmit={makeLink} noValidate>
+              <Card as="form" className="change" onSubmit={makeLink} noValidate>
                 <p className="sub">A link lets one buyer contact see only that buyer's orders, read-only. Share it by email or message. Anyone who has it can open it, so cancel it if it goes to the wrong person.</p>
                 <div className="grid2">
-                  <label className="field"><span>Buyer</span>
-                    <select className="input" value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
+                  <Field label="Buyer">
+                    <Select value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
                       <option value="">Choose a buyer</option>{buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select></label>
-                  <label className="field"><span>Works for (days)</span>
-                    <input className="input mono" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></label>
+                    </Select></Field>
+                  <Field label="Works for (days)">
+                    <Input mono inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
                 </div>
-                <label className="field"><span>Who it is for (optional)</span>
-                  <input className="input" value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} /></label>
-                {linkError && <p className="error" role="alert">{linkError}</p>}
-                <button className="btn btn--primary" disabled={busy === 'link'}>Make link</button>
-              </form>
+                <Field label="Who it is for (optional)">
+                  <Input value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} /></Field>
+                {linkError && <ErrorText>{linkError}</ErrorText>}
+                <Button variant="primary" disabled={busy === 'link'}>Make link</Button>
+              </Card>
 
               {made && (
                 <div className="notice-box" role="status">
                   <b>Copy this link now. For safety it is shown only once.</b>
-                  <input id="link-url" className="input mono" readOnly value={made.url} onFocus={(e) => e.currentTarget.select()} aria-label="Buyer link" />
-                  <button className="btn btn--small" onClick={() => void copy()}>{made.copied ? 'Copied' : 'Copy link'}</button>
+                  <Input id="link-url" mono readOnly value={made.url} onFocus={(e) => e.currentTarget.select()} aria-label="Buyer link" />
+                  <Button size="small" onClick={() => void copy()}>{made.copied ? 'Copied' : 'Copy link'}</Button>
                 </div>
               )}
 
-              {exportError && <p className="error" role="alert">{exportError}</p>}
+              {exportError && <ErrorText>{exportError}</ErrorText>}
               {links.length === 0 ? <p className="sub">{emptyLine('links')}</p> : (
                 <table className="plan links">
                   <thead><tr><th scope="col">Buyer</th><th scope="col">For</th><th scope="col">State</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
@@ -326,8 +330,8 @@ export default function Review() {
                       <tr key={l.id}>
                         <td data-label="Buyer">{l.buyerName}</td><td data-label="For">{l.label ?? '-'}</td><td data-label="State">{s.text}</td>
                         <td className="links__actions">
-                          <button className="btn btn--small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</button>
-                          {s.active && <button className="btn btn--small" onClick={() => void revoke(l.id)}>Cancel link</button>}
+                          <Button size="small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</Button>
+                          {s.active && <Button size="small" onClick={() => void revoke(l.id)}>Cancel link</Button>}
                         </td>
                       </tr>
                     )
@@ -337,7 +341,6 @@ export default function Review() {
             </section>
           </>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

@@ -121,11 +121,11 @@ describe('the two pages use them', () => {
     expect(today).toMatch(/<TodayHero[\s\S]*?<SyncChip/)
   })
   it('Update: the way back and the sync chip share one row (a second row pushed the number field behind the bar with the keyboard up)', () => {
-    expect(update).toMatch(/<div className="update__bar">\s*<Link className="link back back--arrow"[\s\S]*?<\/Link>\s*\{queue && state && <SyncChip/)
+    expect(update).toMatch(/<div className="update__bar">\s*<TextLink className="back back--arrow"[\s\S]*?<\/TextLink>\s*\{queue && state && <SyncChip/)
     expect(read('../src/styles.css')).toMatch(/\.update__bar\s*\{[^}]*flex-wrap:\s*wrap/)
   })
   it('Update: the bottom bar stays inside the card (it takes its padding and edges from the card\'s --card-pad; outside a card it lost both and Send touched the screen edge)', () => {
-    expect(update).toMatch(/<div className="card update__body">[\s\S]*<ActionBar>[\s\S]*<\/ActionBar>\s*<\/div>\s*<\/form>/)
+    expect(update).toMatch(/<Card as="div" className="update__body">[\s\S]*<ActionBar>[\s\S]*<\/ActionBar>\s*<\/Card>\s*<\/form>/)
   })
   it('Update: opens with the hero; the bar at the bottom, the focus effects and the one-at-a-time save are untouched', () => {
     expect(update).toContain('<UpdateHero')

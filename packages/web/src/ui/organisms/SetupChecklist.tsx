@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
 import type { LoadFailure } from '../../api/sessionRules'
 import type { Checklist, ChecklistItem, ItemState, SetupTab } from '../../setup/setupChecklist'
+import { ButtonLink } from '../atoms/Button'
 import { LoadFailed } from '../LoadFailed'
 import { useNarrow } from '../useNarrow'
 import './SetupChecklist.css'
@@ -25,8 +25,8 @@ function Row({ item, onGo }: { item: ChecklistItem; onGo: (tab: SetupTab, anchor
         <p className="setupcheck__label"><b>{item.label}</b> <span className="setupcheck__state">{WORD[item.state]}</span></p>
         <p className="setupcheck__detail">{item.detail}</p>
       </div>
-      <Link className="btn btn--small setupcheck__go" to={href(item.tab)} aria-label={item.state === 'todo' ? undefined : `Open ${item.label}`}
-        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; onGo(item.tab, item.state === 'todo' ? item.anchor : undefined) }}>{item.state === 'todo' ? item.action : 'Open'}</Link>
+      <ButtonLink size="small" className="setupcheck__go" to={href(item.tab)} aria-label={item.state === 'todo' ? undefined : `Open ${item.label}`}
+        onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; onGo(item.tab, item.state === 'todo' ? item.anchor : undefined) }}>{item.state === 'todo' ? item.action : 'Open'}</ButtonLink>
     </li>
   )
 }

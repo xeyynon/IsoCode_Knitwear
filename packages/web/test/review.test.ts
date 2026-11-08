@@ -129,6 +129,7 @@ describe('a double click on Make link', () => {
     expect(makeLink.indexOf('oneAtATime(')).toBeLessThan(makeLink.indexOf("'/api/buyer-links'"))
   })
   it('disables the button while the link is being made', () => {
-    expect(src).toMatch(/<button className="btn btn--primary" disabled=\{busy === 'link'\}>Make link<\/button>/)
+    // Same promise through the atom: the filled Button, disabled while `busy === 'link'` (atoms.test.tsx: `variant="primary"` draws `btn btn--primary`).
+    expect(src).toMatch(/<Button variant="primary" disabled=\{busy === 'link'\}>Make link<\/Button>/)
   })
 })

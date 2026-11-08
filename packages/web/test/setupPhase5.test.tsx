@@ -153,11 +153,14 @@ describe('the People screen has one filled button', () => {
   const tab = read('../src/setup/PeopleTab.tsx')
   const form = read('../src/ui/organisms/AddPersonForm.tsx')
   it('the tab itself has no primary button: Save PIN and Add unit are plain', () => {
+    // Same promise through the atom: no `variant="primary"` Button in the tab, and Add unit is the plain Button.
+    expect(tab).not.toMatch(/variant="primary"/)
     expect(tab).not.toContain('btn--primary')
-    expect(tab).toContain('<button className="btn">Add unit</button>')
+    expect(tab).toContain('<Button>Add unit</Button>')
   })
   it('the person form has exactly one', () => {
-    expect(form.match(/btn--primary/g)).toHaveLength(1)
+    expect(form.match(/variant="primary"/g)).toHaveLength(1)
+    expect(form).not.toContain('btn--primary')
   })
   it('a unit is not a person: Add a unit stays its own form, with an anchor the checklist can reach', () => {
     expect(tab).toContain('<h2 id="add-unit" tabIndex={-1}>Add a unit</h2>')
