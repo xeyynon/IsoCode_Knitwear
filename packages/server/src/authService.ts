@@ -19,8 +19,14 @@ export interface LoginResult {
 
 const INVALID = () => new AppError(401, 'invalid_credentials', 'Incorrect details')
 
+/** "15 minutes", "1 minute": the time left on a lock, rounded UP so it is never "0 minutes", and at most the full lock. (BE-070) */
+export function minutesLeft(msLeft: number): string {
+  const n = Math.min(LOCK_MINUTES, Math.max(1, Math.ceil((Number.isFinite(msLeft) ? msLeft : LOCK_MINUTES * 60_000) / 60_000)))
+  return `${n} minute${n === 1 ? '' : 's'}`
+}
+
 /** What a person sees when the account (or the name they typed) is locked. The same words for a real account and for a name with none. */
-const LOCKED = () => new AppError(429, 'locked', `Too many wrong attempts. Try again in ${LOCK_MINUTES} minutes. If you forgot your PIN or password, ask your merchandiser to reset it.`)
+const LOCKED = (msLeft: number) => new AppError(429, 'locked', `Too many wrong attempts. Try again in ${minutesLeft(msLeft)}. If you forgot your PIN or password, ask your merchandiser to reset it.`)
 
 /** Ten digits; accepts +91 and spaces. */
 export function normalisePhone(raw: string): string | null {
@@ -31,7 +37,7 @@ export function normalisePhone(raw: string): string | null {
 
 interface Row {
   id: string; role: 'merchandiser' | 'supervisor'; password_hash: string | null; pin_hash: string | null
-  unit_id: string | null; failed_attempts: number; locked: boolean; token_version: number; disabled: boolean
+  unit_id: string | null; failed_attempts: number; locked: boolean; lock_secs: number; token_version: number; disabled: boolean
 }
 
 // ---- tries against names that have no account (BE-033)
@@ -44,6 +50,8 @@ interface Row {
 export interface FailureTracker {
   /** Is this key locked at `nowMs`? */
   isLocked(key: string, nowMs: number): boolean
+  /** Milliseconds of lock left at `nowMs` (0 when not locked). */
+  lockLeftMs(key: string, nowMs: number): number
   /** Count one wrong try. Like the account rule: the try after a lock has run out starts a new count at 1. */
   recordFailure(key: string, nowMs: number): void
   readonly size: number
@@ -55,6 +63,10 @@ export function createFailureTracker(maxEntries = 10_000): FailureTracker {
     isLocked(key, nowMs) {
       const e = seen.get(key)
       return e !== undefined && e.lockedUntil > nowMs
+    },
+    lockLeftMs(key, nowMs) {
+      const e = seen.get(key)
+      return e !== undefined && e.lockedUntil > nowMs ? e.lockedUntil - nowMs : 0
     },
     recordFailure(key, nowMs) {
       const e = seen.get(key)
@@ -108,7 +120,8 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
   // queue of sign-ins never holds database connections.
   const found = await db.tx({ role: 'auth' }, async (tx) => (await tx.query<Row>(
     `select id::text as id, role, password_hash, pin_hash, unit_id::text as unit_id, failed_attempts,
-            coalesce(locked_until > $2::timestamptz, false) as locked, token_version, disabled_at is not null as disabled
+            coalesce(locked_until > $2::timestamptz, false) as locked,
+            coalesce(extract(epoch from (locked_until - $2::timestamptz)), 0)::float8 as lock_secs, token_version, disabled_at is not null as disabled
        from account where ${lookup.sql}`, [lookup.key, now.toISOString()]))[0])
 
   // Throwing inside db.tx rolls the transaction back, which would undo the failed-attempt
@@ -116,13 +129,13 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
   if (!found || found.disabled) {
     // A stopped account answers exactly like an unknown one, and costs the same time (and locks the same way).
     await verifySecretAsync(lookup.secret, DUMMY_HASH)
-    if (tracker.isLocked(unknownKey, nowMs)) throw LOCKED()
+    if (tracker.isLocked(unknownKey, nowMs)) throw LOCKED(tracker.lockLeftMs(unknownKey, nowMs))
     tracker.recordFailure(unknownKey, nowMs)
     throw INVALID()
   }
   if (found.locked) {
     await verifySecretAsync(lookup.secret, DUMMY_HASH)   // the same cost as every other answer
-    throw LOCKED()
+    throw LOCKED(Number(found.lock_secs) * 1000)
   }
   if (!(await verifySecretAsync(lookup.secret, found[field]))) {
     // Count in the database, not from the row read above: wrong PINs sent at the same moment

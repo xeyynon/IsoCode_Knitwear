@@ -85,7 +85,7 @@ describe('O-4: compression', () => {
     expect((await get('/api/board', { ...h, 'accept-encoding': 'GZIP;q=0.5' })).headers['content-encoding']).toBe('gzip')
     const small = await get('/api/me', { ...h, 'accept-encoding': 'gzip' })
     expect(small.headers['content-encoding']).toBeUndefined()
-    expect(small.headers.vary).toBeUndefined()
+    expect(String(small.headers.vary ?? '').toLowerCase()).not.toContain('accept-encoding')   // BE-071: Vary: Origin is now on every answer when an allow-list is set; what matters here is that nothing varies on the encoding
     expect(acceptsGzip('gzip;q=0')).toBe(false)
     expect(acceptsGzip('br, gzip;q=0.8')).toBe(true)
   })
