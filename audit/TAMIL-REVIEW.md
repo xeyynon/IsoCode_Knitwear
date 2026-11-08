@@ -16,3 +16,5 @@ How to review: show the screen (or the line below) to three supervisors; ask wha
 | `err.notFoundBack` | The same screen, the button | `Back to today's orders` | `இன்றைய ஆர்டர்களுக்குத் திரும்பு` | "திரும்பு" (go back): does the button clearly lead to the list? | |
 
 Existing Tamil that the first audit already flagged for review (words to ask about first): "கெடு" for Due, "இதுவரை" for so far, "பதிவு செய்" for Update.
+
+Open question from AUDIT-03 (finding 12), not a word to translate: the style and the colour on every Today card and on the Update hero ("tee · navy") are typed by a merchandiser as free text and come from the order, so they show in English on the Tamil screens. Ask the supervisors whether they read them as they are. If they want Tamil, the colours and styles need an agreed word list first (the server stores free text); the app does not translate data.
