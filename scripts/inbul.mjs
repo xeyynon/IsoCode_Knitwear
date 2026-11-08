@@ -38,13 +38,17 @@ export function inbulNumberOfTitle(title) {
 export const inbulName = (n) => `InBul${String(n).padStart(2, '0')}`
 
 /**
- * Every commit on every ref. Empty in a repository with no commits yet.
+ * Every commit on every ref, or with `reachableOnly` only the history of the checked-out commit. Empty in a repository with no
+ * commits yet. The next free id and the check before tagging use every ref (another session may hold an id it has not merged
+ * yet); the repository check uses the checked-out history only, because a pull request merged by squashing leaves its own
+ * branch commits behind with the same id as the one squashed commit, and those must not count as a clash.
  * @param {string} cwd
+ * @param {boolean} [reachableOnly]
  * @returns {CommitTitle[]}
  */
-export function commitTitles(cwd) {
+export function commitTitles(cwd, reachableOnly = false) {
   try {
-    return execFileSync('git', ['log', '--all', '--format=%H%x09%s'], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    return execFileSync('git', ['log', reachableOnly ? 'HEAD' : '--all', '--format=%H%x09%s'], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
       .split('\n').filter(Boolean).map((l) => { const i = l.indexOf('\t'); return { hash: l.slice(0, i), title: l.slice(i + 1) } })
   } catch { return [] }
 }

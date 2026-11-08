@@ -266,7 +266,7 @@ describe('BE-046: clean-up deletes files with no transaction open, in batches, a
     expect(slow.seen).toHaveLength(n)
     expect(slow.seen.every((e) => e.openAtCall === 0)).toBe(true)
     expect(mem.files.size).toBe(0)
-    expect(s.started).toBe(3 + 3)   // three rounds: one select and one update each
+    expect(s.started).toBe(3)   // three rounds: one claiming update each (BE-067 merged the old select and update; a second transaction runs only to give back a failed delete)
 
     // a file that can never be deleted: tried once per run, the rest still go
     await plant(PURGE_BATCH + 3, mem)
