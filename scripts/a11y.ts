@@ -1,6 +1,6 @@
 // Runs axe-core on every screen, at a phone (390x844, touch) and a desktop (1280x900) size, in Edge.
 //
-//   npm run dev:api                    (terminal 1)
+//   DEMO_DATA=fixture npm run dev:api                    (terminal 1)
 //   npm run dev -w @isocode/web        (terminal 2)
 //   npm run a11y                       (terminal 3)
 //
@@ -37,7 +37,7 @@ let screens = 0
 
 async function up(): Promise<void> {
   try { if ((await fetch(`${WEB}/api/health`)).ok) return } catch { /* handled below */ }
-  console.error(`The app is not running at ${WEB}. Start it first:\n  npm run dev:api\n  npm run dev -w @isocode/web`)
+  console.error(`The app is not running at ${WEB}. Start it first:\n  DEMO_DATA=fixture npm run dev:api\n  npm run dev -w @isocode/web`)
   process.exit(2)
 }
 

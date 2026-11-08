@@ -1,6 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, apiFetch } from '../api/session'
+import { Button } from './atoms/Button'
+import { Card } from './atoms/Card'
 import { DateWords } from './atoms/DateWords'
+import { ErrorText } from './atoms/ErrorText'
+import { Input, Select } from './atoms/Input'
+import { Field } from './molecules/Field'
 import { checkVisitEntry, visitEntryDone, type VisitEntryForm as Fields } from '../orders/visitEntry'
 import { MAX_NOTE } from '../notes/reasons'
 import { setUnsentInput } from './unsentInput'
@@ -60,27 +65,27 @@ export function VisitEntryForm({ orderId, stages, today, onAdded }: { orderId: s
 
   const bad = (k: 'stage' | 'date' | 'pieces') => problem?.field === k
   return (
-    <section className="card">
+    <Card>
       {/* Open once the person opens it, and kept open while they type: it must not fold away when an error clears. */}
       <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary><b>Add an update</b></summary>
         <form onSubmit={submit} noValidate className="change">
           <p className="sub">For a stage nobody on the floor reports, such as a subcontractor. It is kept as entered by a merchandiser and shown as low confidence.</p>
-          <label className="field"><span>Stage</span>
-            <select ref={stage} className="input" value={f.stage} aria-invalid={bad('stage')} aria-describedby={bad('stage') ? `${uid}-err` : undefined} onChange={(e) => set({ stage: e.target.value })}>
+          <Field label="Stage">
+            <Select ref={stage} value={f.stage} aria-invalid={bad('stage')} aria-describedby={bad('stage') ? `${uid}-err` : undefined} onChange={(e) => set({ stage: e.target.value })}>
               {stages.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
-            </select></label>
-          <label className="field"><span>Date of the count</span>
-            <input ref={date} className="input" type="date" max={today} value={f.date} aria-invalid={bad('date')} aria-describedby={bad('date') ? `${uid}-err` : undefined} onChange={(e) => set({ date: e.target.value })} /><DateWords iso={f.date} /></label>
-          <label className="field"><span>Pieces made that day</span>
-            <input ref={pieces} className="input mono" inputMode="numeric" autoComplete="off" value={f.pieces} aria-invalid={bad('pieces')} aria-describedby={bad('pieces') ? `${uid}-err` : undefined} onChange={(e) => set({ pieces: e.target.value })} /></label>
-          <label className="field"><span>Note (optional)</span>
-            <input className="input" value={f.note} maxLength={MAX_NOTE} onChange={(e) => set({ note: e.target.value })} /></label>
-          {problem && <p id={`${uid}-err`} className="error" role="alert">{problem.text}</p>}
-          <button className="btn btn--primary" disabled={busy}>{busy ? 'Adding…' : 'Add update'}</button>
+            </Select></Field>
+          <Field label="Date of the count">
+            <Input ref={date} type="date" max={today} value={f.date} aria-invalid={bad('date')} aria-describedby={bad('date') ? `${uid}-err` : undefined} onChange={(e) => set({ date: e.target.value })} /><DateWords iso={f.date} /></Field>
+          <Field label="Pieces made that day">
+            <Input ref={pieces} mono inputMode="numeric" autoComplete="off" value={f.pieces} aria-invalid={bad('pieces')} aria-describedby={bad('pieces') ? `${uid}-err` : undefined} onChange={(e) => set({ pieces: e.target.value })} /></Field>
+          <Field label="Note (optional)">
+            <Input value={f.note} maxLength={MAX_NOTE} onChange={(e) => set({ note: e.target.value })} /></Field>
+          {problem && <ErrorText id={`${uid}-err`}>{problem.text}</ErrorText>}
+          <Button variant="primary" disabled={busy}>{busy ? 'Adding…' : 'Add update'}</Button>
         </form>
       </details>
       {done && <p className="notice-box" role="status">{done}</p>}
-    </section>
+    </Card>
   )
 }

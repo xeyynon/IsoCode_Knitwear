@@ -24,6 +24,11 @@ export function linkStatus(l: LinkInfo): { text: string; active: boolean } {
   return { text: `Works until ${day(l.expiresAt)}`, active: true }
 }
 
+/** Links that work now, and the cancelled and expired ones apart (AUDIT-03 finding 15: a table that kept every cancelled link forever). Order is kept. */
+export function splitLinks<L extends LinkInfo>(links: L[]): { working: L[]; past: L[] } {
+  return { working: links.filter((l) => linkStatus(l).active), past: links.filter((l) => !linkStatus(l).active) }
+}
+
 /** How many links a buyer could open right now. */
 export const activeLinkCount = (links: LinkInfo[]): number => links.filter((l) => linkStatus(l).active).length
 

@@ -1,5 +1,5 @@
 import {
-  formatMaths, projectOrder,
+  formatMaths, isWaiting, projectOrder,
   type Status, type StageResult,
 } from '@isocode/engine'
 import { compareDates } from '@isocode/engine/dates'
@@ -64,7 +64,7 @@ export async function getBoard(tx: Tx, ctx: Ctx, today: string): Promise<BoardRo
     const flagged = lowConfidenceStages(events, onBehalf, today, settings, calendarOfStages(stages, calendars))
     // The stage that sets the colour; among equals the one furthest behind.
     const setting = result.stages
-      .filter((s) => s.status === result.status && !s.complete)
+      .filter((s) => s.status === result.status && !s.complete && !isWaiting(s))
       .sort((a, b) => (b.shortBy ?? 0) - (a.shortBy ?? 0))[0] as StageResult | undefined
     const milestone = stages.find((s) => s.stage === setting?.stage)?.milestone
     // The engine returns stages in sequence order, so the first one not complete is where the order is now.

@@ -1,7 +1,7 @@
 /* The board as a dashboard on a wide screen (UI/UX 2.0 phase 8B). Everything here is scoped to .board--wide / .strip--attached /
    .boardhead, which only the wide layout uses, so the phone layout and its density rules in styles.css are untouched. Tokens only. */
 
-/* the row above the tiles: the buyer choice (it changes their numbers) on the left, the update time, Refresh and New order on the right */
+/* the row above the tiles: the update time, Refresh and New order, on the right. Every filter, the buyer included, is in the table's one toolbar below. */
 .strip.boardhead { margin-bottom: 0; }
 
 /* the search and filters are the table's own toolbar: one card with the table under it */
@@ -15,7 +15,10 @@ table.board.board--wide { border-color: var(--border-soft); border-radius: 0 0 v
 .board--wide th { background: var(--page); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-soft); font-weight: 600; }
 .board--wide td { padding: var(--space-4); }
 .board--wide tbody tr:hover td { background: var(--page); }
-.board--wide .po-link { font-size: 1.0625rem; }
+/* a mouse target of at least 24 px (WCAG 2.5.8): the link was 22 px tall (AUDIT-03) */
+.board--wide .po-link { font-size: 1.0625rem; display: inline-block; min-height: 24px; }
+/* a touch screen still gets the touch size (at 768 px the board is the wide layout): this rule is as specific as the one above, and later */
+@media (pointer: coarse) { .board--wide .po-link { display: inline-flex; align-items: center; min-height: var(--tap-min); } }
 .board--wide .row td:first-child { width: 9.5rem; }
 .board--wide td[data-label='Buyer'] { width: 9rem; }
 .board--wide td[data-label='Ship'] { width: 9rem; font-weight: 600; }

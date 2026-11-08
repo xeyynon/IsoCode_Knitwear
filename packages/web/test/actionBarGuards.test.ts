@@ -29,7 +29,10 @@ describe('the Send bar on the Update screen', () => {
     expect(form).toBeGreaterThan(-1)
     expect(bar).toBeGreaterThan(form)
     expect(endForm).toBeGreaterThan(update.indexOf('</ActionBar>'))
-    expect(update).toMatch(/<button className="btn btn--primary btn--block btn--big"/)
+    // Same promise through the atom (slice 2.x): Send is the filled, full-width, big Button with no `type="button"` (so it submits the form);
+    // test/atoms.test.tsx proves that these three props draw `btn btn--primary btn--block btn--big`.
+    expect(update).toMatch(/<Button variant="primary" block size="big" disabled=/)
+    expect(update).not.toMatch(/<Button variant="primary" block size="big"[^>]*type="button"/)
   })
 })
 

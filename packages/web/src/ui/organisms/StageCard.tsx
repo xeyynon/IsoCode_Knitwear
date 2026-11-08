@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
 import { pieces } from '../../numberFormat'
 import { percentText } from '../../stages/pieceProgress'
+import { ButtonLink } from '../atoms/Button'
 import { PieceBar } from '../atoms/PieceBar'
 import './StageCard.css'
 
@@ -41,7 +41,7 @@ export function StageCard({ po, meta, stageName, done, qty, today, dueText, href
         )}
         {labels.today} <b>{pieces(today)}</b>
       </p>
-      <Link className="btn btn--primary btn--block stage__go" to={href}>{labels.update}</Link>
+      <ButtonLink variant="primary" block className="stage__go" to={href}>{labels.update}</ButtonLink>
     </li>
   )
 }

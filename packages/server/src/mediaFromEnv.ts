@@ -1,3 +1,5 @@
+import type { Db } from './db.js'
+import { dbMediaStore } from './dbMediaStore.js'
 import { diskStore, memoryMediaStore, type MediaStore } from './mediaStore.js'
 import { s3Store, type S3Config, type S3Like, type S3StoreOptions } from './s3Store.js'
 
@@ -63,6 +65,8 @@ export interface MediaFromEnvOptions {
   s3Client?: S3Like
   onError?: S3StoreOptions['onError']
   warn?: (message: string) => void
+  /** The app's database, for MEDIA_STORE=db. */
+  db?: Db
 }
 
 /**
@@ -71,6 +75,7 @@ export interface MediaFromEnvOptions {
  *   MEDIA_STORE=disk         needs MEDIA_DIR.
  *   MEDIA_STORE=memory       in-process only; photos vanish on restart. For trials.
  *   MEDIA_STORE=s3           needs S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY.
+ *   MEDIA_STORE=db           photo bytes in Postgres (migration 019): a host with no disk and no bucket, such as the review demo.
  */
 export function mediaStoreFromEnv(env: Env, opts: MediaFromEnvOptions = {}): MediaStore | undefined {
   const kind = env.MEDIA_STORE?.trim().toLowerCase() || undefined
@@ -85,5 +90,9 @@ export function mediaStoreFromEnv(env: Env, opts: MediaFromEnvOptions = {}): Med
     if (dir) opts.warn?.('MEDIA_DIR is ignored because MEDIA_STORE=s3')
     return s3Store(s3ConfigFromEnv(env), { ...(opts.s3Client ? { client: opts.s3Client } : {}), ...(opts.onError ? { onError: opts.onError } : {}) })
   }
-  throw new MediaConfigError('MEDIA_STORE must be disk, memory or s3')
+  if (kind === 'db') {
+    if (!opts.db) throw new MediaConfigError('MEDIA_STORE=db needs the database, which this start-up path does not pass')
+    return dbMediaStore(opts.db)
+  }
+  throw new MediaConfigError('MEDIA_STORE must be disk, memory, s3 or db')
 }

@@ -34,6 +34,9 @@ describe('the stamp in CSS', () => {
     expect(css).toMatch(/\.badge--stamp\s*\{[^}]*text-transform:\s*uppercase/)
     expect(css).toMatch(/\.badge--stamp::after\s*\{[^}]*border:/)
   })
+  it('has text of 12 px, no smaller (AUDIT-03 finding 3: 11 px capitals were the smallest text in the app)', () => {
+    expect(css).toMatch(/\.badge--stamp\s*\{[^}]*font-size:\s*12px/)
+  })
   it('is not tilted, and has no fill (the colour is on the rule, the icon and the word)', () => {
     expect(css).not.toMatch(/rotate|skew|(^|[;{\s])transform\s*:/) // text-transform (capitals) is fine; a tilt is not
     expect(css).toMatch(/\.badge--stamp\s*\{[^}]*background:\s*transparent/)

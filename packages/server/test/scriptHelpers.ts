@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 // Shared by toolingScripts.test.ts and repoGuard.test.ts: throw-away git repositories in the OS temp folder, each
 // holding its own copy of the scripts, because the scripts act on the repository that holds them (BE-059), not on
@@ -51,6 +51,10 @@ export function run(script: string, cwd: string, args: string[] = [], env: Recor
   return spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env: { ...process.env, BANNED_TERMS: '', REQUIRE_BANNED_TERMS: '', GITHUB_ACTIONS: '', ...env } })
 }
 
-/** Loads one of the scripts as a module (the scripts are plain .mjs with no type declarations, so the result is untyped). */
+/**
+ * Loads one of the scripts as a module (the scripts are plain .mjs with no type declarations, so the result is untyped).
+ * A plain path with forward slashes, not a file:// URL: Vite does not decode the URL, so a checkout in a folder with a space
+ * ("New folder" becomes "New%20folder") could not find the file.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const loadScript = (name: string): Promise<any> => import(pathToFileURL(path.join(SCRIPTS_DIR, name)).href)
+export const loadScript = (name: string): Promise<any> => import(/* @vite-ignore */ path.join(SCRIPTS_DIR, name).split(path.sep).join('/'))

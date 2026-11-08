@@ -107,12 +107,12 @@
   "orders": 300,
   "statuses": {
    "red": 105,
-   "grey": 184,
-   "green": 11
+   "grey": 173,
+   "green": 22
   },
   "lowConfidenceOrders": 87,
-  "boardSha256": "0c8aa13ac49a52d8027ca02eb30e548294e0c74c8c0bc69c1e5f2ad3c5e6b833",
-  "detailsSha256": "cf29bede1f492a1a8091f540ffce482fe28dc325fe90a0e8fd47d4566c753122",
+  "boardSha256": "84e70df8054988ee95928714dbea73ac20a2a8011ed17c799915b3516dd7ec0b",
+  "detailsSha256": "81ae70fe055e057b624392a8212956dfcc18d042dab25b52d8e6f1da4878ba94",
   "sample": [
    {
     "orderId": "a96f1154-2a12-461e-e3bf-55a45afaffb0",

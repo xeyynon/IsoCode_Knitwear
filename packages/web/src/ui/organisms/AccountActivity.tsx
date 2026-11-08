@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { activityTime, visibleEntries, type AuditEntry } from '../../setup/activityLogic'
+import { Button } from '../atoms/Button'
 import { LoadFailed } from '../LoadFailed'
 import './AccountActivity.css'
 
@@ -24,7 +25,7 @@ export function AccountActivity({ entries, failed, unreachable = false, onRetry 
           </li>
         ))}
       </ol>
-      {entries.length > shown.length && <button type="button" className="btn btn--small" onClick={() => setAll(true)}>Show all {entries.length}</button>}
+      {entries.length > shown.length && <Button type="button" size="small" onClick={() => setAll(true)}>Show all {entries.length}</Button>}
     </>
   )
 }
