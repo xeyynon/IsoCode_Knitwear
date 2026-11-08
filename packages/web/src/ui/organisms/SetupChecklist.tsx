@@ -41,14 +41,18 @@ export function SetupChecklist({ result, failure, onRetry, onGo }: { result: Che
   if (result === null) return <section className="setupcheck" aria-label="Pilot setup"><p className="sub">Checking what is set up…</p></section>
   if (result.overall === 'failed') return <section className="setupcheck" aria-label="Pilot setup"><LoadFailed unreachable={failure?.unreachable ?? false} message={failure?.message ?? result.line} onRetry={onRetry} /></section>
   const done = result.overall === 'done'
+  const list = <ul className="plain setupcheck__list">{result.items.map((i) => <Row key={i.id} item={i} onGo={onGo} />)}</ul>
   return (
     <section className={`setupcheck setupcheck--${result.overall}`} aria-labelledby="setupcheck-title">
       <h2 id="setupcheck-title" className="setupcheck__title">Pilot setup</h2>
       <p className="setupcheck__line" role="status">{result.line}</p>
-      <details className="setupcheck__details" open={!done && !narrow}>
-        <summary>{done ? 'See what is set up' : narrow ? 'Show the steps' : 'The steps'}</summary>
-        <ul className="plain setupcheck__list">{result.items.map((i) => <Row key={i.id} item={i} onGo={onGo} />)}</ul>
-      </details>
+      {/* On a wide screen with steps left they are simply shown: a toggle that is always open and looks like a heading link only confuses (AUDIT-03 finding 18). */}
+      {!done && !narrow ? list : (
+        <details className="setupcheck__details">
+          <summary>{done ? 'See what is set up' : 'Show the steps'}</summary>
+          {list}
+        </details>
+      )}
     </section>
   )
 }

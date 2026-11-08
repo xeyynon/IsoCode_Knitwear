@@ -41,6 +41,8 @@ export default function Setup() {
     const h = target ?? panel.current?.querySelector<HTMLElement>('h2')
     if (h) { h.tabIndex = -1; h.focus(); if (target) target.scrollIntoView({ block: 'start' }) }
   }, [tab, jumps])
+  // The tab row scrolls sideways on a phone: keep the current tab in view (block: nearest, so the page itself does not move).
+  useEffect(() => { document.querySelector('.seg--tabs [aria-current]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [tab])
   const goTo = (section: SetupTab, at?: string) => { pending.current = { tab: section, anchor: at ?? null }; setJumps((n) => n + 1) }
 
   return (

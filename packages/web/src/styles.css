@@ -404,8 +404,14 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 .orig { font-size: 18px; margin: 6px 0; }
 
 /* ---- setup */
-.seg--tabs { max-width: 640px; margin-bottom: 8px; flex-wrap: wrap; }
-.seg--tabs .seg__btn { min-width: 120px; }
+/* The five tabs are one row of equal widths (AUDIT-03 finding 8: they were 120 to 149 px and wrapped to three rows on a phone). On a phone the row scrolls
+   sideways instead, with the next tab half in view; Setup.tsx scrolls the current one into view. */
+.seg--tabs { width: 100%; max-width: 640px; margin-bottom: 8px; flex-wrap: nowrap; }
+.seg--tabs .seg__btn { flex: 1 1 0; min-width: 120px; white-space: nowrap; }
+@media (max-width: 720px) {
+  .seg--tabs { max-width: none; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .seg--tabs .seg__btn { flex: 0 0 auto; scroll-snap-align: start; }
+}
 .people__actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 /* A word stays whole here: the shared .plan td rule lets any word break anywhere, which split "Merchandiser" and "Active" in the middle. */
 .people td, .people th { overflow-wrap: normal; word-break: normal; }
