@@ -31,27 +31,40 @@ export interface CreatedOrder {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const MAX_ORDER_TEXT_CHARS = 200
 const text = (v: unknown, name: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw badRequest(`${name} is required`)
-  return v.trim().slice(0, 200)
+  // Refused, never cut: two different POs that share their first 200 characters must not turn into one.
+  if (v.trim().length > MAX_ORDER_TEXT_CHARS) throw badRequest(`${name} must be at most ${MAX_ORDER_TEXT_CHARS} characters`)
+  return v.trim()
 }
 
-/** Check the sizes of an order and return their total. Every message says which limit was passed. */
-export function checkSizes(sizes: unknown): number {
+/**
+ * Check the sizes of an order and return them tidied (names trimmed) with their total. Every message says which limit was passed.
+ * A name is trimmed before it is kept, so " S" and "S" are one size and listing both is refused rather than stored as two.
+ */
+export function normaliseSizes(sizes: unknown): { sizes: Record<string, number>; total: number } {
   if (typeof sizes !== 'object' || sizes === null || Array.isArray(sizes) || !Object.keys(sizes).length) throw badRequest('Enter the quantity for at least one size')
   const entries = Object.entries(sizes as Record<string, unknown>)
   if (entries.length > MAX_SIZES) throw badRequest(`An order can have at most ${MAX_SIZES} sizes`)
+  const out: Record<string, number> = {}
   let total = 0
-  for (const [size, q] of entries) {
-    if (!size.trim()) throw badRequest('A size has no name')
+  for (const [raw, q] of entries) {
+    const size = raw.trim()
+    if (!size) throw badRequest('A size has no name')
     if (size.length > MAX_SIZE_NAME_CHARS) throw badRequest(`A size name can be at most ${MAX_SIZE_NAME_CHARS} characters`)
     if (/[\u0000-\u001F\u007F]/.test(size)) throw badRequest('A size name has a character that is not allowed')
+    if (Object.hasOwn(out, size)) throw badRequest(`The size ${size} is listed twice`)
     if (!Number.isInteger(q) || (q as number) < 0 || (q as number) > MAX_QTY_PER_SIZE) throw badRequest(`Size ${size.slice(0, 20)}: quantity must be a whole number from 0 to ${MAX_QTY_PER_SIZE}`)
+    out[size] = q as number
     total += q as number
   }
   if (total > MAX_ORDER_QTY) throw badRequest(`The order quantity can be at most ${MAX_ORDER_QTY} pieces`)
-  return total
+  return { sizes: out, total }
 }
+
+/** The total of an order's sizes, after the same checks. */
+export const checkSizes = (sizes: unknown): number => normaliseSizes(sizes).total
 
 async function calendarsFor(tx: Tx, unitIds: string[]): Promise<Record<string, UnitCalendar>> {
   const out: Record<string, UnitCalendar> = {}
@@ -68,9 +81,6 @@ export async function loadTemplate(tx: Tx, templateId: string): Promise<{ name: 
   if (!tpl) throw notFound('No such TNA template')
   const raw = Array.isArray(tpl.offsets) ? tpl.offsets as { stage: string; sequence: number; working_days_before: number; unit_id: string }[] : []
   return { name: tpl.name, steps: raw.map((o) => ({ stage: o.stage, sequence: o.sequence, workingDaysBefore: o.working_days_before, unitId: o.unit_id })) }
-}
-export async function loadTemplateSteps(tx: Tx, templateId: string): Promise<TemplateStep[]> {
-  return (await loadTemplate(tx, templateId)).steps
 }
 
 /**
@@ -165,10 +175,13 @@ export async function createOrder(tx: Tx, ctx: Ctx, input: NewOrder, today: stri
   if (!UUID.test(String(input.templateId))) throw badRequest('Choose a TNA template')
   if (!isIsoDate(input.exFactory)) throw badRequest('Ex-factory date must be a real date (YYYY-MM-DD)')
 
-  const sizes = input.sizes
-  const total = checkSizes(sizes)
+  const { sizes, total } = normaliseSizes(input.sizes)
   if (total <= 0) throw badRequest('The order quantity must be more than 0')
-  if (input.qty !== undefined && input.qty !== total) throw badRequest(`Quantity ${input.qty} does not match the sizes, which add up to ${total}`)
+  // qty is optional (null counts as not sent). When it is sent it must be a number; text such as "300" is told so, not told it differs from 300.
+  if (input.qty !== undefined && input.qty !== null) {
+    if (typeof input.qty !== 'number') throw badRequest('Quantity must be a number')
+    if (input.qty !== total) throw badRequest(`Quantity ${input.qty} does not match the sizes, which add up to ${total}`)
+  }
 
   if (!(await tx.query('select 1 from buyer where id = $1', [input.buyerId])).length) throw notFound('No such buyer')
   const tpl = await loadTemplate(tx, input.templateId)

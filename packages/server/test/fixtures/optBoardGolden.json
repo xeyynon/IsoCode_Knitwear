@@ -1,0 +1,321 @@
+{
+ "seeded": {
+  "orders": 3,
+  "statuses": {
+   "red": 1,
+   "grey": 1,
+   "green": 1
+  },
+  "lowConfidenceOrders": 0,
+  "boardSha256": "423bcb7a359946e4f495149b4ba24977e120f54360141105f51d8c7eeed07930",
+  "detailsSha256": "1b05c13593dc0968f1cbb255b93ba12efd22e81284480f4da5cb14b8549db6b7",
+  "sample": [
+   {
+    "orderId": "00000000-0000-0000-0000-0000000000d1",
+    "po": "B-PO-88240",
+    "buyerId": "00000000-0000-0000-0000-0000000000b1",
+    "buyerName": "Buyer B",
+    "style": "tee",
+    "colour": "navy",
+    "exFactory": "2026-11-20",
+    "status": "red",
+    "worstStage": "sewing",
+    "maths": "Need 467/day · making 350/day · 700 pcs short by 11 Nov.",
+    "shortBy": 700,
+    "reasons": [
+     "making less than 90% of needed"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000aa01",
+      "name": "Unit 1"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "sewing",
+    "currentStageQty": 4550,
+    "currentStageProduced": 1750,
+    "currentStageMadeIsEstimate": false,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "00000000-0000-0000-0000-0000000000d3",
+    "po": "B-PO-88213",
+    "buyerId": "00000000-0000-0000-0000-0000000000b1",
+    "buyerName": "Buyer B",
+    "style": "tee",
+    "colour": "grey",
+    "exFactory": "2026-11-25",
+    "status": "grey",
+    "worstStage": "sewing",
+    "maths": "Need 214/day · no output recorded yet.",
+    "shortBy": null,
+    "reasons": [
+     "no update yet"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": false,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000aa01",
+      "name": "Unit 1"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "sewing",
+    "currentStageQty": 3000,
+    "currentStageProduced": 0,
+    "currentStageMadeIsEstimate": false,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "00000000-0000-0000-0000-0000000000d2",
+    "po": "C-PO-0488",
+    "buyerId": "00000000-0000-0000-0000-0000000000c1",
+    "buyerName": "Buyer C",
+    "style": "tee",
+    "colour": "red",
+    "exFactory": "2026-11-20",
+    "status": "green",
+    "worstStage": "sewing",
+    "maths": "Need 467/day · making 500/day · on pace.",
+    "shortBy": 0,
+    "reasons": [],
+    "noRecentUpdate": false,
+    "hasWarning": false,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000aa02",
+      "name": "Unit 2"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "sewing",
+    "currentStageQty": 5300,
+    "currentStageProduced": 2500,
+    "currentStageMadeIsEstimate": false,
+    "lowConfidenceStages": []
+   }
+  ]
+ },
+ "generated": {
+  "orders": 300,
+  "statuses": {
+   "red": 105,
+   "grey": 184,
+   "green": 11
+  },
+  "lowConfidenceOrders": 87,
+  "boardSha256": "0c8aa13ac49a52d8027ca02eb30e548294e0c74c8c0bc69c1e5f2ad3c5e6b833",
+  "detailsSha256": "cf29bede1f492a1a8091f540ffce482fe28dc325fe90a0e8fd47d4566c753122",
+  "sample": [
+   {
+    "orderId": "a96f1154-2a12-461e-e3bf-55a45afaffb0",
+    "po": "GEN-PO-0060",
+    "buyerId": "2283335d-8d12-b210-0143-9091e74f5028",
+    "buyerName": "Gen buyer 5",
+    "style": "style5",
+    "colour": "navy",
+    "exFactory": "2026-10-27",
+    "status": "red",
+    "worstStage": "cutting",
+    "maths": "milestone has passed · making 260/day (estimate) · 2550 pcs short by 18 Oct.",
+    "shortBy": 2550,
+    "reasons": [
+     "milestone passed with pieces remaining",
+     "this stage is projected past ex-factory"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000cc02",
+      "name": "Gen unit 2"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "cutting",
+    "currentStageQty": 2550,
+    "currentStageProduced": 0,
+    "currentStageMadeIsEstimate": true,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "25fb627b-2f94-d69f-4cbf-aab4a3839af4",
+    "po": "GEN-PO-0120",
+    "buyerId": "edbab455-72c7-2a5d-9440-b40bcc0500c0",
+    "buyerName": "Gen buyer 1",
+    "style": "style10",
+    "colour": "navy",
+    "exFactory": "2026-10-27",
+    "status": "red",
+    "worstStage": "cutting",
+    "maths": "milestone has passed · making 140/day (estimate) · 1350 pcs short by 18 Oct.",
+    "shortBy": 1350,
+    "reasons": [
+     "milestone passed with pieces remaining",
+     "this stage is projected past ex-factory"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000cc02",
+      "name": "Gen unit 2"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "cutting",
+    "currentStageQty": 1350,
+    "currentStageProduced": 0,
+    "currentStageMadeIsEstimate": true,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "48d47de6-bbaa-3f61-00df-5000b3747b82",
+    "po": "GEN-PO-0180",
+    "buyerId": "2283335d-8d12-b210-0143-9091e74f5028",
+    "buyerName": "Gen buyer 5",
+    "style": "style4",
+    "colour": "navy",
+    "exFactory": "2026-10-27",
+    "status": "red",
+    "worstStage": "cutting",
+    "maths": "milestone has passed · making 300/day (estimate) · 2700 pcs short by 18 Oct.",
+    "shortBy": 2700,
+    "reasons": [
+     "milestone passed with pieces remaining",
+     "this stage is projected past ex-factory"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000cc02",
+      "name": "Gen unit 2"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "cutting",
+    "currentStageQty": 2700,
+    "currentStageProduced": 0,
+    "currentStageMadeIsEstimate": true,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "9809350b-5b99-badd-dd2a-647ad236f7d0",
+    "po": "GEN-PO-0240",
+    "buyerId": "edbab455-72c7-2a5d-9440-b40bcc0500c0",
+    "buyerName": "Gen buyer 1",
+    "style": "style9",
+    "colour": "navy",
+    "exFactory": "2026-10-27",
+    "status": "red",
+    "worstStage": "cutting",
+    "maths": "milestone has passed · making 180/day (estimate) · 1500 pcs short by 18 Oct.",
+    "shortBy": 1500,
+    "reasons": [
+     "milestone passed with pieces remaining",
+     "this stage is projected past ex-factory"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000cc02",
+      "name": "Gen unit 2"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "cutting",
+    "currentStageQty": 1500,
+    "currentStageProduced": 0,
+    "currentStageMadeIsEstimate": true,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "2f16ea28-44a8-097d-1a93-acd3bb2d5027",
+    "po": "GEN-PO-0300",
+    "buyerId": "2283335d-8d12-b210-0143-9091e74f5028",
+    "buyerName": "Gen buyer 5",
+    "style": "style3",
+    "colour": "navy",
+    "exFactory": "2026-10-27",
+    "status": "red",
+    "worstStage": "cutting",
+    "maths": "milestone has passed · making 340/day (estimate) · 2850 pcs short by 18 Oct.",
+    "shortBy": 2850,
+    "reasons": [
+     "milestone passed with pieces remaining",
+     "this stage is projected past ex-factory"
+    ],
+    "noRecentUpdate": false,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000cc02",
+      "name": "Gen unit 2"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 1,
+    "currentStage": "cutting",
+    "currentStageQty": 2850,
+    "currentStageProduced": 0,
+    "currentStageMadeIsEstimate": true,
+    "lowConfidenceStages": []
+   },
+   {
+    "orderId": "c9a87620-cd78-d8ee-025c-a467f34be2b1",
+    "po": "GEN-PO-0043",
+    "buyerId": "3dfe5631-03ab-11be-c75b-b5081e7a1dbe",
+    "buyerName": "Gen buyer 4",
+    "style": "style10",
+    "colour": "grey",
+    "exFactory": "2026-10-28",
+    "status": "red",
+    "worstStage": "cutting",
+    "maths": "milestone has passed · making 639/day · 204 pcs short by 18 Oct.",
+    "shortBy": 204,
+    "reasons": [
+     "milestone passed with pieces remaining",
+     "this stage is projected past ex-factory"
+    ],
+    "noRecentUpdate": true,
+    "hasWarning": true,
+    "units": [
+     {
+      "id": "00000000-0000-0000-0000-00000000cc01",
+      "name": "Gen unit 1"
+     },
+     {
+      "id": "00000000-0000-0000-0000-00000000cc02",
+      "name": "Gen unit 2"
+     },
+     {
+      "id": "00000000-0000-0000-0000-00000000cc03",
+      "name": "Gen unit 3"
+     }
+    ],
+    "stagesDone": 0,
+    "stagesTotal": 4,
+    "currentStage": "cutting",
+    "currentStageQty": 2550,
+    "currentStageProduced": 2346,
+    "currentStageMadeIsEstimate": false,
+    "lowConfidenceStages": [
+     "cutting"
+    ]
+   }
+  ]
+ }
+}

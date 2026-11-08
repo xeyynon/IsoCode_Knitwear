@@ -1,0 +1,30 @@
+{
+  // Type-checks the backend's own scripts and the test configuration, which `npm run typecheck` did not cover (BE-060).
+  // The scripts are plain JavaScript (.mjs) checked with checkJs, under the same strictness as the rest.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "types": ["node"],
+    "lib": ["ES2022"]
+  },
+  "include": [
+    "scripts/*.mjs",
+    "scripts/*.d.mts",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ],
+  // Skipped on purpose: these belong to the UI session (browser-driving tools and the colour-contrast check), which owns
+  // their types; they run through tsx, which does not type-check. Listed by name so a new script is never skipped by accident:
+  // packages/server/test/toolingScripts.test.ts fails for a file in scripts/ that is neither included above nor named here.
+  "exclude": [
+    "scripts/a11y.ts",
+    "scripts/check_contrast.mjs",
+    "scripts/e2e_offline.ts",
+    "scripts/phone_keyboard.ts",
+    "scripts/pngDiff.ts",
+    "scripts/snapshot_diff.ts",
+    "scripts/snapshots.ts",
+    "scripts/ux_metrics.ts"
+  ]
+}

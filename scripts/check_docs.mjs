@@ -1,29 +1,44 @@
 #!/usr/bin/env node
-// Every relative link in the Markdown files must resolve.
+// Every relative link in the Markdown files must resolve, and so must its #anchor.
+//
+// Links read: inline [text](target) (with a "title", with <angle brackets> around a target that has spaces, with balanced
+// parentheses inside the target), reference definitions "[ref]: target", and src= / href= in HTML. Links inside fenced
+// code and inline code are examples and are skipped. A #fragment must be a heading of the target Markdown file (GitHub's
+// rule for the id: lower-case, punctuation dropped, spaces to hyphens, a repeat gets -1, -2), or an <a name=".."> / id=".."
+// in it; #top is always fine. External links (http:, mailto:, ...) are not fetched.
 //
 // The files checked are the ones git knows: tracked files plus new files that are not ignored. That is what a
 // fresh CI checkout holds, so a local run and CI agree: an ignored folder such as md/ is neither read nor a valid
-// link target (a link into it would break on CI). Without git it walks the disk instead.
+// link target (a link into it would break on CI). Without git it walks the disk instead. It acts on the repository
+// that holds this script, whatever the folder it was started from.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { repoRootOrNull, scriptDir } from './repoRoot.mjs'
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist'])
 
+/** @type {string} */
 let ROOT
+/** @type {Set<string> | null} */
 let known = null // Set of repo-relative file paths (forward slashes), or null when git is unavailable
-try {
-  ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  const ls = (...args) => execFileSync('git', ['ls-files', '-z', ...args], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean)
+const gitRoot = repoRootOrNull(import.meta.url)
+if (gitRoot) {
+  ROOT = gitRoot
+  /** @param {...string} args */
+  const ls = (...args) => execFileSync('git', ['-c', 'core.quotepath=false', 'ls-files', '-z', ...args], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean)
   const all = [...new Set([...ls(), ...ls('--others', '--exclude-standard')])]
   // A tracked file deleted from disk is not a file any more.
   known = new Set(all.filter((f) => fs.existsSync(path.join(ROOT, f))))
-} catch {
-  ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-  known = null
+} else {
+  ROOT = path.resolve(scriptDir(import.meta.url), '..')
 }
 
+/**
+ * @param {string} dir
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_DIRS.has(e.name)) continue
@@ -34,14 +49,18 @@ function walk(dir, out = []) {
   return out
 }
 
+/** @param {string} rel */
 const skipped = (rel) => rel.split('/').some((seg) => SKIP_DIRS.has(seg))
 const files = known
   ? [...known].filter((f) => f.endsWith('.md') && !skipped(f)).sort().map((f) => path.join(ROOT, f))
   : walk(ROOT)
 
 // Does a link target exist? With git, only what a checkout holds counts: a file git knows, or a folder holding one.
+/** @param {string} abs */
 const toRel = (abs) => path.relative(ROOT, abs).split(path.sep).join('/')
+/** @type {Set<string> | null} */
 let dirs = null
+/** @param {string} abs */
 function exists(abs) {
   if (!known) return fs.existsSync(abs)
   const rel = toRel(abs)
@@ -55,19 +74,91 @@ function exists(abs) {
   return dirs.has(rel)
 }
 
-const LINK = /\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+/** @param {string} text */
+const withoutFences = (text) => text.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, '')
+/** @param {string} text */
+const withoutCode = (text) => withoutFences(text).replace(/(`+)[^`]*?\1/g, '')
+
+// GitHub's id for a heading.
+/** @param {string} raw */
+function slugOf(raw) {
+  const t = raw.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]+>/g, '').replace(/[`*~]/g, '').trim().toLowerCase()
+  return t.replace(/[^\p{L}\p{M}\p{N}\p{Pc}\s-]/gu, '').replace(/\s/g, '-')
+}
+
+/** @type {Map<string, Set<string>>} */
+const anchorCache = new Map()
+/** @param {string} abs */
+function anchorsOf(abs) {
+  let set = anchorCache.get(abs)
+  if (set) return set
+  set = new Set(['top'])
+  const text = withoutFences(fs.readFileSync(abs, 'utf8'))
+  const seen = new Map()
+  for (const m of text.matchAll(/^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/gm)) {
+    const base = slugOf(m[1] ?? '')
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    set.add(n === 0 ? base : `${base}-${n}`)
+  }
+  for (const m of text.matchAll(/<a\s[^>]*?\b(?:name|id)\s*=\s*["']([^"']+)["']/gi)) set.add((m[1] ?? '').toLowerCase())
+  anchorCache.set(abs, set)
+  return set
+}
+
+// The target of each inline link: after "](", up to the first space, or the ")" that closes it (parentheses inside the
+// target may nest), or the ">" when it starts with "<".
+/** @param {string} text */
+function inlineTargets(text) {
+  /** @type {string[]} */
+  const out = []
+  for (let i = text.indexOf(']('); i !== -1; i = text.indexOf('](', i + 2)) {
+    let j = i + 2
+    while (text[j] === ' ') j++
+    if (text[j] === '<') {
+      const end = text.indexOf('>', j)
+      if (end !== -1 && !text.slice(j, end).includes('\n')) out.push(text.slice(j + 1, end))
+      continue
+    }
+    let depth = 0
+    let k = j
+    for (; k < text.length; k++) {
+      const c = text[k] ?? ''
+      if (c === '(') depth++
+      else if (c === ')') { if (depth === 0) break; depth-- } else if (/\s/.test(c)) break
+    }
+    if (k > j) out.push(text.slice(j, k))
+  }
+  return out
+}
+
+/** @param {string} text */
+function targetsOf(text) {
+  const out = inlineTargets(text)
+  for (const m of text.matchAll(/^ {0,3}\[[^\]\n]+\]:[ \t]*(<[^>\n]+>|\S+)/gm)) out.push((m[1] ?? '').replace(/^<|>$/g, ''))
+  for (const m of text.matchAll(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) out.push(m[1] ?? m[2] ?? '')
+  return out
+}
+
+/** @param {string} s */
+const decode = (s) => { try { return decodeURIComponent(s) } catch { return s } }
+
+/** @type {string[]} */
 const problems = []
 for (const file of files) {
-  // Ignore fenced code so examples are not treated as links.
-  const text = fs.readFileSync(file, 'utf8').replace(/```[\s\S]*?```/g, '')
-  for (const m of text.matchAll(LINK)) {
-    const target = m[1]
-    if (/^(https?:|mailto:|#)/i.test(target)) continue
-    let rel
-    try { rel = decodeURIComponent(target.split('#')[0].split('?')[0]) } catch { rel = target.split('#')[0] }
-    if (!rel) continue
-    if (!exists(path.resolve(path.dirname(file), rel))) {
+  const text = fs.readFileSync(file, 'utf8')
+  for (const target of targetsOf(withoutCode(text))) {
+    if (!target || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)) continue
+    const hash = target.indexOf('#')
+    const pathPart = decode((hash === -1 ? target : target.slice(0, hash)).split('?')[0] ?? '')
+    const fragment = hash === -1 ? '' : decode(target.slice(hash + 1))
+    const abs = pathPart === '' ? file : pathPart.startsWith('/') ? path.join(ROOT, pathPart) : path.resolve(path.dirname(file), pathPart)
+    if (pathPart !== '' && !exists(abs)) {
       problems.push(`${path.relative(ROOT, file)}: broken link ${target}`)
+      continue
+    }
+    if (fragment && abs.endsWith('.md') && fs.existsSync(abs) && fs.statSync(abs).isFile() && !anchorsOf(abs).has(fragment.toLowerCase())) {
+      problems.push(`${path.relative(ROOT, file)}: broken anchor ${target}`)
     }
   }
 }

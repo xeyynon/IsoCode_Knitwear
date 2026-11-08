@@ -30,6 +30,6 @@ export function buyerExportCsv(view: BuyerView): string {
 
 /** orders-<buyer name as letters and digits>-<date>.csv: nothing from the name can break out of the header. */
 export function exportFileName(buyerName: string, date: string): string {
-  const slug = buyerName.normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 40)
+  const slug = buyerName.normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase().slice(0, 40).replace(/^-+|-+$/g, '')   // cut first, then trim: a cut that lands on a separator must not leave one behind
   return `orders-${slug || 'buyer'}-${date}.csv`
 }

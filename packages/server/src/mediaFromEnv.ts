@@ -33,6 +33,8 @@ export function s3ConfigFromEnv(env: Env): S3Config {
     if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOOPBACK.has(u.hostname))) {
       throw new MediaConfigError('S3_ENDPOINT must start with https:// (http:// is allowed only for localhost)')
     }
+    // A path, query or fragment would be dropped by u.origin and the requests would go to the wrong place: refuse it here, at start-up.
+    if ((u.pathname !== '' && u.pathname !== '/') || u.search || u.hash) throw new MediaConfigError('S3_ENDPOINT must be only the address (scheme, host and port), with no path')
     cfg.endpoint = u.origin
   }
 

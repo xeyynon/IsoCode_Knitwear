@@ -89,7 +89,8 @@ describe('the flag on the order page and the board', () => {
   it('is off for a stage fed only by floor counts, on once a visit entry feeds its rate', async () => {
     expect((await detail()).stages[0].lowConfidence).toBe(false)
     expect((await app.inject({ url: '/api/board', headers: await merch() })).json().rows.find((r: any) => r.po === 'B-PO-88240').lowConfidenceStages).toEqual([])
-    await send(evt(), await merch())
+    // BE-004: the rate rests on finished days, so the visit entry is dated yesterday; one dated today does not feed it (see bugfixEngineData.test.ts)
+    await send(evt({ date: '2026-11-03' }), await merch())
     expect((await detail()).stages[0].lowConfidence).toBe(true)
     const row = (await app.inject({ url: '/api/board', headers: await merch() })).json().rows.find((r: any) => r.po === 'B-PO-88240')
     expect(row.lowConfidenceStages).toEqual(['sewing'])
@@ -101,7 +102,7 @@ describe('the flag on the order page and the board', () => {
   })
 
   it('does not name a finished stage on the board', async () => {
-    await send(evt({ qty: 5000 }), await merch())
+    await send(evt({ qty: 5000, date: '2026-11-03' }), await merch())   // BE-004: dated yesterday, a day the rate rests on
     const d = await detail()
     expect(d.stages[0].complete).toBe(true)
     expect(d.stages[0].lowConfidence).toBe(true)
@@ -124,9 +125,10 @@ describe('lowConfidenceStages (which stages rest on a visit entry)', () => {
   })
 
   it('does not flag one that has fallen out of the window', () => {
-    const events = [1, 2, 3, 4, 5, 6].map((n) => ev('sewing', day(n), `e${n}`))
-    expect(lowConfidenceStages(events, new Set(['e1']), '2026-11-04', 5).size).toBe(0)
-    expect(lowConfidenceStages(events, new Set(['e2']), '2026-11-04', 5).size).toBe(1)
+    // 5 to 10 Oct 2026 are Monday to Saturday (4 Oct is a Sunday, which is not a day of the rate: BE-004)
+    const events = [5, 6, 7, 8, 9, 10].map((n) => ev('sewing', day(n), `e${n}`))
+    expect(lowConfidenceStages(events, new Set(['e5']), '2026-11-04', 5).size).toBe(0)
+    expect(lowConfidenceStages(events, new Set(['e6']), '2026-11-04', 5).size).toBe(1)
   })
 
   it('counts days, not rows: two entries on one day take one place', () => {
