@@ -59,3 +59,13 @@ describe('demo seed from the brief', () => {
     expect(pos).not.toContain('C-PO-')
   })
 })
+
+// The evaluator panel on the sign-in screen must show logins that work against this seed.
+describe('the evaluator panel and the demo seed agree', () => {
+  it('lists the same accounts and buyer links', async () => {
+    const { DEMO_ACCESS, DEMO_BUYER_LINKS } = await import('../../web/src/demo/demoAccess')
+    expect(DEMO_ACCESS.merchandiser.map((l) => [l.id, l.secret])).toEqual([[DEMO_LOGINS.merchandiser.email, DEMO_LOGINS.merchandiser.password]])
+    expect(DEMO_ACCESS.supervisor.map((l) => [l.id, l.secret])).toEqual(DEMO_LOGINS.supervisors.map((s) => [s.phone, s.pin]))
+    expect(DEMO_BUYER_LINKS.map((b) => b.token)).toEqual([DEMO_BUYER_TOKENS.companyB, DEMO_BUYER_TOKENS.companyC])
+  })
+})

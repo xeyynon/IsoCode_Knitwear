@@ -10,6 +10,11 @@ import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input } from '../ui/atoms/Input'
 import { Field } from '../ui/molecules/Field'
+import { EvaluatorAccess } from '../ui/organisms/EvaluatorAccess'
+import { demoAccessOn } from '../demo/demoAccess'
+
+// The demo logins are shown only in a build made for the hosted review demo; a real deployment never shows a password.
+const SHOW_DEMO_ACCESS = demoAccessOn(import.meta.env.VITE_DEMO_ACCESS)
 
 type Mode = LoginMode
 
@@ -85,6 +90,7 @@ export default function Login() {
           <button type="button" className="seg__btn" lang="ta" aria-pressed={lang === 'ta'} onClick={() => setLang('ta')}>{t('nav.toTamil')}</button>
           <button type="button" className="seg__btn" lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>{t('nav.toEnglish')}</button>
         </div>
+        {SHOW_DEMO_ACCESS && <EvaluatorAccess mode={mode} onUse={(id, secret) => { setA(id); setB(secret); setError(null) }} />}
       </Card>
     </AuthShell>
   )
