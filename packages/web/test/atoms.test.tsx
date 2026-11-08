@@ -7,6 +7,7 @@ import { Button, ButtonLink } from '../src/ui/atoms/Button'
 import { TextLink, LinkButton } from '../src/ui/atoms/TextLink'
 import { Input, Select, Textarea } from '../src/ui/atoms/Input'
 import { ErrorText } from '../src/ui/atoms/ErrorText'
+import { Banner } from '../src/ui/atoms/Banner'
 import { Card } from '../src/ui/atoms/Card'
 import { Chip } from '../src/ui/atoms/Chip'
 import { Field } from '../src/ui/molecules/Field'
@@ -70,6 +71,11 @@ describe('Input, Select, Textarea', () => {
 
 describe('ErrorText, Card, Chip, Field', () => {
   it('the error sentence, announced', () => expect(html(<ErrorText>Wrong</ErrorText>)).toBe('<p class="error" role="alert">Wrong</p>'))
+  it('the banner: announced by default, with its own id, or told to be a status', () => {
+    expect(html(<Banner>Full</Banner>)).toBe('<p class="banner" role="alert">Full</p>')
+    expect(html(<Banner id="toomany">More</Banner>)).toBe('<p class="banner" role="alert" id="toomany">More</p>')
+    expect(html(<Banner role="status">News</Banner>)).toBe('<p class="banner" role="status">News</p>')
+  })
   it('a card, and a card that is a form', () => {
     expect(html(<Card>x</Card>)).toBe('<section class="card">x</section>')
     expect(html(<Card as="form" className="login__card" noValidate>x</Card>)).toBe('<form class="card login__card" novalidate="">x</form>')

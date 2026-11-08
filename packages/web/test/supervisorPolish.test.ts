@@ -51,7 +51,7 @@ describe('1.5 the number field points at the "more than is left" question', () =
     expect(update).not.toMatch(/aria-invalid=\{[^}]*confirming/)
   })
   it('the field gets an ink edge, never a status colour (red means order status)', () => {
-    expect(update).toMatch(/confirming \? ' input--asking' : ''/)
+    expect(update).toMatch(/<Input[^>]*\basking=\{confirming\}/)   // the atom adds `input--asking` (atoms.test.tsx)
     const asking = rule('.input--asking')
     expect(asking).toContain('var(--ink)')
     expect(asking).not.toMatch(/--status-|--accent/)

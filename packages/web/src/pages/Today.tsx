@@ -9,6 +9,9 @@ import { dayProgress } from '../stages/dayProgress'
 import { stagesErrorText, useStages, type Stage } from '../stages/useStages'
 import { AppBar } from '../ui/AppBar'
 import { LoadFailed } from '../ui/LoadFailed'
+import { Banner } from '../ui/atoms/Banner'
+import { Card } from '../ui/atoms/Card'
+import { LinkButton } from '../ui/atoms/TextLink'
 import { Skeleton } from '../ui/atoms/Skeleton'
 import { SyncChip } from '../ui/SyncChip'
 import { StageCard } from '../ui/organisms/StageCard'
@@ -59,32 +62,32 @@ export default function Today() {
             {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
           </TodayHero>
         ) : (queue && state && <SyncChip state={state} ctl={queue.ctl} />)}
-        {warning && <p className="banner" role="alert">{t(warning)}</p>}
+        {warning && <Banner>{t(warning)}</Banner>}
 
         {state && state.rejected.length > 0 && queue && (
-          <section className="card attention" aria-label={t('today.attention')}>
+          <Card className="attention" aria-label={t('today.attention')}>
             <h2 tabIndex={-1} ref={refusedHeading}>{t('sync.notAccepted')}</h2>
             <ul className="plain">
               {state.rejected.map((r) => (
                 <li key={r.clientUuid}>
                   <span><b className="mono">{pieces(r.qty)}</b> {t('today.refusedLine', { date: dayMonth(lang, r.date), reason: serverWords(lang, r.reason, 'sync.refusedGeneric') })}</span>
-                  <button className="link" onClick={() => { removed.current = true; void queue.ctl.discard(r.clientUuid) }}>{t('common.remove')}</button>
+                  <LinkButton onClick={() => { removed.current = true; void queue.ctl.discard(r.clientUuid) }}>{t('common.remove')}</LinkButton>
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         )}
 
         {queue && queue.ctl.droppedPhotos().length > 0 && (
-          <section className="card attention" aria-label={t('sync.photoNotAccepted')}>
+          <Card className="attention" aria-label={t('sync.photoNotAccepted')}>
             <h2>{t('sync.photoNotAccepted')}</h2>
             <ul className="plain">
               {queue.ctl.droppedPhotos().map((d) => (
                 <li key={d.clientUuid}><span><b className="mono">{pieces(d.qty)}</b> {t('today.droppedLine', { stage: stageLabel(lang, d.stage), date: dayMonth(lang, d.date), note: serverWords(lang, d.note, 'sync.photoGeneric') })}</span></li>
               ))}
             </ul>
-            <button className="link" onClick={() => queue.ctl.clearDroppedPhotos()}>{t('common.ok')}</button>
-          </section>
+            <LinkButton onClick={() => queue.ctl.clearDroppedPhotos()}>{t('common.ok')}</LinkButton>
+          </Card>
         )}
 
         {st.source === 'saved' && st.savedAt && (
@@ -107,7 +110,7 @@ export default function Today() {
         {st.stages === null && st.error && (
           <LoadFailed unreachable={st.error.unreachable} message={stagesErrorText(st.error, lang)} onRetry={() => void st.reload()} workSafe />
         )}
-        {st.stages && open.length === 0 && <div className="card"><p>{t('today.nothing')}</p><p className="sub">{t('today.nothingNext')}</p></div>}
+        {st.stages && open.length === 0 && <Card as="div"><p>{t('today.nothing')}</p><p className="sub">{t('today.nothingNext')}</p></Card>}
         <ul className="stages plain">
           {open.map((s) => {
             const n = shown(s)

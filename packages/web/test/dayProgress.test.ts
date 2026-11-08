@@ -88,7 +88,7 @@ describe('the screens use them', () => {
     expect(update).toContain('nextStage(')
     const bar = update.slice(update.indexOf('<ActionBar>'), update.indexOf('</ActionBar>'))
     expect(bar).toContain("t('update.next'")
-    expect(bar).toMatch(/<Link className="btn btn--block"/)
+    expect(bar).toMatch(/<ButtonLink block to=/)   // a link drawn as a full-width button (atoms.test.tsx: `btn btn--block`)
   })
   it('Update is keyed by the stage it shows, so moving to the next stage starts a fresh form and never carries the old "Saved" line', () => {
     expect(update).toMatch(/key=\{`\$\{orderId\}\/\$\{stage\}`\}/)
