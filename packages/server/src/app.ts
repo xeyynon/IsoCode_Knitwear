@@ -124,9 +124,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   // ---- CORS: exact-match allow list; nothing is allowed by default
   app.addHook('onRequest', async (req, reply) => {
     const origin = req.headers.origin
+    // BE-071: with an allow-list, EVERY answer can differ by Origin (the allowed origin gets Access-Control-Allow-Origin, the others do not), so
+    // every answer says so, or a cache could keep the one made for a stranger and serve it to the app.
+    if (origins.size > 0) reply.header('Vary', 'Origin')
     if (origin && origins.has(origin)) {
       reply.header('Access-Control-Allow-Origin', origin)
-      reply.header('Vary', 'Origin')
       reply.header('Access-Control-Expose-Headers', 'ETag')   // so a page on another origin can read the validator and send it back
       if (req.method === 'OPTIONS') {
         reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')

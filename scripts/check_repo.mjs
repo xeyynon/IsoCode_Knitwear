@@ -33,6 +33,8 @@ const lsFiles = (...a) => gitRaw('ls-files', '-z', ...a).split('\0').filter(Bool
 const FORBIDDEN_PATHS = [
   /(^|\/)\.env(\..+)?$/, /(^|\/)local_config\./, /\.log$/, /(^|\/)node_modules\//,
   /(^|\/)data\//, /(^|\/)recordings\//, /(^|\/)(media|uploads)\//, /\.(pem|key|p12)$/,
+  // database dumps and local database files hold real data (BE-073); .gitignore lists the same names.
+  /\.(dump|sqlite3?|db)$/,
   // .gitignore keeps these two private (budget, rates, pilot plans); a forced add must not get past this guard either.
   /^md\//, /^company-a-build-plan\.md$/,
 ]
@@ -160,7 +162,7 @@ if (fs.existsSync(reportsDir)) {
 }
 
 // One InBul id on two commits (BE-053). History cannot be rewritten, so the ones that already happened are listed in inbul.mjs.
-for (const d of findDuplicateInbuls(commitTitles(ROOT))) {
+for (const d of findDuplicateInbuls(commitTitles(ROOT, true))) {
   problems.push(`${d.id} is the title of ${d.hashes.length} commits (${d.hashes.map((h) => h.slice(0, 7)).join(', ')}); take the next free id with changelog.mjs --next-internal`)
 }
 

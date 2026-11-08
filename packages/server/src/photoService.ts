@@ -4,6 +4,7 @@ import { AppError, badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Db, type Tx } from './db.js'
 import type { MediaStore } from './mediaStore.js'
 import { isIsoDate, isStageName } from './today.js'
+import { stripJpegMetadata } from './jpegMeta.js'
 import { earliestAllowedDate, tooOld } from './eventService.js'
 import { photoAlertBody, writeOutbox } from './outboxService.js'
 
@@ -44,6 +45,7 @@ export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: Phot
   if (compareDates(input.date, earliestAllowedDate(today)) < 0) throw tooOld()
   if (!Buffer.isBuffer(input.bytes) || input.bytes.length > MAX_PHOTO_BYTES) throw new AppError(413, 'photo_too_large', 'That photo is too large')   // 413 here and in the error handler: the phone reads any 4xx but 429 as "never going to work"; a stable code says why
   if (!looksLikeJpeg(input.bytes)) throw new AppError(400, 'not_a_photo', 'That file is not a JPEG photo')
+  const bytes = stripJpegMetadata(input.bytes)   // BE-068: the phone app already drops the camera's EXIF; a scripted upload did not, and its location would reach the buyer
 
   // 1. The stage (row-level security filters it to the caller's unit) and the photo already stored under this clientUuid, in one query.
   const found = (await db.tx(ctx, (tx) => tx.query<{ buyer_id: string; unit_id: string; photo_id: string | null; photo_order: string | null }>(
@@ -55,7 +57,7 @@ export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: Phot
 
   // 2. The bytes, with no transaction open. If this throws there is no row, and a retry starts again from step 1.
   const key = `photos/${randomUUID()}.jpg`
-  await store.put(key, input.bytes)
+  await store.put(key, bytes)
 
   // 3. The row. Any way out other than "this row is stored" takes the object back.
   let kept = false, inserted = false
@@ -64,7 +66,7 @@ export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: Phot
       const made = await tx.query<{ id: string }>(
         `insert into photo (client_uuid, order_id, buyer_id, storage_key, stage, unit_id, taken_on, bytes)
          values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict (client_uuid) do nothing returning id::text as id`,
-        [input.clientUuid, input.orderId, found.buyer_id, key, input.stage, found.unit_id, input.date, input.bytes.length])
+        [input.clientUuid, input.orderId, found.buyer_id, key, input.stage, found.unit_id, input.date, bytes.length])
       if (made.length) { inserted = true; return { id: made[0]!.id, duplicate: false } }
       // Lost a race with a repeat of this upload that stored its row first. Return that photo, if it really is this caller's (row-level security filters the read).
       const existing = (await tx.query<{ id: string; order_id: string }>('select id::text as id, order_id::text as order_id from photo where client_uuid = $1', [input.clientUuid]))[0]
@@ -120,11 +122,14 @@ export const PURGE_BATCH = 100
  * Delete the FILES of photos rejected more than `days` ago. The row stays (an update may point at it) and
  * is marked purged, so it simply reads as "not found" from then on. Safe to run again and again.
  *
- * No transaction is open while a file is deleted (BE-046): a short transaction picks up to PURGE_BATCH candidates, the files are
- * deleted with nothing held, and a second short transaction marks purged only the ones whose delete succeeded. A delete that fails
- * leaves its row as it was (it is tried again at the next clean-up), the others of the round are still marked, and the first failure
- * is thrown at the end, so the caller sees the error and the work done is kept. A crash between deleting and marking is harmless: the
- * delete is repeated and finds nothing (stores treat a missing file as success).
+ * No transaction is open while a file is deleted (BE-046), and a photo approved at the same moment keeps its file (BE-067). So the
+ * order is: a short transaction CLAIMS up to PURGE_BATCH rows with one guarded UPDATE (rejected, not approved, not purged, old enough)
+ * that marks them purged and returns their keys; only then are the files deleted, with nothing held. The guard is checked again by
+ * Postgres after the row lock, so a photo approved after it was looked at is not claimed, and approving a claimed photo is refused
+ * ("purged", see approvePhoto): the file of an approved photo can no longer be deleted. A delete that fails gives its claim back in a
+ * second short transaction (the row is as it was and is tried again at the next clean-up); the others of the round stay purged, and
+ * the first failure is thrown at the end. A crash between the claim and the delete leaves a file with no usable row: wasted space under
+ * a random key, never a missing photo (the same kind of leftover as BE-046's orphan objects).
  */
 export async function purgeRejectedPhotos(db: Db, ctx: Ctx, store: MediaStore, days: number): Promise<number> {
   if (!isStaff(ctx)) throw forbidden()
@@ -134,18 +139,20 @@ export async function purgeRejectedPhotos(db: Db, ctx: Ctx, store: MediaStore, d
   let firstFailure: unknown
   for (;;) {
     const rows = await db.tx(ctx, (tx) => tx.query<{ id: string; storage_key: string }>(
-      `select id::text as id, storage_key from photo
-        where rejected_at is not null and purged_at is null and rejected_at < now() - make_interval(days => $1::int) and id <> all($3::uuid[])
-        order by rejected_at, id limit $2`, [days, PURGE_BATCH, skip]))
+      `update photo set purged_at = now()
+        where id in (select id from photo
+                      where rejected_at is not null and approved_by is null and purged_at is null
+                        and rejected_at < now() - make_interval(days => $1::int) and id <> all($3::uuid[])
+                      order by rejected_at, id limit $2)
+          and rejected_at is not null and approved_by is null and purged_at is null
+        returning id::text as id, storage_key`, [days, PURGE_BATCH, skip]))
     if (!rows.length) break
-    const done: string[] = []
+    const failed: string[] = []
     for (const r of rows) {
-      try { await store.delete(r.storage_key); done.push(r.id) } catch (e) { skip.push(r.id); firstFailure ??= e }
+      try { await store.delete(r.storage_key) } catch (e) { failed.push(r.id); skip.push(r.id); firstFailure ??= e }
     }
-    if (done.length) {
-      await db.tx(ctx, (tx) => tx.query('update photo set purged_at = now() where id = any($1::uuid[]) and purged_at is null', [done]))
-      purged += done.length
-    }
+    if (failed.length) await db.tx(ctx, (tx) => tx.query('update photo set purged_at = null where id = any($1::uuid[])', [failed]))
+    purged += rows.length - failed.length
     if (rows.length < PURGE_BATCH) break
   }
   if (firstFailure !== undefined) throw firstFailure
