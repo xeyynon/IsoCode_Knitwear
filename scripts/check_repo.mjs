@@ -13,7 +13,7 @@
 //     failure (CI sets it where the secret is available); on GitHub Actions an empty list that is not required prints a warning.
 //
 // Acts on the repository that holds this script, whatever the folder it was started from.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { placeholdersIn } from './buildInfo.mjs'
@@ -132,11 +132,17 @@ for (const entry of titles) {
 }
 
 const tagNames = git('tag', '--list').split('\n').filter(Boolean)
+/**
+ * Is the tagged commit part of this checkout's history? A tag from another branch (a release that has not been merged here yet)
+ * has its report on that branch, not on this one, and must not fail this one (BE-063). Only a definite "no" (exit status 1)
+ * skips the check: when git cannot tell (a shallow clone, an error) the tag is treated as reachable, the strict way.
+ */
+const inHistory = (tag) => spawnSync('git', ['merge-base', '--is-ancestor', `refs/tags/${tag}`, 'HEAD'], { cwd: ROOT, stdio: 'ignore' }).status !== 1
 for (const t of tagNames) {
   const b = /^build-(\d+)$/.exec(t)
   if (b) {
     if (Number(b[1]) < 1000) problems.push(`tag ${t}: builds start at 1000`)
-    if (!fs.existsSync(path.join(ROOT, 'docs', 'builds', `${t}.md`))) problems.push(`tag ${t}: no report docs/builds/${t}.md`)
+    if (inHistory(t) && !fs.existsSync(path.join(ROOT, 'docs', 'builds', `${t}.md`))) problems.push(`tag ${t}: no report docs/builds/${t}.md`)
   } else if (!/^InBul\d{2,}$/.test(t)) problems.push(`tag ${t}: not build-N or InBulNN`)
 }
 
