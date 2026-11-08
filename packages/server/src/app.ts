@@ -8,7 +8,7 @@ import { submitEvent, type EventInput } from './eventService.js'
 import { changeExFactory, createOrder, getOrderOptions, previewSchedule, type NewOrder } from './orderService.js'
 import { getOrderDetail } from './orderDetailService.js'
 import { getMyStages } from './myService.js'
-import { confirmWarning, dismissWarning, listReview, refreshWarnings } from './warningService.js'
+import { confirmWarning, dismissWarning, listReview, refreshWarnings, undoDismissWarning } from './warningService.js'
 import {
   clearCalendarDay, createMerchandiser, createSupervisor, createUnit, deleteTemplate, listAccounts, listCalendar, listTemplates, listUnits,
   resetPin, saveTemplate, setCalendarDay, setDisabled, signOutEverywhere,
@@ -310,6 +310,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.post<{ Params: { id: string } }>('/api/warnings/:id/dismiss', async (req) => {
     const ctx = ctxOf(req)
     await opts.db.tx(ctx, (tx) => dismissWarning(tx, ctx, req.params.id))
+    return { ok: true }
+  })
+  // Undo "Don't show" for a warning that was still waiting for review. A confirmed one cannot be undone (409 needs_confirmation).
+  app.post<{ Params: { id: string } }>('/api/warnings/:id/undo-dismiss', async (req) => {
+    const ctx = ctxOf(req)
+    await opts.db.tx(ctx, (tx) => undoDismissWarning(tx, ctx, req.params.id, istDate(clock())))
     return { ok: true }
   })
   // Mocked alerts (nothing is sent): the latest 50, newest first.
