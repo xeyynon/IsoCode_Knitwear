@@ -411,6 +411,27 @@ describe('BE-050: a build report with placeholder text is never tagged', { timeo
   })
 })
 
+// BE-063: a tag from another branch (its report is on that branch) failed every branch that did not have it yet.
+describe('BE-063: a build tag needs its report only where the tagged commit is part of the history', { timeout: SLOW }, () => {
+  it('BE-063: a tag on another branch is ignored, a tag on this history still needs its report', () => {
+    const d = startedRepo('tagreach')
+    commitAll(d, 'InBul02: base')
+    const home = git(d, 'rev-parse', '--abbrev-ref', 'HEAD')
+    git(d, 'checkout', '-q', '-b', 'other-branch')
+    git(d, 'commit', '-q', '--allow-empty', '-m', 'InBul03: release work on another branch')
+    git(d, 'tag', 'build-1000')                               // tagged over there; its report would be over there too
+    git(d, 'checkout', '-q', home)
+    let r = checkRepo(d)
+    expect(r.status, r.stderr).toBe(0)
+    expect(r.stderr).not.toContain('build-1000')
+    git(d, 'tag', 'build-1001')                               // a tag on THIS history with no report is still a failure
+    r = checkRepo(d)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('tag build-1001: no report')
+    expect(r.stderr).not.toContain('tag build-1000')
+  })
+})
+
 // BE-052: the secret-looking-text check rejected ordinary release prose.
 describe('BE-052: release prose that uses the words token and password is accepted', { timeout: SLOW }, () => {
   it('BE-052: ordinary sentences with "token:" and "password =" are accepted', () => {
