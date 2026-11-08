@@ -37,7 +37,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 }
 .field { display: block; margin: 0 0 1rem; }
 .field > span { display: block; margin-bottom: .25rem; color: var(--muted); font-size: 14px; }
-.error { color: var(--status-red-text); margin: 0 0 1rem; }
+.error { color: var(--ink); font-weight: 600; margin: 0 0 1rem; }   /* red means order status only (rule 10): a failure is ink with a "!" mark, and role=alert */
 .card { --card-pad: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: var(--card-pad); max-width: 640px; }
 
 /* ---- sign in */
@@ -201,8 +201,9 @@ html[lang='ta'] .btn { line-height: 1.6; padding-top: 6px; padding-bottom: 6px; 
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .grid3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0 16px; }
 @media (max-width: 640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
-.field__error { display: block; color: var(--status-red-text); font-size: 14px; margin-top: 4px; }
-.input[aria-invalid='true'] { border-color: var(--status-red); border-width: 2px; }
+.field__error { display: block; color: var(--ink); font-size: 14px; font-weight: 600; margin-top: 4px; }
+.error::before, .field__error::before { content: '!'; display: inline-grid; place-items: center; width: 1.15em; height: 1.15em; margin-right: 6px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 0.8em; font-weight: 700; line-height: 1; vertical-align: 0.05em; }
+.input[aria-invalid='true'] { border-color: var(--ink); border-width: 2px; }
 /* The number field while the "more than is left" question is open: pointed at, in ink. Not red: red means order status, and more than is left is allowed. */
 .input--asking { border-color: var(--ink); border-width: 2px; }
 .sizes { display: grid; gap: 8px; }
