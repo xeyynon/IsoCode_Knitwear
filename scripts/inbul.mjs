@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 export const LEGACY_DUPLICATES = {
   InBul17: ['d77dc1f', 'd85a545'],
   InBul18: ['3f085a7', '4d7999a'],
+  InBul21: ['f40c758', 'aee6d6e'],   // the UI session's and the README pull request's, numbered at the same time
 }
 
 /**
