@@ -10,6 +10,7 @@ import { parseOrigins } from './cors.js'
 import { demoClock } from './demoClock.js'
 import { mediaStoreFromEnv } from './mediaFromEnv.js'
 import { classifierFromEnv } from './aiFromEnv.js'
+import type { NoteClassifier } from './noteAi.js'
 import { assertSafeDbRole, pgDb, unsafeRoleOverride } from './pgDb.js'
 import { parseLogLevel, parseTrustProxy, poolSettings } from './startup.js'
 
@@ -25,9 +26,20 @@ export function vercelOrigins(env: NodeJS.ProcessEnv): string[] {
     .map((k) => env[k]?.trim()).filter((h): h is string => !!h).map((h) => `https://${h}`)
 }
 
-async function init(env: NodeJS.ProcessEnv): Promise<FastifyInstance> {
+export async function init(env: NodeJS.ProcessEnv): Promise<FastifyInstance> {
   // A serverless instance handles one request at a time: a small pool is enough, and many instances share the database.
   const pool = new pg.Pool(poolSettings({ DB_POOL_MAX: '2', ...env }, need(env, 'DATABASE_URL')))
+  // Anything that stops the start-up ends the pool: init is tried again on the next request, and each try would otherwise leave a pool of
+  // open connections behind (S-6: an unsafe database login, or a database that is not answering yet, used to).
+  try {
+    return await build(env, pool)
+  } catch (err) {
+    await pool.end().catch(() => undefined)
+    throw err
+  }
+}
+
+async function build(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<FastifyInstance> {
   await assertSafeDbRole(async (sql) => (await pool.query(sql)).rows, { allowUnsafe: unsafeRoleOverride(env), warn: (m) => console.warn(m) })
   const db = pgDb(pool, (err) => console.error('idle db client error', err.name))
   const media = mediaStoreFromEnv(env, {
@@ -37,13 +49,16 @@ async function init(env: NodeJS.ProcessEnv): Promise<FastifyInstance> {
   })
   const { origins } = parseOrigins(env.ALLOWED_ORIGINS)
   const dayClock = demoClock(env.DEMO_TODAY)   // only the factory's day; tokens and locks keep real time
+  // AI is optional: a provider named without its key (S-5) must not turn every route into a 503. Say so once in the log and run without it.
+  let noteAi: NoteClassifier | null = null
+  try { noteAi = classifierFromEnv(env) } catch (err) { console.error(`AI suggestions are off: ${err instanceof Error ? err.message : String(err)}`) }
   const app = buildApp({
     db,
     tokenSecret: need(env, 'TOKEN_SECRET'),
     allowedOrigins: [...new Set([...origins, ...vercelOrigins(env)])],
     trustProxy: parseTrustProxy(env.TRUST_PROXY ?? '1'),   // Vercel's edge is the one proxy in front
     ...(media ? { media } : {}),
-    noteAi: classifierFromEnv(env),
+    noteAi,
     ...(dayClock ? { dayClock } : {}),
     logger: true,
     logLevel: parseLogLevel(env.LOG_LEVEL),

@@ -4,7 +4,7 @@ import { piecesProgress } from '../src/board/progressText'
 import type { BoardRow } from '../src/board/boardLogic'
 
 // UI/UX plan slice 3.4 (audit 02 finding 4) and the board findings of AUDIT-03 (6, 7, 11, and the PO link size).
-// The server now sends the current stage's pieces on each board row (md/api.md, DEC-028); the bar and its words are made from those, and
+// The server now sends the current stage's pieces on each board row (see the README API table); the bar and its words are made from those, and
 // nothing here estimates a number that was not reported.
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const board = read('../src/pages/Board.tsx')

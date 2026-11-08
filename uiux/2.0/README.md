@@ -1,9 +1,9 @@
 # Interface snapshots
 
-Pictures of every screen as it looks now, taken from the running app on demo data (not real orders). Regenerate them any time the interface changes:
+Pictures of every screen as it looks now, taken from the running app on the small test fixture data (invented, not real orders, and not the hosted demo's seed data). Regenerate them any time the interface changes:
 
 ```bash
-npm run dev:api                  # terminal 1
+DEMO_DATA=fixture npm run dev:api                  # terminal 1
 npm run dev -w @isocode/web      # terminal 2
 npm run snapshots                # terminal 3: writes this folder; the previous set is kept in previous/
 ```

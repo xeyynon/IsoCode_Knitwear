@@ -8,8 +8,10 @@
 //   - the merchandiser always decides, and can change the reason; buyers never see notes at all
 import Anthropic from '@anthropic-ai/sdk'
 import type { Ctx, Db } from './db.js'
+import { AppError, notFound } from './errors.js'
 import {
-  cleanNote, loadAiMinConfidence, loadReasons, notesToSuggest, saveSuggestion, saveSuggestionFailure, type Reason,
+  claimNotesToSuggest, cleanNote, loadAiDailyBudget, loadAiMinConfidence, loadReasons, pauseWaitingNotes, releaseNotes, reserveAiCalls, saveSuggestion,
+  MAX_NOTE_CHARS, saveSuggestionFailure, TRANSIENT_AI_FAILURES, type NoteToSuggest, type Reason,
 } from './noteService.js'
 
 export const DEFAULT_AI_MODEL = 'claude-opus-5-5'
@@ -28,7 +30,8 @@ export interface AiInput {
 /** What a classifier returns: the model's raw answer, before this module judges it. */
 export interface AiRaw { english: string; category: string; confidence: number; why: string; model: string }
 
-export type NoteClassifier = (input: AiInput) => Promise<AiRaw>
+/** `dailyBudget`: this deployment's own limit of AI calls a day (AI_DAILY_BUDGET), when it sets one; else the setting in the database. */
+export type NoteClassifier = ((input: AiInput) => Promise<AiRaw>) & { dailyBudget?: number }
 
 export type AiFailure = 'timeout' | 'rate_limited' | 'refused' | 'bad_answer' | 'auth' | 'unreachable' | 'error'
 
@@ -47,17 +50,27 @@ export interface Judged {
   model: string
 }
 
-const MAX_TEXT = 1000
+// The English draft is cut to what "Mark as reviewed" accepts (MAX_NOTE_CHARS, 500), so a draft the page pre-fills can always be confirmed.
+// (The column also allows 1000: migration 018 is already applied and is never edited.)
+const MAX_TEXT = MAX_NOTE_CHARS
 const MAX_WHY = 500
+
+/** Cut at `n` characters without leaving half of an emoji (a lone surrogate) at the end. */
+const cutAt = (text: string, n: number): string => {
+  const cut = text.slice(0, n)
+  return /[\ud800-\udbff]$/.test(cut) ? cut.slice(0, -1).trimEnd() : cut.trimEnd()
+}
 
 /**
  * Decide what a raw answer is worth. A reason off the list is never stored as a reason; a low or missing confidence is "unsure";
- * text is tidied and capped like any other text that reaches a page.
+ * text is tidied and capped like any other text that reaches a page. A confidence outside 0 to 1 (a 0 to 100 scale, a percentage)
+ * cannot be read as a probability, so it is not trusted at all: "unsure", confidence 0, no reason pre-selected.
  */
 export function judgeSuggestion(raw: AiRaw, reasons: Reason[], minConfidence: number): Judged {
-  const onList = reasons.some((r) => r.id === raw.category)
-  const c = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? Math.min(1, Math.max(0, raw.confidence)) : 0
-  const textEn = cleanNote(String(raw.english ?? '')).slice(0, MAX_TEXT)
+  const inRange = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) && raw.confidence >= 0 && raw.confidence <= 1
+  const onList = inRange && reasons.some((r) => r.id === raw.category)
+  const c = inRange ? raw.confidence : 0
+  const textEn = cutAt(cleanNote(String(raw.english ?? '')), MAX_TEXT)
   const sure = onList && c >= minConfidence && textEn.length > 0
   return {
     status: sure ? 'suggested' : 'unsure',
@@ -89,12 +102,15 @@ export function systemPrompt(reasons: Reason[]): string {
   ].join('\n')
 }
 
+/** Nothing a person typed may open or close a tag of the message: "<" becomes "&lt;" in every value that is put between tags. */
+const defang = (text: string): string => text.replace(/</g, '&lt;')
+
 export function userMessage(input: AiInput): string {
   return [
-    `<stage>${input.stage}</stage>`,
-    `<supervisor_tapped_reason>${input.supervisorCategory ?? 'none'}</supervisor_tapped_reason>`,
+    `<stage>${defang(input.stage)}</stage>`,
+    `<supervisor_tapped_reason>${defang(input.supervisorCategory ?? 'none')}</supervisor_tapped_reason>`,
     `<note language="${input.language}">`,
-    input.text,
+    defang(input.text),
     '</note>',
   ].join('\n')
 }
@@ -105,12 +121,23 @@ export function answerSchema(reasons: Reason[]) {
     properties: {
       english: { type: 'string', description: 'The note in plain English' },
       category: { type: 'string', enum: reasons.map((r) => r.id), description: 'One reason id from the list' },
-      confidence: { type: 'number', description: 'From 0 to 1' },
+      confidence: { type: 'number', minimum: 0, maximum: 1, description: 'From 0 to 1' },
       why: { type: 'string', description: 'One short sentence' },
     },
     required: ['english', 'category', 'confidence', 'why'],
     additionalProperties: false,
   } as const
+}
+
+/**
+ * The same schema without the number limits, for the services whose structured-output mode may refuse a schema with "minimum" or
+ * "maximum" (Claude's and Groq's strict mode list numeric limits among what they do not take). The prompt still says 0 to 1, and
+ * judgeSuggestion does not trust a number outside it, so nothing depends on the service enforcing the limit.
+ */
+export function answerSchemaWithoutLimits(reasons: Reason[]) {
+  const s = answerSchema(reasons)
+  const { minimum: _min, maximum: _max, ...confidence } = s.properties.confidence
+  return { ...s, properties: { ...s.properties, confidence } }
 }
 
 /** Read the model's JSON answer. Anything that is not the expected shape is a bad answer, never a guess. */
@@ -149,7 +176,7 @@ export function anthropicClassifier(opts: { apiKey: string; model?: string; time
         max_tokens: 4000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
-        output_config: { effort: 'low', format: { type: 'json_schema', schema: answerSchema(input.reasons) } },
+        output_config: { effort: 'low', format: { type: 'json_schema', schema: answerSchemaWithoutLimits(input.reasons) } },
         system: systemPrompt(input.reasons),
         messages: [{ role: 'user', content: userMessage(input) }],
       })
@@ -163,36 +190,69 @@ export function anthropicClassifier(opts: { apiKey: string; model?: string; time
   }
 }
 
+/** The time limit (AbortSignal.timeout) or an abort fired: whether before the answer began or while its body was being read. */
+export const isAbort = (e: unknown): boolean => (e as Error | null)?.name === 'TimeoutError' || (e as Error | null)?.name === 'AbortError'
+
 export interface SuggestRun { asked: number; suggested: number; unsure: number; failed: number }
 
 /**
  * Ask for suggestions on up to `limit` notes. The model is never called inside a database transaction (a slow answer must not
- * hold a connection or a lock): the notes are read in one short transaction, each answer is stored in its own. A few at a time,
- * so one slow call does not hold the others up and the request stays well inside a serverless time limit.
+ * hold a connection or a lock). In one short transaction the notes are CLAIMED (so requests arriving together ask about different
+ * notes, never the same one twice), a call of today's budget is taken for each (when it is spent: 429 ai_busy, and every claim is
+ * undone), and then each answer is stored in its own transaction, which also lets the claim go.
+ *
+ * A busy, slow or unreachable service is not the note's fault: it does not count as one of the note's 3 tries, the note waits a
+ * minute, and the first such failure stops the batch (the notes not yet asked are let go, not lost).
+ *
+ * With `onlyId` (a person pressed "Ask again"): a note that does not exist is 404, a note already being read is 409, and the
+ * fourth ask on one note is 429 ai_ask_limit.
  */
-export async function suggestNotes(db: Db, ctx: Ctx, classify: NoteClassifier, opts: { limit?: number; onlyId?: string; concurrency?: number } = {}): Promise<SuggestRun> {
+export async function suggestNotes(db: Db, ctx: Ctx, classify: NoteClassifier, opts: { limit?: number; onlyId?: string; concurrency?: number; dailyBudget?: number } = {}): Promise<SuggestRun> {
   const limit = Math.min(10, Math.max(1, opts.limit ?? 3))
-  const { notes, reasons, min } = await db.tx(ctx, async (tx) => ({
-    notes: await notesToSuggest(tx, ctx, limit, MAX_AI_ATTEMPTS, opts.onlyId),
-    reasons: await loadReasons(tx),
-    min: await loadAiMinConfidence(tx),
-  }))
+  const { notes, reasons, min } = await db.tx(ctx, async (tx) => {
+    const claimed = await claimNotesToSuggest(tx, ctx, limit, MAX_AI_ATTEMPTS, opts.onlyId)
+    if ('refused' in claimed) {
+      if (claimed.refused === 'not_found') throw notFound('No such note')
+      if (claimed.refused === 'ask_limit') throw new AppError(429, 'ai_ask_limit', 'This note has been asked about enough times. Please write the English yourself.')
+      if (claimed.refused === 'in_progress') throw new AppError(409, 'ai_in_progress', 'This note is being read right now. Try again in a moment.')
+      return { notes: [] as NoteToSuggest[], reasons: [] as Reason[], min: 0 }
+    }
+    const reasons = await loadReasons(tx)
+    if (!claimed.notes.length || !reasons.length) {
+      await releaseNotes(tx, claimed.notes.map((n) => n.id), !!opts.onlyId)
+      return { notes: [] as NoteToSuggest[], reasons, min: 0 }
+    }
+    const budget = opts.dailyBudget ?? classify.dailyBudget ?? (await loadAiDailyBudget(tx))
+    const granted = await reserveAiCalls(tx, ctx, claimed.notes.length, budget)
+    if (granted === 0) throw new AppError(429, 'ai_busy', 'The AI has been used as much as it can be today. Please write the English yourself, or try again tomorrow.')
+    await releaseNotes(tx, claimed.notes.slice(granted).map((n) => n.id))
+    return { notes: claimed.notes.slice(0, granted), reasons, min: await loadAiMinConfidence(tx) }
+  })
   const run: SuggestRun = { asked: notes.length, suggested: 0, unsure: 0, failed: 0 }
-  if (!notes.length || !reasons.length) return run
+  if (!notes.length) return run
   const queue = [...notes]
-  const worker = async () => {
-    for (let n = queue.shift(); n; n = queue.shift()) {
-      const note = n
-      try {
-        const judged = judgeSuggestion(await classify({ text: note.text, language: note.language, stage: note.stage, reasons, supervisorCategory: note.category }), reasons, min)
-        await db.tx(ctx, (tx) => saveSuggestion(tx, ctx, note.id, judged))
-        run[judged.status]++
-      } catch (e) {
-        await db.tx(ctx, (tx) => saveSuggestionFailure(tx, ctx, note.id, failureOf(e)))
-        run.failed++
-      }
+  let stopped = false
+  const ask = async (note: NoteToSuggest) => {
+    try {
+      const judged = judgeSuggestion(await classify({ text: note.text, language: note.language, stage: note.stage, reasons, supervisorCategory: note.category }), reasons, min)
+      await db.tx(ctx, (tx) => saveSuggestion(tx, ctx, note.id, judged))
+      run[judged.status]++
+    } catch (e) {
+      const code = failureOf(e)
+      if (TRANSIENT_AI_FAILURES.includes(code)) stopped = true
+      await db.tx(ctx, (tx) => saveSuggestionFailure(tx, ctx, note.id, code))
+      run.failed++
     }
   }
-  await Promise.all(Array.from({ length: Math.min(opts.concurrency ?? 3, notes.length) }, worker))
+  try {
+    // The first note is asked alone: if the service is busy or down, nothing else is sent to it in this request. The rest go a few at a time.
+    await ask(queue.shift()!)
+    const worker = async () => { while (!stopped && queue.length) await ask(queue.shift()!) }
+    await Promise.all(Array.from({ length: Math.min(opts.concurrency ?? 3, queue.length) }, worker))
+  } finally {
+    // Notes this request did not get to (the batch stopped, or something failed): let them go so the next request can take them.
+    if (queue.length) await db.tx(ctx, (tx) => releaseNotes(tx, queue.map((n) => n.id))).catch(() => undefined)
+    if (stopped) await db.tx(ctx, (tx) => pauseWaitingNotes(tx)).catch(() => undefined)
+  }
   return run
 }

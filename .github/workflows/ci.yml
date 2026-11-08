@@ -127,5 +127,3 @@ jobs:
           PGUSER=postgres PGPASSWORD=postgres psql -v ON_ERROR_STOP=1 -d rls_ci -c 'grant app_user to rls_owner'
           psql -v ON_ERROR_STOP=1 -d rls_ci -c 'select rolsuper, rolbypassrls from pg_roles where rolname = current_user'
           psql -v ON_ERROR_STOP=1 -d rls_ci -f packages/server/db/tests/rls.test.sql
-
-# Still to add: Playwright offline-sync tests.

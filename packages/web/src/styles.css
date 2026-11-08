@@ -52,7 +52,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 
 /* ---- sign in */
 .login { min-height: 100dvh; display: grid; padding: 16px; }
-.login__card { margin: auto; width: 100%; max-width: 380px; }
+.login__card { margin: auto; width: 100%; min-width: 0; max-width: 380px; }   /* min-width: a long value inside (the evaluator's email) must not widen the card past a 320 px phone */
 /* Wraps, never clips: two long Tamil words do not fit side by side on a 390 px phone, so the second button takes its own row. */
 .seg { display: flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin: 0 0 1.25rem; }
 .seg__btn { flex: 1 1 auto; min-height: var(--tap-min); padding: 4px 12px; border: 0; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }

@@ -1,4 +1,4 @@
-// Setup > People "Activity" (UI/UX plan, slice 5.3), without React. The route is GET /api/accounts/audit (md/api.md): the latest 100,
+// Setup > People "Activity" (UI/UX plan, slice 5.3), without React. The route is GET /api/accounts/audit (see the API table in the README): the latest 100,
 // newest first, each with a plain-English `sentence`. The page shows that sentence as it is: it never writes its own wording about
 // who did what, and the server never sends a PIN, password or hash.
 

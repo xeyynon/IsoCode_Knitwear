@@ -1,5 +1,6 @@
 // The demo logins shown on the sign-in screen for evaluators. Only in a build made with VITE_DEMO_ACCESS=1 (the hosted review
-// demo): a real deployment never shows a password. These are the throwaway accounts loaded by packages/server/src/demoSeed.ts
+// demo): a real deployment never shows a password. Pages/Login.tsx loads the panel that imports this file by a dynamic
+// import inside that one branch, so a normal build does not contain this file at all. These are the throwaway accounts loaded by packages/server/src/demoSeed.ts
 // (a server test checks the two lists agree), not anyone's real details.
 /** The two sign-in roles (the same strings as loginRules.LoginMode; kept here so this file needs nothing from the browser). */
 export type LoginMode = 'merchandiser' | 'supervisor'
@@ -20,8 +21,6 @@ export const DEMO_BUYER_LINKS = [
   { name: 'Company B (UK)', token: 'bl_demoCompanyB_readonly_2026' },
   { name: 'Company C (Germany)', token: 'bl_demoCompanyC_readonly_2026' },
 ]
-
-export const demoAccessOn = (flag: string | undefined): boolean => flag === '1' || flag === 'true'
 
 /** A secret as dots: at most ten, so a long password still fits one line on a phone and its length is not given away. */
 export const masked = (secret: string): string => '•'.repeat(Math.min(secret.length, 10))

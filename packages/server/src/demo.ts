@@ -6,6 +6,7 @@ import { memoryMediaStore } from './mediaStore.js'
 import { migratedDb, pgliteDb, resetAndSeed, ID, TODAY } from '../test/helpers.js'
 import { DEMO_TODAY, seedDemo } from './demoSeed.js'
 import { demoClock } from './demoClock.js'
+import { StartupConfigError } from './startup.js'
 import type { NoteClassifier } from './noteAi.js'
 
 export interface Demo { pg: PGlite; port: number; close: () => Promise<void> }
@@ -30,12 +31,24 @@ export async function startDemoApi(opts: { port?: number; origins?: string[]; da
     // The factory's day is fixed so the seeded figures line up; real time runs for sign-in tokens and locks, which the browser checks
     // against its own clock. The browser scripts still pin both to the fixture's day (they drive a browser whose clock they set).
     ...(brief ? { dayClock: demoClock(DEMO_TODAY)! } : { clock: () => new Date(`${today}T04:30:00Z`) }),
+    // This one is on your own computer, in memory, for one person: there is nobody to lock out, so accounts, links and templates stay editable
+    // (a hosted demo gets demo mode from its pinned day, demoMode.ts).
+    demo: false,
     logger: false,
     media: memoryMediaStore(),   // photos live in memory in the demo and vanish with it
     noteAi: opts.noteAi ?? null,
   })
   const port = opts.port ?? 8787
-  await app.listen({ port, host: '127.0.0.1' })
+  try {
+    await app.listen({ port, host: '127.0.0.1' })
+  } catch (err) {
+    await app.close().catch(() => undefined)
+    await pg.close().catch(() => undefined)
+    if ((err as { code?: unknown }).code === 'EADDRINUSE') {
+      throw new StartupConfigError(`Port ${port} is already in use. Stop the program that is using it, or pick another port with the PORT variable (for example PORT=${port + 1} npm run dev:api).`)
+    }
+    throw err
+  }
   return { pg, port, close: async () => { await app.close(); await pg.close() } }
 }
 

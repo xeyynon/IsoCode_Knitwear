@@ -4,12 +4,19 @@
 // DEMO_DATA=fixture npm run dev:api  serves the small test fixture instead, which the a11y, snapshots and ux scripts check against.
 import { CREDS, TODAY } from '../test/helpers.js'
 import { startDemoApi } from './demo.js'
+import { parsePort, StartupConfigError } from './startup.js'
 import { classifierFromEnv } from './aiFromEnv.js'
 import { DEMO_BUYER_TOKENS, DEMO_LOGINS, DEMO_TODAY } from './demoSeed.js'
 
 const fixture = process.env.DEMO_DATA === 'fixture'
 const noteAi = classifierFromEnv(process.env)   // GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY in this shell turns AI suggestions on; unset, they are off
-const demo = await startDemoApi({ data: fixture ? 'fixture' : 'brief', noteAi })
+// PORT (default 8787), read the way the real server reads it. A bad PORT or a port in use is one plain sentence, never a stack.
+const demo = await (async () => {
+  try { return await startDemoApi({ port: parsePort(process.env.PORT), data: fixture ? 'fixture' : 'brief', noteAi }) } catch (err) {
+    if (err instanceof StartupConfigError) { console.error(err.message); process.exit(1) }
+    throw err
+  }
+})()
 console.log(`demo API on http://127.0.0.1:${demo.port}  (today = ${fixture ? TODAY : DEMO_TODAY}, ${fixture ? 'test fixture' : "the brief's sample data"})`)
 console.log(`  AI suggestions for notes: ${noteAi ? 'on' : 'off (set GROQ_API_KEY, GEMINI_API_KEY or ANTHROPIC_API_KEY to turn them on)'}`)
 if (fixture) {

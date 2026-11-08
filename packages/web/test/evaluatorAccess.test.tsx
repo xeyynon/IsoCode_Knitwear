@@ -2,16 +2,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EvaluatorAccess } from '../src/ui/organisms/EvaluatorAccess'
-import { DEMO_ACCESS, demoAccessOn, masked } from '../src/demo/demoAccess'
+import { DEMO_ACCESS, masked } from '../src/demo/demoAccess'
 
 describe('evaluator access on the sign-in screen (hosted demo only)', () => {
   afterEach(cleanup)
-  it('is on only when the build says so', () => {
-    expect(demoAccessOn(undefined)).toBe(false)
-    expect(demoAccessOn('')).toBe(false)
-    expect(demoAccessOn('1')).toBe(true)
-  })
-
   it('shows the login for the chosen role with the secret hidden until asked', () => {
     render(<EvaluatorAccess mode="merchandiser" onUse={() => undefined} />)
     expect(screen.getByText('merch@companya.test')).toBeTruthy()

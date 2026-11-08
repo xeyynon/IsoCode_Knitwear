@@ -3,6 +3,11 @@ export function istDate(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now)
 }
 
+/** "14:05": the factory's clock (India), hours and minutes on a 24-hour clock, for the language on screen. Not the phone's own locale string, with its seconds and AM or PM. */
+export function clockTime(lang: 'en' | 'ta', at: Date): string {
+  return new Intl.DateTimeFormat(lang === 'ta' ? 'ta-IN' : 'en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at)
+}
+
 /** Digits only, as a whole number, or null if there is nothing usable. Strips spaces, commas and anything a keyboard might add. */
 export function parsePieces(raw: string): number | null {
   // Anything but digits, spaces and thousands commas is refused outright. Stripping it instead

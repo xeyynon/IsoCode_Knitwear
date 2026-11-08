@@ -89,6 +89,7 @@ export default function OrderSetup() {
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : 'Could not create the order.')
       setBusy(false)
+      setFailedTries((n) => n + 1)   // the effect above moves focus to the message, which sits above the Create button
     }
   }
 
@@ -109,7 +110,7 @@ export default function OrderSetup() {
                 <ul>{problemList.map((m) => <li key={m}>{m}</li>)}</ul>
               </div>
             )}
-            {serverError && <Banner>{serverError}</Banner>}
+            {serverError && <Banner tabIndex={-1} ref={showErrors && problemList.length > 0 ? undefined : errorsRef}>{serverError}</Banner>}
 
             <Card>
               <h2>Order</h2>
@@ -121,11 +122,11 @@ export default function OrderSetup() {
               </Field>
               <div className="grid3">
                 <Field label="PO number" below={err('po')}>
-                  <Input mono value={form.po} onChange={(e) => set('po', e.target.value)} aria-invalid={showErrors && !!errors.po} /></Field>
+                  <Input mono maxLength={200} value={form.po} onChange={(e) => set('po', e.target.value)} aria-invalid={showErrors && !!errors.po} /></Field>
                 <Field label="Style" below={err('style')}>
-                  <Input value={form.style} onChange={(e) => set('style', e.target.value)} aria-invalid={showErrors && !!errors.style} /></Field>
+                  <Input maxLength={200} value={form.style} onChange={(e) => set('style', e.target.value)} aria-invalid={showErrors && !!errors.style} /></Field>
                 <Field label="Colour" below={err('colour')}>
-                  <Input value={form.colour} onChange={(e) => set('colour', e.target.value)} aria-invalid={showErrors && !!errors.colour} /></Field>
+                  <Input maxLength={200} value={form.colour} onChange={(e) => set('colour', e.target.value)} aria-invalid={showErrors && !!errors.colour} /></Field>
               </div>
             </Card>
 

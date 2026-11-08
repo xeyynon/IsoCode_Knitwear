@@ -4,18 +4,19 @@
 .evaluator__sub, .evaluator__note, .evaluator__buyers { font-size: 14px; color: var(--muted); margin: 0 0 var(--space-2); }
 .evaluator__note { color: var(--ink); }
 .evaluator__who { display: flex; gap: var(--space-2); margin: 0 0 var(--space-2); flex-wrap: wrap; }
-.evaluator__chip { min-height: 32px; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.evaluator__chip { min-height: var(--tap-min); padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 .evaluator__chip[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
-.evaluator__box { position: relative; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); }
+.evaluator__box { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); }
 .evaluator__row { display: flex; align-items: center; gap: var(--space-2); min-height: 56px; padding: 0 var(--space-2) 0 var(--space-3); }
 .evaluator__use + .evaluator__row { border-top: 1px solid var(--border-soft); }
 .evaluator__label { font-size: 12px; color: var(--muted); width: 56px; flex: none; }
-.evaluator__value { flex: 1; min-width: 0; font: 15px/1.4 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; color: var(--ink); }
+.evaluator__value { flex: 1; min-width: 0; font: 14px/1.4 ui-monospace, Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
 .evaluator__icon { flex: none; width: var(--tap-min); height: var(--tap-min); display: grid; place-items: center; border: 1px solid var(--border-soft); border-radius: var(--radius-s); background: var(--surface); color: var(--muted); cursor: pointer; }
 .evaluator__icon:hover, .evaluator__icon[aria-pressed="true"] { color: var(--ink); border-color: var(--border); }
-/* "Use these" sits on the seam between the two rows: it fills both fields at once. */
-.evaluator__use { position: absolute; left: 50%; top: 56px; transform: translate(-50%, -50%); z-index: 1; height: 28px; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+/* "Use these" is a row of its own between the two fields, in the normal flow (never laid over a value): it fills both at once. */
+.evaluator__use { display: block; width: 100%; min-height: var(--tap-min); padding: 0 var(--space-3); border: 0; border-top: 1px solid var(--border-soft); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .evaluator__buyers { margin-top: var(--space-3); }
-.evaluator__buyers a { color: var(--accent); }
+.evaluator__buyers { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-3); }
+.evaluator__buyers a { display: inline-flex; align-items: center; min-height: var(--tap-min); padding: 0 var(--space-1); color: var(--accent); }
 .evaluator__said { min-height: 1.5em; margin: var(--space-1) 0 0; font-size: 14px; color: var(--ink); }
 .evaluator button:focus-visible, .evaluator a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

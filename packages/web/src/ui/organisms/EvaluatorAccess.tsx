@@ -46,13 +46,15 @@ export function EvaluatorAccess({ mode, onUse }: { mode: LoginMode; onUse: (id: 
       </div>
       <p className="evaluator__buyers">Buyer view, read-only:{' '}
         {DEMO_BUYER_LINKS.map((b, i) => (
-          <span key={b.token}>{i > 0 && ' · '}<a href={`/buyer#${b.token}`}>{b.name}</a></span>
+          <span key={b.token}><a href={`/buyer#${b.token}`}>{b.name}</a></span>
         ))}
       </p>
       <p className="evaluator__said" role="status" aria-live="polite">{said}</p>
     </section>
   )
 }
+
+export default EvaluatorAccess
 
 const icon = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true }
 function CopyIcon() { return <svg {...icon}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg> }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { istDate } from '../dates'
+import { clockTime, istDate } from '../dates'
 import { pieces } from '../numberFormat'
 import { dayMonth, serverWords, stageLabel, useLang, type Key } from '../i18n'
 import { useQueue } from '../queue/instance'
@@ -89,7 +89,7 @@ export default function Today() {
         )}
 
         {st.source === 'saved' && st.savedAt && (
-          <p className="notice" role="status">{t('today.savedList', { date: dayMonth(lang, istDate(new Date(st.savedAt))), time: new Date(st.savedAt).toLocaleTimeString() })}</p>
+          <p className="notice" role="status">{t('today.savedList', { date: dayMonth(lang, istDate(new Date(st.savedAt))), time: clockTime(lang, new Date(st.savedAt)) })}</p>
         )}
         {st.stages === null && !st.error && (
           <div className="skeletons" role="status" aria-label={t('today.loading')}>

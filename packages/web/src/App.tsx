@@ -1,5 +1,5 @@
 import { lazy, Suspense, useSyncExternalStore, type ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { getClaims, snapshot, subscribe } from './api/session'
 import { homeFor, type Role } from './api/sessionRules'
 import { ChunkErrorBoundary } from './ui/ChunkErrorBoundary'
@@ -24,7 +24,9 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
   useSyncExternalStore(subscribe, snapshot)
   const claims = getClaims()
-  if (!claims) return <Navigate to="/login" replace />
+  const here = useLocation()
+  // Remember where the person was going, so signing in again brings them back to it (returnTarget).
+  if (!claims) return <Navigate to="/login" replace state={{ from: `${here.pathname}${here.search}` }} />
   if (claims.role !== role) return <Navigate to={homeFor(claims.role)} replace />
   return <>{children}</>
 }

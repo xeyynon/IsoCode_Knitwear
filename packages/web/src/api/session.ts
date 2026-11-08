@@ -7,6 +7,11 @@ export const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
 const KEY = 'orders.token'
 
 let memory: string | null = null
+// Set when a token that existed stopped working (the server refused it, or it ran out), so the sign-in page can say why it is showing. Held in
+// memory only: it is for the next screen, not something to keep. A deliberate sign-out and a wrong PIN never set it.
+let sessionEnded = false
+export const sessionEndedNotice = (): boolean => sessionEnded
+export const acknowledgeSessionEnded = (): void => { sessionEnded = false }
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach((l) => l())
 
@@ -20,11 +25,12 @@ function readStored(): string | null {
 export function getToken(): string | null {
   if (!memory) memory = readStored()
   const claims = decodeClaims(memory)
-  if (memory && (!claims || isExpired(claims, Date.now()))) { clearToken(); return null }
+  if (memory && (!claims || isExpired(claims, Date.now()))) { endSession(); return null }
   return memory
 }
 
 function setToken(token: string, role: Role) {
+  sessionEnded = false
   memory = token
   safe(() => { window.localStorage.removeItem(KEY); window.sessionStorage.removeItem(KEY) }, undefined)
   const kind = storeKind(role)
@@ -38,7 +44,13 @@ export function clearToken() {
   notify()
 }
 
-export const signOut = clearToken
+/** The token stopped working: sign out, and remember to say so on the sign-in page. */
+export function endSession() {
+  sessionEnded = true
+  clearToken()
+}
+
+export const signOut = () => { sessionEnded = false; clearToken() }
 export const getClaims = (): Claims | null => decodeClaims(getToken())
 
 /** For useSyncExternalStore. */
@@ -63,7 +75,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     if (classifyFetchError(e, !!init.signal?.aborted) === 'cancelled') throw e
     throw new ApiError(0, 'unreachable', signInMessage('unreachable'))
   }
-  if (res.status === 401) clearToken()
+  if (res.status === 401) { if (token) endSession(); else clearToken() }   // no token means a sign-in that was refused: not a session that ended
   const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null
   // A proxy or gateway page is the connection failing, not the app answering. The real status is kept (the sync queue reads it).
   if (!res.ok && isGatewayFailure(res.status, !!body?.error?.code)) throw new ApiError(res.status, 'unreachable', signInMessage('unreachable'))
@@ -77,7 +89,7 @@ export async function apiBlob(path: string, headerToken?: string): Promise<Blob>
   let res: Response
   try { res = await fetch(`${API_BASE}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }) }
   catch { throw new ApiError(0, 'unreachable', signInMessage('unreachable')) }
-  if (res.status === 401 && !headerToken) clearToken()
+  if (res.status === 401 && !headerToken) { if (token) endSession(); else clearToken() }
   if (!res.ok) throw new ApiError(res.status, isGatewayFailure(res.status, false) ? 'unreachable' : 'error', 'That picture could not be loaded.')
   return res.blob()
 }

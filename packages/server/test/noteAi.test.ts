@@ -29,15 +29,17 @@ describe('judging what the model said', () => {
   it('a reason that is not on the list is never stored as a reason', () => {
     expect(judgeSuggestion(raw({ category: 'holiday' }), REASONS, 0.7)).toMatchObject({ status: 'unsure', category: null })
   })
-  it('a confidence that is missing, not a number or out of range is clamped, and nothing is sure without English text', () => {
+  // Changed deliberately in the final cycle (N-11): this used to pin a clamp (7 became 1, i.e. fully sure). A confidence on a 0 to 100
+  // scale must never read as 100% sure, so out of range is now unsure, confidence 0, no reason pre-selected.
+  it('a confidence that is missing, not a number or out of range is not trusted, and nothing is sure without English text', () => {
     expect(judgeSuggestion(raw({ confidence: Number.NaN }), REASONS, 0.7)).toMatchObject({ status: 'unsure', confidence: 0 })
-    expect(judgeSuggestion(raw({ confidence: 7 }), REASONS, 0.7).confidence).toBe(1)
+    expect(judgeSuggestion(raw({ confidence: 7 }), REASONS, 0.7)).toMatchObject({ status: 'unsure', confidence: 0, category: null })
     expect(judgeSuggestion(raw({ english: '   ' }), REASONS, 0.7).status).toBe('unsure')
   })
   it('text is tidied and capped like any other text that reaches a page', () => {
     const j = judgeSuggestion(raw({ english: 'a\u0000b   c' + 'x'.repeat(2000), why: 'y'.repeat(900) }), REASONS, 0.7)
     expect(j.textEn.startsWith('ab c')).toBe(true)
-    expect(j.textEn.length).toBe(1000)
+    expect(j.textEn.length).toBe(500)   // the confirm step's limit (N-6): a stored draft can always be confirmed as it is
     expect(j.why.length).toBe(500)
   })
 })

@@ -40,7 +40,7 @@ const MAX_QTY = 1_000_000
  * the caller's account id from the sign-in token.
  */
 export async function submitEvent(
-  tx: Tx, ctx: Ctx, input: EventInput, today: string, enteredBy?: string,
+  tx: Tx, ctx: Ctx, input: EventInput, today: string, enteredBy?: string, opts: { clampFuture?: boolean } = {},
 ): Promise<{ duplicate: boolean }> {
   if (ctx.role !== 'supervisor' && !isStaff(ctx)) throw forbidden()
   // A null body or batch item must be a 400 / one rejected item, not a TypeError that sinks the whole request.
@@ -55,7 +55,11 @@ export async function submitEvent(
   }
   if (!isIsoDate(input.date)) throw badRequest('date must be YYYY-MM-DD')
   // A phone with a wrong clock must not post into the future; the engine would ignore it anyway.
-  if (compareDates(input.date, today) > 0) throw badRequest('date is in the future')
+  // (A shared demo, whose factory day is pinned, keeps such an update on the pinned day instead: N-10, see demoMode.ts.)
+  if (compareDates(input.date, today) > 0) {
+    if (!opts.clampFuture) throw badRequest('date is in the future')
+    input = { ...input, date: today }
+  }
   if (compareDates(input.date, earliestAllowedDate(today)) < 0) throw tooOld()
 
   // Check the note BEFORE anything is written, so a malformed note refuses the whole update cleanly.

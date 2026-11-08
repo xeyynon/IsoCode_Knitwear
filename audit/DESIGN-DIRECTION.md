@@ -3,7 +3,7 @@
 > **Superseded in part by `audit/POA-UIUX.md` (v2).** After research: no coach mark (NN/g), Undo in the page rather than in a toast, skeletons only after measuring, and new supervisor words need Tamil because a test requires it. Where the two disagree, the plan wins.
 
 Method: **Atomic Design**. Everything is built from atoms, then molecules, organisms, templates and pages.
-Evidence for the choices comes from this repo's hard rules (`frontendskill.md` section 2), the audits in `audit/`, and the code (`packages/web/src`).
+Evidence for the choices comes from this repo's hard rules (the front-end guide, section 2), the audits in `audit/`, and the code (`packages/web/src`).
 
 ## 1. The combination we are choosing
 
@@ -65,14 +65,14 @@ Today the atoms exist as CSS classes only (`styles.css`, 444 lines). `ui/` holds
 
 ## 5. How we work (small slices, each proved)
 
-1. **Foundation, no visual change:** spacing, radius and elevation tokens next to the colour tokens; a clear disabled treatment; a component test harness (Vitest with Testing Library) because `frontendskill.md` 8.9 lists "no component tests" as a gap.
+1. **Foundation, no visual change:** spacing, radius and elevation tokens next to the colour tokens; a clear disabled treatment; a component test harness (Vitest with Testing Library) because the front-end guide, section 8.9 lists "no component tests" as a gap.
 2. **Atoms**, one at a time, replacing the raw class markup; each with a test and a screenshot.
 3. **Molecules**, starting with **ActionBar** (the first fix from audit 01).
 4. **Organisms and templates**, starting with the phone board filters and the People table (audit 02).
 5. **Pages** become thin; then re-audit with Playwright, report, and move to the next.
 6. New components go in new folders (`ui/atoms`, `ui/molecules`, `ui/organisms`, `ui/templates`). Existing files move in one mechanical commit later, so history stays readable.
 
-Every slice follows `frontendskill.md` section 10: test first, break it on purpose, look at 390 and 1280 in English and Tamil, check greyscale if status is touched, retake snapshots, update docs, then a build or an InBul (only when you ask me to commit).
+Every slice follows the front-end guide, section 10: test first, break it on purpose, look at 390 and 1280 in English and Tamil, check greyscale if status is touched, retake snapshots, update docs, then a build or an InBul (only when you ask me to commit).
 
 ## 6. First slice
 

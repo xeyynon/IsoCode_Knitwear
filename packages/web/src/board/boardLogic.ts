@@ -258,3 +258,9 @@ export function shortDate(iso: string): string {
   if (!m) return '-'
   return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? '-'}`
 }
+
+/** "20 Nov", and "5 Jan 2027" when the year is not the year of `today`: a date in another year must not read as one in this year. */
+export function shortDateIn(iso: string, today: string): string {
+  const s = shortDate(iso)
+  return s === '-' || iso.slice(0, 4) === today.slice(0, 4) ? s : `${s} ${iso.slice(0, 4)}`
+}

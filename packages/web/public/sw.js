@@ -4,6 +4,7 @@
  * - install: store the page and every script and stylesheet listed in precache.json
  * - pages (navigations): network first, so a new release is picked up; the stored page when offline
  * - /assets/*: cache first (the file names carry a hash, so a stored file is never stale)
+ * - /icons/* and the manifest: from the stored copy when there is one (the cache is this build's own, so it is never stale either)
  * - the API and other sites: not handled here
  *
  * A new version waits (no automatic skipWaiting): swapping files under a screen that is still
@@ -60,7 +61,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest') {
     event.respondWith((async () => {
       // ignoreVary: the server sends `Vary: Origin` and module scripts carry an Origin header that our
       // own precache request did not, so a strict match would miss. Safe here: the name has a content hash.

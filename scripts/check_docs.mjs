@@ -8,9 +8,13 @@
 // in it; #top is always fine. External links (http:, mailto:, ...) are not fetched.
 //
 // The files checked are the ones git knows: tracked files plus new files that are not ignored. That is what a
-// fresh CI checkout holds, so a local run and CI agree: an ignored folder such as md/ is neither read nor a valid
-// link target (a link into it would break on CI). Without git it walks the disk instead. It acts on the repository
-// that holds this script, whatever the folder it was started from.
+// fresh CI checkout holds, so a local run and CI agree: an ignored folder (private notes, say) is neither read nor a
+// valid link target (a link into it would break on CI). Without git it walks the disk instead. It acts on the
+// repository that holds this script, whatever the folder it was started from.
+//
+// One more rule: every environment variable the server code (packages/server/src/*.ts) or the Vercel build script reads
+// must be written down in README.md, deployment.md or packages/server/.env.example, so a reader who sets up a deployment
+// is never surprised by a setting that no document names. A repository without that source skips the rule.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -159,6 +163,40 @@ for (const file of files) {
     }
     if (fragment && abs.endsWith('.md') && fs.existsSync(abs) && fs.statSync(abs).isFile() && !anchorsOf(abs).has(fragment.toLowerCase())) {
       problems.push(`${path.relative(ROOT, file)}: broken anchor ${target}`)
+    }
+  }
+}
+
+// ---- environment variables the code reads must be documented
+// Variables that are read but deliberately not described for a reader (internal switches). Keep this short; say why.
+const INTERNAL_ENV = new Set(/** @type {string[]} */ ([]))
+const ENV_READS = [
+  /\b(?:process\.env|env)\.([A-Z][A-Z0-9_]*)\b/g,                 // process.env.NAME, env.NAME
+  /\benv\[\s*['"]([A-Z][A-Z0-9_]*)['"]\s*\]/g,                    // env['NAME']
+  /\b(?:need|get)\(\s*(?:\w+\s*,\s*)?['"]([A-Z][A-Z0-9_]+)['"]/g, // need('NAME'), need(env, 'NAME')
+  /\bconst\s+\w*ENV\w*\s*=\s*['"]([A-Z][A-Z0-9_]+)['"]/g,         // const UNSAFE_ROLE_ENV = 'NAME'
+]
+/** @param {string} rel */
+const inRepo = (rel) => (known ? known.has(rel) : fs.existsSync(path.join(ROOT, rel)))
+const serverSources = known
+  ? [...known].filter((f) => /^packages\/server\/src\/[^/]+\.ts$/.test(f))
+  : fs.existsSync(path.join(ROOT, 'packages/server/src')) ? fs.readdirSync(path.join(ROOT, 'packages/server/src')).filter((f) => f.endsWith('.ts')).map((f) => `packages/server/src/${f}`) : []
+const envSources = [...serverSources, ...(inRepo('scripts/vercel_build.mjs') ? ['scripts/vercel_build.mjs'] : [])].sort()
+if (serverSources.length) {
+  const docText = ['README.md', 'deployment.md', 'packages/server/.env.example']
+    .filter(inRepo)
+    .map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8'))
+    .join('\n')
+  /** @type {Map<string, string>} variable -> the first file that reads it */
+  const reads = new Map()
+  for (const rel of envSources) {
+    const text = fs.readFileSync(path.join(ROOT, rel), 'utf8')
+    for (const re of ENV_READS) for (const m of text.matchAll(re)) if (m[1] && !reads.has(m[1])) reads.set(m[1], rel)
+  }
+  for (const [name, rel] of [...reads].sort()) {
+    if (INTERNAL_ENV.has(name)) continue
+    if (!new RegExp(`(?<![A-Z0-9_])${name}(?![A-Z0-9_])`).test(docText)) {
+      problems.push(`${rel}: reads the environment variable ${name}, which README.md, deployment.md and packages/server/.env.example never mention`)
     }
   }
 }

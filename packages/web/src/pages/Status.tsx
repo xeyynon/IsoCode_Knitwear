@@ -31,7 +31,7 @@ export default function Status() {
 
   const headline = unreachable ? 'Cannot reach the server' : !body ? 'Checking…' : body.ok ? 'Everything is working' : 'Some parts are not working'
   return (
-    <PublicShell narrow>
+    <PublicShell narrow title="System status">
       <h1>System status</h1>
       {/* aria-live covers the headline only, so a screen reader is not interrupted every minute. */}
       <p className="status-headline" role="status" aria-live="polite">{headline}</p>

@@ -6,6 +6,7 @@ import { Button } from './atoms/Button'
 import './AppBar.css'
 import { WhatsNewDialog } from './WhatsNewDialog'
 import { NavTabs } from './molecules/NavTabs'
+import { useDocumentTitle } from './useDocumentTitle'
 import { useReviewCount } from './useReviewCount'
 
 /**
@@ -15,10 +16,14 @@ import { useReviewCount } from './useReviewCount'
  */
 export function AppBar({ title, plainTitle = false }: { title: string; plainTitle?: boolean }) {
   const { lang, t } = useLang()
+  useDocumentTitle(title, t('app.title'))
   const [open, setOpen] = useState(false)
   const [news, setNews] = useState(false)
   // Release notes are public English wording, so they are for merchandisers; every menu shows the build label.
-  const merchandiser = getClaims()?.role === 'merchandiser'
+  const role = getClaims()?.role
+  const merchandiser = role === 'merchandiser'
+  // The language switch is for supervisors: a merchandiser's screens are English only, so offering Tamil would only turn a few fragments of them.
+  const canSwitch = role !== 'merchandiser'
   // A merchandiser's Board, Review and Setup are tabs in this bar; the Review tab shows how many wait (slice 3.3).
   const reviewCount = useReviewCount(merchandiser)
   const bar = useRef<HTMLElement>(null)
@@ -67,9 +72,11 @@ export function AppBar({ title, plainTitle = false }: { title: string; plainTitl
         </Button>
         {open && (
           <div ref={menu} className="menu__popover" role="menu">
-            <button role="menuitem" className="menu__item" onClick={() => { setLang(lang === 'en' ? 'ta' : 'en'); close() }}>
-              {t(lang === 'en' ? 'nav.toTamil' : 'nav.toEnglish')}
-            </button>
+            {canSwitch && (
+              <button role="menuitem" className="menu__item" onClick={() => { setLang(lang === 'en' ? 'ta' : 'en'); close() }}>
+                {t(lang === 'en' ? 'nav.toTamil' : 'nav.toEnglish')}
+              </button>
+            )}
             {merchandiser && (
               <button role="menuitem" className="menu__item" onClick={() => { setOpen(false); setNews(true) }}>{t('release.whatsNew')}</button>
             )}

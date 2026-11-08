@@ -8,7 +8,7 @@ Screenshots in `audit/`: 12 board, 13 board in greyscale, 14 empty search, 15 an
 Measured: overflow, headings, accessible names, target heights, focus after a tab change, console (no errors).
 
 ## Environment trap found first (not a product bug)
-`npm run dev:api` fixes the server clock to 4 Nov 2026 and merchandiser tokens last 12 hours, so on any later real date the app refuses the sign-in with "This device's date or time looks wrong". The message is honest and helpful, but the demo cannot be signed into as a merchandiser from a normal browser. The supervisor token (30 days) worked only because it was already stored. I worked around it with `page.clock.install` to 4 Nov 2026. Suggested: make `dev.ts` issue longer-lived demo tokens, or print this in `README.md` and `frontendskill.md` section 3.
+`npm run dev:api` fixes the server clock to 4 Nov 2026 and merchandiser tokens last 12 hours, so on any later real date the app refuses the sign-in with "This device's date or time looks wrong". The message is honest and helpful, but the demo cannot be signed into as a merchandiser from a normal browser. The supervisor token (30 days) worked only because it was already stored. I worked around it with `page.clock.install` to 4 Nov 2026. Suggested: make `dev.ts` issue longer-lived demo tokens, or print this in `README.md` and the front-end guide, section 3.
 
 ## Findings (most serious first)
 

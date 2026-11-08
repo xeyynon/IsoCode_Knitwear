@@ -16,7 +16,9 @@ The sign-in screen of the live app has an **Evaluator access** panel with these 
 | Buyer, Company B (read-only) | https://isocode-knitwear.vercel.app/buyer#bl_demoCompanyB_readonly_2026 | Only Company B's orders, milestones, approved photos and confirmed notices |
 | Buyer, Company C (read-only) | https://isocode-knitwear.vercel.app/buyer#bl_demoCompanyC_readonly_2026 | Only Company C's |
 
-**The demo's "today" is Friday 6 November 2026** on every real day (`DEMO_TODAY`), so the brief's "qty done" figures keep their meaning however long the review takes. Time of day, sign-in tokens and locks run on real time. Five wrong passwords lock an account for 15 minutes.
+**The demo's "today" is Friday 6 November 2026** on every real day (`DEMO_TODAY`), so the brief's "qty done" figures keep their meaning however long the review takes. Time of day and sign-in tokens run on real time.
+
+**What the shared demo allows.** Many reviewers use the same logins, so the demo protects itself: the demo logins never lock (a wrong password is still limited per address); adding, stopping or resetting accounts, making or cancelling buyer links, deleting templates and changing closed days are refused with a plain message; a photo is refused after 20 a day or 100 MB in total; a date after the demo day is stored on the demo day. Once a day, the first visit to the Review page puts the seeded notes and warnings back to waiting, so the next reviewer can try them, and each production deploy sets the demo accounts, PINs and buyer links back as published. A real deployment leaves `DEMO_TODAY` unset and has none of these limits.
 
 **Tips:** a supervisor screen opens in Tamil on a phone where no language has been chosen; the switch is on the sign-in screen and in the menu. Try the supervisor screen at phone width (or on a phone), and turn the network off in the browser's developer tools before sending: the update waits on the phone and is sent when the connection returns.
 
@@ -30,7 +32,7 @@ The sign-in screen of the live app has an **Evaluator access** panel with these 
 git clone https://github.com/xeyynon/IsoCode_Knitwear.git
 cd IsoCode_Knitwear
 npm ci                          # install exactly what the lock file says
-npm run verify                  # optional: repo checks, typecheck and all ~2,350 tests (a few minutes)
+npm run verify                  # optional: repo checks, typecheck and all about 2,400 tests (a few minutes)
 ```
 
 Start the API and the app in two terminals:
@@ -115,7 +117,7 @@ Names only. Values live in Vercel's encrypted settings (secrets marked sensitive
 | `DEMO_TODAY` | no | `2026-11-06`: the demo's fixed factory day. Also turns on the Evaluator access panel. Not set in a real deployment |
 | `SEED_DEMO` | no | `1`: load the demo data into an empty database on a production deploy |
 
-**Optional** (not set on the demo): `AI_MODEL`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `ALLOWED_ORIGINS` (the app and API share one address, so not needed), `TRUST_PROXY` (defaults to 1 on Vercel), `LOG_LEVEL`, `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `VITE_DEMO_ACCESS`, `VITE_API_BASE` (the build sets `same-origin`), and for a bucket instead of Postgres: `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE`, `S3_PREFIX`, `S3_SSE`.
+**Optional** (not set on the demo): `AI_MODEL`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `ALLOWED_ORIGINS` (the app and API share one address, so not needed), `TRUST_PROXY` (defaults to 1 on Vercel), `LOG_LEVEL`, `DB_POOL_MAX` (2 here, 5 elsewhere), `DB_STATEMENT_TIMEOUT_MS`, `WARNING_FULL_REFRESH_MS` (0 here), `VITE_DEMO_ACCESS`, `VITE_API_BASE` (the build sets `same-origin`), and for a bucket instead of Postgres: `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE`, `S3_PREFIX`, `S3_SSE`.
 
 **Added by the Neon integration** (prefixed `NEON_`): `NEON_DATABASE_URL`, `NEON_DATABASE_URL_UNPOOLED` and the other `NEON_*` connection parts. The app does not read them directly; they are where the owner connection above came from.
 
@@ -125,7 +127,7 @@ Names only. Values live in Vercel's encrypted settings (secrets marked sensitive
 
 ## Limits of this deployment (honest notes)
 
-- Free plans: the Neon database sleeps after a few idle minutes, so the first request after a pause takes a second or two. Groq's free plan allows about 30 AI requests a minute and 1,000 a day; above that a note shows "the AI service is busy" and is tried again later, never guessed.
+- Free plans: the Neon database sleeps after a few idle minutes, so the first request after a pause takes a second or two. Groq's free plan allows about 30 AI requests a minute and 1,000 a day; above that a note shows "the AI service is busy" and is asked again after a minute (a busy service does not use up one of the note's 3 tries), never guessed. A daily limit on calls (`AI_DAILY_BUDGET`, default 300) keeps the free plan from running out.
 - Free-plan AI prompts may be used by the provider; acceptable here because every note is invented. A real deployment would use a paid plan with a data-processing agreement.
 - The demo clock is for review only. A real deployment leaves `DEMO_TODAY` unset, which also removes the Evaluator access panel.
-- Not yet checked on real low-end phones or with floor supervisors reading the Tamil (see the TDD).
+- Not yet checked on real low-end phones or with floor supervisors reading the Tamil (see the Status section of the README).

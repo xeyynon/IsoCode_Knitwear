@@ -60,4 +60,3 @@ jobs:
           awk '/^## What changed/{f=1;next} /^## /{f=0} f' "$report" | sed '/./,$!d' > notes.txt
           test -s notes.txt || { echo "::error::$report has no 'What changed' text"; exit 1; }
           gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file notes.txt
-      # Add the container/static build here once the app exists.

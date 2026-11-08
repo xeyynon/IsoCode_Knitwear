@@ -5,7 +5,8 @@
 //   functions/api.func  the whole API bundled into one ES module (esbuild), a Node.js function
 //   config.json         /api/* to the function, files as they are, every other path to index.html (the app's own router)
 // On a PRODUCTION deploy only, it then brings the database up to date (MIGRATE_DATABASE_URL, the table owner) and, with
-// SEED_DEMO=1, loads the demo data into an empty database (DATABASE_URL, the app's own login). A preview never touches the schema.
+// SEED_DEMO=1, loads the demo data into an empty database, or puts the demo accounts, PINs, buyer links and notes back in a database that
+// already holds it (DATABASE_URL, the app's own login; one transaction behind an advisory lock, see demoSeed.ts ensureDemo). A preview never touches the schema.
 //   npm run build:vercel        (Vercel runs it as the build command; it also works locally and skips the database step)
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'

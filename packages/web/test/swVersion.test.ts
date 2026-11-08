@@ -38,7 +38,9 @@ describe('the service worker each build ships', () => {
   })
 
   it('still lists every script and stylesheet for the install step', () => {
-    expect(JSON.parse(a.find((f) => f.fileName === 'precache.json')!.source)).toEqual(['assets/index-aaa.js', 'assets/Update-111.js', 'assets/index-aaa.css'])
+    // The manifest and the home-screen icons from public/ come after the bundle's own files (test/finalF4Pwa.test.ts covers them).
+    const list = JSON.parse(a.find((f) => f.fileName === 'precache.json')!.source) as string[]
+    expect(list.filter((f) => f.startsWith('assets/'))).toEqual(['assets/index-aaa.js', 'assets/Update-111.js', 'assets/index-aaa.css'])
   })
 
   it('lists the bundled fonts (woff2), so Tamil still has a font with no signal; the old woff fallback is left out', () => {

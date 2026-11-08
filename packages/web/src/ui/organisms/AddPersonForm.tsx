@@ -16,9 +16,9 @@ const ROLES: { id: PersonRole; label: string; sub: string }[] = [
  * One form for adding a person (UI/UX plan, slice 5.2), with a role choice that decides which fields show. It checks what it can before
  * sending (the server checks again), keeps the name when the role is switched, and is the one filled button on the People screen.
  * `onAdd` sends it and resolves true when it was saved (the fields are then cleared, the unit kept for the next supervisor); a refusal
- * from the server is shown by the caller. A unit is not a person: "Add a unit" stays a separate form.
+ * from the server is shown by the caller, and `onSubmit` lets it clear that refusal whenever the form is sent again. A unit is not a person: "Add a unit" stays a separate form.
  */
-export function AddPersonForm({ units, onAdd }: { units: { id: string; name: string }[]; onAdd: (role: PersonRole, fields: PersonFields) => Promise<boolean> }) {
+export function AddPersonForm({ units, onAdd, onSubmit }: { units: { id: string; name: string }[]; onAdd: (role: PersonRole, fields: PersonFields) => Promise<boolean>; onSubmit?: () => void }) {
   const uid = useId()
   const [role, setRole] = useState<PersonRole>('supervisor')
   const [f, setF] = useState<PersonFields>(EMPTY_PERSON)
@@ -29,6 +29,7 @@ export function AddPersonForm({ units, onAdd }: { units: { id: string; name: str
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    onSubmit?.()   // whatever the screen is still showing from the last try (a refusal from the server) is old news as soon as the form is sent again
     const p = personProblem(role, f)
     setProblem(p)
     if (p) return

@@ -27,7 +27,7 @@ describe('BE-073: database files stay out of git', () => {
     expect(ignored('data/orders.csv')).toBe(true)
     expect(ignored('.claude/settings.local.json')).toBe(true)
     expect(ignored('packages/server/src/data/seed.ts')).toBe(false)
-    expect(ignored('.claude/settings.json')).toBe(false)
+    expect(ignored('.claude/worktrees/x/file.ts')).toBe(true)    // the whole .claude/ folder is local tooling (final cycle, R-24)
   })
 
   it.each(['backup.dump', 'packages/server/local.sqlite', 'local.sqlite3', 'packages/server/app.db'])('BE-073: check_repo refuses %s once force-added', (rel) => {
@@ -49,6 +49,6 @@ describe('BE-073: database files stay out of git', () => {
   it('BE-073: package.json states the Node version the README asks for', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { engines?: { node?: string } }
     expect(pkg.engines?.node).toBe('>=20.19')
-    expect(fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')).toContain('Node.js 20.19 or newer')
+    expect(fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')).toContain('Node 20.19 also works')
   })
 })

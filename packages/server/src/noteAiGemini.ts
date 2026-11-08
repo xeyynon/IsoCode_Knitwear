@@ -4,7 +4,7 @@
 //   AI_PROVIDER=gemini  GEMINI_API_KEY=...  [AI_MODEL=gemini-3.8-flash]
 // Free-tier limits are per minute and per day: a request over them answers 429, which is stored as "rate_limited" and tried
 // again later, exactly like any other failure. Free-tier prompts may be used by Google to improve its products: demo data only.
-import { AiUnavailable, answerSchema, parseAnswer, systemPrompt, userMessage, AI_TIMEOUT_MS, type NoteClassifier } from './noteAi.js'
+import { AiUnavailable, answerSchema, parseAnswer, systemPrompt, userMessage, AI_TIMEOUT_MS, isAbort, type NoteClassifier } from './noteAi.js'
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash'
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
@@ -25,7 +25,7 @@ export function geminiSchema(reasons: Parameters<typeof answerSchema>[0]) {
     properties: {
       english: { type: 'STRING', description: s.properties.english.description },
       category: { type: 'STRING', enum: [...s.properties.category.enum], description: s.properties.category.description },
-      confidence: { type: 'NUMBER', description: s.properties.confidence.description },
+      confidence: { type: 'NUMBER', minimum: 0, maximum: 1, description: s.properties.confidence.description },
       why: { type: 'STRING', description: s.properties.why.description },
     },
     required: [...s.required],
@@ -51,13 +51,14 @@ export function geminiClassifier(opts: { apiKey: string; model?: string; timeout
         signal: AbortSignal.timeout(opts.timeoutMs ?? AI_TIMEOUT_MS),
       })
     } catch (e) {
-      throw new AiUnavailable((e as Error)?.name === 'TimeoutError' || (e as Error)?.name === 'AbortError' ? 'timeout' : 'unreachable')
+      throw new AiUnavailable(isAbort(e) ? 'timeout' : 'unreachable')
     }
     if (res.status === 429) throw new AiUnavailable('rate_limited')
     if (res.status === 401 || res.status === 403) throw new AiUnavailable('auth')
     if (!res.ok) throw new AiUnavailable('error')
     let body: GeminiReply
-    try { body = (await res.json()) as GeminiReply } catch { throw new AiUnavailable('bad_answer') }
+    // The time limit covers the body too: a body cut off by it is a timeout, not an answer that was wrong.
+    try { body = (await res.json()) as GeminiReply } catch (e) { throw new AiUnavailable(isAbort(e) ? 'timeout' : 'bad_answer') }
     if (body.promptFeedback?.blockReason) throw new AiUnavailable('refused')
     const c = body.candidates?.[0]
     if (!c) throw new AiUnavailable('bad_answer')

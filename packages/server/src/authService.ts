@@ -91,6 +91,14 @@ const trackerFor = (db: Db): FailureTracker => {
   return t
 }
 
+export interface LoginOptions {
+  /**
+   * Names (email in lower case, or the ten-digit phone) whose account is never locked by wrong tries. For the published logins of a shared
+   * demo only (demoMode.ts): anyone could lock them for everybody otherwise. The caller's address is still counted (app.ts).
+   */
+  neverLock?: (name: string) => boolean
+}
+
 /**
  * Check credentials. A wrong password and an unknown account give the same message and
  * take the same time. After MAX_FAILED_ATTEMPTS wrong tries an account is locked for
@@ -98,7 +106,7 @@ const trackerFor = (db: Db): FailureTracker => {
  * A locked account, an unknown name and a stopped account that has been tried as often all give the same answer,
  * and every answer except a refusal for a malformed request costs one hash.
  */
-export async function login(db: Db, input: LoginInput, secret: string, now: Date): Promise<LoginResult> {
+export async function login(db: Db, input: LoginInput, secret: string, now: Date, opts: LoginOptions = {}): Promise<LoginResult> {
   let lookup: { sql: string; key: string; secret: string }
   if ('email' in input) {
     if (typeof input.email !== 'string' || typeof input.password !== 'string' || !input.email || !input.password) throw badRequest('Email and password are required')
@@ -133,11 +141,13 @@ export async function login(db: Db, input: LoginInput, secret: string, now: Date
     tracker.recordFailure(unknownKey, nowMs)
     throw INVALID()
   }
-  if (found.locked) {
+  const exempt = opts.neverLock?.(lookup.key) === true
+  if (found.locked && !exempt) {
     await verifySecretAsync(lookup.secret, DUMMY_HASH)   // the same cost as every other answer
     throw LOCKED(Number(found.lock_secs) * 1000)
   }
   if (!(await verifySecretAsync(lookup.secret, found[field]))) {
+    if (exempt) throw INVALID()   // nothing is counted against a published demo login
     // Count in the database, not from the row read above: wrong PINs sent at the same moment
     // would otherwise each write the same "count + 1", and the lock would never come.
     // A lock that has run out starts the count again, so the account gets five fresh tries.

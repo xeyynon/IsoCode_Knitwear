@@ -7,7 +7,7 @@ One entry per slice: what changed, measured before and after, what was not check
 **Changed**
 - `scripts/snapshots.ts`: every browser context now starts its clock at the demo API's "now" (from `/api/status`) and lets time run on. Before this, the merchandiser shots could not sign in on any real date after 4 Nov 2026.
 - `scripts/ux_metrics.ts` and `npm run ux`: measures the plan's baseline numbers with touch emulation (Send in view, Send height, first order card on a phone, broken words in the People table, hand-written markup, media queries).
-- `frontendskill.md` section 3: the trap and the fix are written down.
+- the front-end guide, section 3: the trap and the fix are written down.
 
 **Measured**
 - Without the clock, merchandiser sign-in is refused ("This device's date or time looks wrong"); with it, the board loads (checked in Edge, both ways).
@@ -25,7 +25,7 @@ You asked for every snapshot to be kept, with the old set named 1.0 and the new 
 - The 31 pictures and index that were in `uiux/` are now **`uiux/1.0/`** (moved, after checking every file is byte-identical to the original; one line was added to its index saying it is a frozen record). `uiux/README.md` is now an index of both sets.
 - `scripts/snapshots.ts` writes to **`uiux/2.0/`** only and never touches 1.0. It used to delete every `.png` in `uiux/` before writing; now, if a 2.0 set already exists, it is first kept in `uiux/2.0/previous/<date-time>/` (index included) and only then replaced.
 - The script's menu selector no longer depends on the page language (`button[aria-haspopup=menu]`): the working tree translates the menu label, which stopped the run in Tamil. It failed before writing anything, so no pictures were lost.
-- `README.md` and `frontendskill.md` describe the new layout.
+- `README.md` and the front-end guide describe the new layout.
 - The audit screenshots in `audit/` and the Playwright files in `.playwright-mcp/` are untouched and stay.
 
 **Note for git:** the old paths show as deleted and `uiux/1.0` as new until staged (a move); nothing was committed.
@@ -44,7 +44,7 @@ You asked for every snapshot to be kept, with the old set named 1.0 and the new 
 
 **Not checked:** a real phone; the disabled colours are not used by any rule yet (slice 1.4).
 
-**Lane note:** `md/poa_backend.md` shows a separate backend session owns `packages/engine`, `packages/server`, the release scripts and CI. I only touched `scripts/snapshots.ts`, `scripts/ux_metrics.ts`, `scripts/check_contrast.mjs` (design-token tooling) and the `ux` line in `package.json`.
+**Scope note:** the backend work owned `packages/engine`, `packages/server`, the release scripts and CI. This phase only touched `scripts/snapshots.ts`, `scripts/ux_metrics.ts`, `scripts/check_contrast.mjs` (design-token tooling) and the `ux` line in `package.json`.
 
 ## 0.3, 0.4, 0.5 Folders, component test harness, state tables (8 Nov 2026)
 
@@ -92,7 +92,7 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 
 **Measured (touch emulation, Edge, 390x844):** Send's bottom edge **832 of 844 px in English and Tamil** (was 1041 and 1144, below the fold); Send 56 px high; in view at the top of the page, scrolled and with the number typed. Saved offline with a new version offered: the update bar is inside the bar, no overlap, everything in view (bar 228 px high in English, 263 in Tamil). `npm run a11y`: **0 failures on 48 screens**. `npm run e2e`: **22 of 22** on a production build.
 
-**Also:** `scripts/e2e_offline.ts` reads `E2E_API_PORT` (default 8787) so it can run beside a dev API another session is using.
+**Also:** `scripts/e2e_offline.ts` reads `E2E_API_PORT` (default 8787) so it can run beside a dev API that is already using the default port.
 
 **Not checked:** a real phone (on-screen keyboard behaviour, `interactive-widget`, an iPhone, where Safari ignores it); a bar that is 228 to 263 px high is heavy with the keyboard open, but only appears when a new version is waiting. The pale disabled Send is slice 1.4. The Tamil strings are unchanged (no new words).
 
@@ -222,8 +222,8 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 ## Commits (8 Nov 2026)
 
 - **`cc30f72` `InBul11`: UI/UX 2.0 phase 0, foundation** (tokens and tap sizes, the component test harness, the measuring tools, the 1.0 and 2.0 picture sets, the audit documents). Checked on its own in an isolated checkout of HEAD plus only its files: typecheck clean, 189 web tests, contrast and docs checks pass. Tagged `InBul11` (the tool warned it expected InBul07: commits InBul07 to InBul10 exist without tags, an earlier gap).
-- **`dda2cd7` Build 1007: Supervisors keep Send in reach, and merchandisers get tabs and a phone-friendly board** (phases 1 and 3 so far, with `docs/builds/build-1007.md`, `CHANGELOG.md`, `build-info.json`). It also carries the UI work done between build 1006 and this session that was never committed, which lives in the same files and could not be separated. Tagged `build-1007`. Full suite 1431 tests, axe 48 screens, e2e 22 of 22 on this tree.
-- Left out on purpose: `scripts/zz_api.ts` and `scripts/zz_tmp_b15.ts` (scratch scripts from an earlier session). Nothing pushed.
+- **`dda2cd7` Build 1007: Supervisors keep Send in reach, and merchandisers get tabs and a phone-friendly board** (phases 1 and 3 so far, with `docs/builds/build-1007.md`, `CHANGELOG.md`, `build-info.json`). It also carries the UI work done between build 1006 and this phase that was never committed, which lives in the same files and could not be separated. Tagged `build-1007`. Full suite 1431 tests, axe 48 screens, e2e 22 of 22 on this tree.
+- Left out on purpose: two scratch scripts from earlier work, which were not part of the product and are not in the repository. Nothing pushed.
 
 ## 3.7 to 3.10 Small merchandiser fixes (8 Nov 2026, not yet committed: they batch into the next build)
 
@@ -275,7 +275,7 @@ TARANG, ORCA (top bar and frontend), Dukaan Dost (guide and skills) and Calley w
 - **4.3 Board with no orders** says what will appear and now gives the way to make the first one ("Set up the first order", an outlined button, not a second primary). The filtered-empty board already had its own message and "show every ..." buttons and is unchanged.
 - **4.4 Sync chip:** when its tone changes (waiting to sent, sent to a problem, problem to sent) it is marked for 1.6 s: a ring in the action colour that thins away; under reduced motion a still 2 px outline instead (no motion). Not on first sight, and not while a count just goes down inside "waiting". Never green. Checked in Edge with touch emulation: offline gives `sync--wait sync--noticed`, back online "All sent" with the animation `sync-notice` (reduced motion: no animation, outline solid), and the mark is gone 2 s later.
 - Tests: `emptyStates.test.ts` (4), `syncNotice.test.tsx` (7); written first (4 and 3 red). Web tests 688 passed; typecheck clean.
-- **Not done in this phase:** 4.1 (Undo for "Don't show" needs a new server route: backend session; see below).
+- **Not done in this phase:** 4.1 (Undo for "Don't show" needs a new server route; see below).
 - **Not checked:** the ring on a real phone; a screen reader reading the changed chip (it was already a polite live region); whether supervisors understand the Tamil sentence.
 
 ## 8B Merchandiser desktop: the board and the order page as a dashboard (8 Nov 2026, branch `ui2-merchandiser`)
@@ -315,7 +315,7 @@ Pictures: `audit/redesign-supervisor/` (before-* and after-*, 390 px, touch emul
 - **Measured (390 px, touch emulation, demo data):** number field top 348 px (before 363, English) and 350 px (before 341, Tamil) of 844; with the keyboard simulated (500 px viewport) the field's bottom edge is 416 and 418 px against the bar's top at 419 px: clear, as before. Send bottom edge 832 of 844 px, 56 px high; no sideways overflow in either language. First Today card now starts lower (the hero is above it) but each card shows four things the old one did not: a real bar, the share, a large done count and a tick.
 - **Checks on this tree:** `npm run verify` 1520 tests passed (16 skipped); `npm run a11y` 0 serious or critical on 48 screens; `npm run ux` 50 of 50 screen-widths clean, 0 controls under the tap size; `E2E_API_PORT=8801 npm run e2e` 22 of 22. Tests written first (the page wiring and the look were red before the pages changed).
 - **One test changed:** `numberFormat.test.ts` looked for `pieces(s.qty)` in `Today.tsx` and `pieces(left)` in `Update.tsx`; the numbers are now written in `StageCard` and `UpdateHero`, so it checks them there.
-- **Not checked:** a real phone (no adb in this session; the keyboard check is a simulated short viewport, not Chrome's own scroll into view), an iPhone, a low-end phone, a screen reader on the hero and cards, supervisors reading the screens (all words are the existing ones). The ink hero is a dark card on a light page: it is neutral, not a status tint, but if only white or page-colour surfaces are wanted it is a one-line change per hero (`background: var(--ink)` in `TodayHero.css` and `UpdateHero.css`).
+- **Not checked:** a real phone (no adb available; the keyboard check is a simulated short viewport, not Chrome's own scroll into view), an iPhone, a low-end phone, a screen reader on the hero and cards, supervisors reading the screens (all words are the existing ones). The ink hero is a dark card on a light page: it is neutral, not a status tint, but if only white or page-colour surfaces are wanted it is a one-line change per hero (`background: var(--ink)` in `TodayHero.css` and `UpdateHero.css`).
 
 ## 8C Merge of 8A and 8B, and the colour theme (8 Nov 2026, InBul17)
 
@@ -331,7 +331,7 @@ Looked at by eye, before and after, in Edge with a fake clock (pictures in `audi
 
 **Result:** the InBul17 theme already held everywhere. No tinted card, notice, row or dialog was found, no literal colour or leftover indigo exists anywhere in `packages/web/src` (grep for hex, rgb and hsl: none outside the tokens), banners, notice boxes, dialogs, the photo viewer and the load-failed card are neutral white surfaces with neutral borders, and links, tabs, selected states and the focus ring all use the action colour.
 
-**One real clash found and fixed (frontendskill.md rule 10: red, amber and green mean order status only):** form errors were red. A field that did not pass its check had a red border, and the messages under it (and the red "could not sign in" kind of line) were red text. That is the status colour on something that is not a status, and it fought the violet theme. Now:
+**One real clash found and fixed (front-end guide rule 10: red, amber and green mean order status only):** form errors were red. A field that did not pass its check had a red border, and the messages under it (and the red "could not sign in" kind of line) were red text. That is the status colour on something that is not a status, and it fought the violet theme. Now:
 - `.error` and `.field__error` are ink, semibold, with a drawn "!" mark in a ring before the words (so they still read in greyscale and are not colour alone; they were already `role="alert"` tied to their field);
 - an invalid field has a heavy ink border, the same look the supervisor's "asking" field already had.
 No new colour pair, so `check_contrast` is unchanged.
@@ -346,7 +346,7 @@ No new colour pair, so `check_contrast` is unchanged.
 - **5.1 Pilot setup checklist** (new organism `SetupChecklist`, rules in `setup/setupChecklist.ts`, data from `useSetupChecklist`): at the top of Setup, four steps in the order a pilot is set up: **Units, Closed days, Templates, People**, each **Done**, **To do** or **Not checked** (a mark and a word, never colour alone; theme colours only, no status colours or tints). It reads the endpoints the sections already use (`/api/units`, `/api/calendar`, `/api/templates`, `/api/accounts`): **no new API field, no invented state**. Done means: at least one unit; at least one calendar entry (Sundays are closed without one, so "Only Sundays are closed so far" is still to do); at least one template; at least one supervisor who can sign in (a stopped account does not count). Each row says what exists in words ("2 units: Unit 1, Unit 2", "3 days set: 2 closed, 1 worked", "1 supervisor and 1 merchandiser can sign in") and has a button to the right section ("Add a unit" lands on the unit form). The line above the list says where things stand: "Nothing is set up yet. Start with the units." / "3 of 4 done. Left: Closed days." / "Everything is set up for the pilot." States: loading, **failed to load** (the shared failure card with Retry), nothing, partly (list open, folded on a phone behind "Show the steps"), all done (one line, list folded). One source failing makes only its own row "Not checked" ("3 of 4 done. Could not check: Templates."). It refreshes when Setup opens, when the section changes and when People changes something.
 - **Template summary in words** (part of 5.2): the Templates row says "Knit tee: cutting, then sewing, then finishing, then packing".
 - **5.2 One "Add a person" form** (`AddPersonForm`, rules in `setup/addPerson.ts`): a role choice (Supervisor or Merchandiser, with one line saying how each signs in), then only that role's fields; the name is kept when the role is switched; the checks the old supervisor form made are unchanged, and a few obvious ones (name, email, password length) are now said before sending for a merchandiser; the button names the role ("Add supervisor"). "Add a unit" stays its own form (a unit is not a person). **One filled button on the People screen** (it was four: three Add buttons and Save PIN): "Add unit" and "Save PIN" are plain buttons.
-- **5.3 Activity**: the route `GET /api/accounts/audit` **exists** (`app.ts`, contract in `md/api.md`), so it is built: Setup > People > "Activity" lists the server's own plain-English sentence for each change (added, PIN reset, signed out, stopped, allowed) with the day, the time and "IST", the latest ten with "Show all N" for the rest; states: loading, nothing yet, list, failed (shared card). No PIN, password or hash is ever shown (the route never sends one). The people list still shows if the activity cannot load.
+- **5.3 Activity**: the route `GET /api/accounts/audit` **exists** (`app.ts`), so it is built: Setup > People > "Activity" lists the server's own plain-English sentence for each change (added, PIN reset, signed out, stopped, allowed) with the day, the time and "IST", the latest ten with "Show all N" for the rest; states: loading, nothing yet, list, failed (shared card). No PIN, password or hash is ever shown (the route never sends one). The people list still shows if the activity cannot load.
 - **A bug found and fixed on the way:** a checklist link that changes section ("Add closed days") left keyboard focus on the page body, because the route update lands a render after the click and the focus request had already fired on the section that was going away. A request to move focus now names its section and waits for it (also used by the section buttons). A guard fails if the old pattern returns.
 - **Found by `npm run ux`:** the role radios were 20 px (under the 48 px touch size). The real radio now covers the whole choice box (invisible), with the dot drawn beside the words; the audit reads 50 of 50 clean, 0 controls under the tap size.
 - **Tests (written first, red then green):** `setupChecklist.test.ts` (18), `addPerson.test.ts` (8), `accountActivity.test.tsx` (9), `setupPhase5.test.tsx` (26; includes the one-primary-button and no-status-colour guards for the new CSS). Broken on purpose: a second `btn--primary` put back on "Add unit" failed the guard, restored. `npm run verify` 1626 passed (16 skipped), `npm run a11y` nothing serious on 48 screens, `npm run ux` 50 of 50 clean, `E2E_API_PORT=8804 npm run e2e` 22 of 22, typecheck clean.

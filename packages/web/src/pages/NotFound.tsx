@@ -33,7 +33,7 @@ export default function NotFound() {
     )
   }
   return (
-    <PublicShell narrow>
+    <PublicShell narrow title="Page not found">
       <h1>Page not found</h1>
       <p>That page does not exist.</p>
       <p><ButtonLink to="/login">Go to sign in</ButtonLink></p>

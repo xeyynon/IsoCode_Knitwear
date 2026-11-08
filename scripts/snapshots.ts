@@ -379,7 +379,7 @@ const groups: [string, Shot['device']][] = [['Desktop', 'desktop'], ['Phone', 'p
 const when = new Date().toISOString().slice(0, 10)
 let md = `# Interface snapshots
 
-Pictures of every screen as it looks now, taken from the running app on demo data (not real orders). Regenerate them any time the interface changes:
+Pictures of every screen as it looks now, taken from the running app on the test fixture data (not real orders). Regenerate them any time the interface changes:
 
 \`\`\`bash
 DEMO_DATA=fixture npm run dev:api                  # terminal 1

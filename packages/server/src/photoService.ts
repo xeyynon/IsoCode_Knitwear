@@ -7,6 +7,7 @@ import { isIsoDate, isStageName } from './today.js'
 import { stripJpegMetadata } from './jpegMeta.js'
 import { earliestAllowedDate, tooOld } from './eventService.js'
 import { photoAlertBody, writeOutbox } from './outboxService.js'
+import { DEMO_MEDIA_BYTES_CAP, DEMO_PHOTOS_PER_DAY, DEMO_QUOTA_MESSAGE } from './demoMode.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024     // the phone resizes to far less; this is the hard ceiling
@@ -18,6 +19,23 @@ export function looksLikeJpeg(b: Buffer): boolean {
 }
 
 export interface PhotoUpload { clientUuid: string; orderId: string; stage: string; date: string; bytes: Buffer }
+
+/** What only a shared demo adds to an upload (demoMode.ts). Both are off for a normal deployment. */
+export interface PhotoLimits {
+  /** A date after `today` is stored on `today` instead of being refused (N-10). */
+  clampFuture?: boolean
+  /** Throws to refuse a NEW photo (a repeat of a stored one never reaches it). Runs as the system, so it can count every unit's photos (N-5). */
+  quota?: (tx: Tx) => Promise<void>
+}
+
+/** The quota check of the shared demo: refuses (429 quota) when the stored photos are too big or too many for today. A cheap sum and count over the photo table. */
+export async function demoPhotoQuota(tx: Tx): Promise<void> {
+  const r = (await tx.query<{ bytes: string; today: string }>(
+    `select coalesce(sum(bytes) filter (where purged_at is null), 0)::text as bytes,
+            count(*) filter (where created_at >= date_trunc('day', now() at time zone 'Asia/Kolkata') at time zone 'Asia/Kolkata')::text as today
+       from photo`))[0]!
+  if (Number(r.bytes) > DEMO_MEDIA_BYTES_CAP || Number(r.today) >= DEMO_PHOTOS_PER_DAY) throw new AppError(429, 'quota', DEMO_QUOTA_MESSAGE)
+}
 
 /**
  * Store one photo for a stage the caller's unit runs. Idempotent on clientUuid: a retried upload
@@ -34,14 +52,17 @@ export interface PhotoUpload { clientUuid: string; orderId: string; stage: strin
  * So a row never exists without its file (the file is there before the row), and a file without a row can only be left by a crash
  * or a failed delete between steps 2 and 3: it sits under a random key nobody can ask for, costs only its bytes, and is harmless.
  */
-export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: PhotoUpload, today: string, onOrphan?: (key: string, err: unknown) => void): Promise<{ id: string; duplicate: boolean }> {
+export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: PhotoUpload, today: string, onOrphan?: (key: string, err: unknown) => void, opts: PhotoLimits = {}): Promise<{ id: string; duplicate: boolean }> {
   if (ctx.role !== 'supervisor' && !isStaff(ctx)) throw forbidden()
   if (typeof input.clientUuid !== 'string' || !UUID.test(input.clientUuid)) throw badRequest('clientUuid must be a UUID')
   if (typeof input.orderId !== 'string' || !UUID.test(input.orderId)) throw badRequest('orderId must be a UUID')
   if (typeof input.stage !== 'string' || !input.stage.trim()) throw badRequest('stage is required')
   if (!isStageName(input.stage)) throw badRequest('stage is not a valid stage name')
   if (!isIsoDate(input.date)) throw badRequest('date must be YYYY-MM-DD')
-  if (compareDates(input.date, today) > 0) throw badRequest('date is in the future')
+  if (compareDates(input.date, today) > 0) {
+    if (!opts.clampFuture) throw badRequest('date is in the future')
+    input = { ...input, date: today }   // the shared demo: the phone's day is ahead of the pinned one (N-10)
+  }
   if (compareDates(input.date, earliestAllowedDate(today)) < 0) throw tooOld()
   if (!Buffer.isBuffer(input.bytes) || input.bytes.length > MAX_PHOTO_BYTES) throw new AppError(413, 'photo_too_large', 'That photo is too large')   // 413 here and in the error handler: the phone reads any 4xx but 429 as "never going to work"; a stable code says why
   if (!looksLikeJpeg(input.bytes)) throw new AppError(400, 'not_a_photo', 'That file is not a JPEG photo')
@@ -54,6 +75,7 @@ export async function savePhoto(db: Db, ctx: Ctx, store: MediaStore, input: Phot
       where m.order_id = $1 and m.stage = $2`, [input.orderId, input.stage, input.clientUuid])))[0]
   if (!found) throw notFound(isStaff(ctx) ? 'No such stage on this order' : 'No such stage for your unit')
   if (found.photo_id) return repeat(found.photo_id, found.photo_order, input.orderId)
+  if (opts.quota) await db.tx({ role: 'system' }, opts.quota)
 
   // 2. The bytes, with no transaction open. If this throws there is no row, and a retry starts again from step 1.
   const key = `photos/${randomUUID()}.jpg`

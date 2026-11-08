@@ -19,8 +19,8 @@ describe('which language a person starts in', () => {
     expect(languageAfterSignIn('merchandiser', parseStoredLang(null, null))).toEqual({ lang: 'en', chosen: false })
   })
 
-  it('a merchandiser who chose Tamil keeps Tamil', () => {
-    expect(languageAfterSignIn('merchandiser', parseStoredLang('ta', null))).toEqual({ lang: 'ta', chosen: true })
+  it('a merchandiser is in English even if Tamil was stored (their screens are English only; final cycle W-4)', () => {
+    expect(languageAfterSignIn('merchandiser', parseStoredLang('ta', null))).toEqual({ lang: 'en', chosen: false })
   })
 
   it('a stored value from before this rule existed is a choice, because only the switch ever wrote it', () => {

@@ -1,5 +1,5 @@
 // The run-rate engine. One pure function: no database, no clock, no I/O.
-// Spec: md/run_rate_engine.md. The caller passes `today`.
+// The rules are described in README.md ("How the colours are decided"). The caller passes `today`.
 import {
   addDays, compareDates, isWorking, nthWorkingDayAfter, previousWorkingDay, workingDaysBetween,
   type IsoDate, type UnitCalendar,
@@ -244,7 +244,7 @@ export function projectOrder(
     }
     else if (r.made !== null && r.made < settings.redBelow * r.needed) red.push(`making less than ${pct(settings.redBelow)}% of needed`)
     if (r.made !== null && r.made <= 0) red.push('no output')
-    // Deliberate deviation from the written spec (see md/run_rate_engine.md, "Spec conflict"):
+    // Deliberate deviation from the written spec (README.md, "How the colours are decided"):
     // slipping past the stage milestone is NOT red by itself, or the amber band
     // (making between the red line and 100% of needed) could never be reached. Red is "past ex-factory".
     // Name the right cause (BUG-057): this stage's own projection, or only a later stage's.

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { activityTime, visibleEntries, type AuditEntry } from '../src/setup/activityLogic'
 import { AccountActivity } from '../src/ui/organisms/AccountActivity'
 
-// UI/UX plan, slice 5.3: Setup > People "Activity". The route (GET /api/accounts/audit, md/api.md) returns `sentence` in plain English
+// UI/UX plan, slice 5.3: Setup > People "Activity". The route (GET /api/accounts/audit, see the README API table) returns `sentence` in plain English
 // already, so the page only shows it with the time (in India time, with the zone named) and never builds its own wording.
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const entry = (n: number, sentence = `Ravi stopped Meena's account (${n}).`): AuditEntry => ({

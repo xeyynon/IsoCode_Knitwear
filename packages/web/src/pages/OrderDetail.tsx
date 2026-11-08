@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
-import { shortDate, type Status } from '../board/boardLogic'
+import { shortDate, shortDateIn, type Status } from '../board/boardLogic'
 import { BACK_PARAM, backToBoard } from '../orders/orderDetailLogic'
 import type { CalendarUnit } from '../orders/timelineLayout'
 import { isRealDate, slipText } from '../orders/orderForm'
 import { LOW_CONFIDENCE } from '../orders/visitEntry'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
-import { Button } from '../ui/atoms/Button'
+import { Button, ButtonLink } from '../ui/atoms/Button'
 import { Card } from '../ui/atoms/Card'
 import { DateWords } from '../ui/atoms/DateWords'
 import { ErrorText } from '../ui/atoms/ErrorText'
@@ -21,6 +21,7 @@ import { BentoCell, OrderBento } from '../ui/organisms/OrderBento'
 import { dateInWords } from '../dateWords'
 import { reasonById, usableReasons, type Reason } from '../notes/reasons'
 import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
+import { useConfirm } from '../ui/ConfirmDialog'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { LowConfidence } from '../ui/LowConfidence'
@@ -55,10 +56,18 @@ const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 
 
 export default function OrderDetail() {
   const { id = '' } = useParams()
-  const created = (useLocation().state as { created?: boolean } | null)?.created === true
+  const location = useLocation()
+  const navigate = useNavigate()
+  // "Order created" arrives in the history entry's state. It is said for this visit and then taken out of the entry, so a reload does not say it again.
+  const [created] = useState(() => (location.state as { created?: boolean } | null)?.created === true)
+  useEffect(() => {
+    if ((location.state as { created?: boolean } | null)?.created) navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+  }, [location, navigate])
+  const { confirm, dialog } = useConfirm()
   const boardPath = backToBoard(useSearchParams()[0].get(BACK_PARAM))
   const [d, setD] = useState<Detail | null>(null)
   const [error, setError] = useState<LoadFailure | null>(null)
+  const [missing, setMissing] = useState(false)   // the server says there is no such order: retrying cannot help
   const [date, setDate] = useState('')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -66,8 +75,11 @@ export default function OrderDetail() {
   const [moved, setMoved] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    try { setD(await apiFetch<Detail>(`/api/orders/${id}`)); setError(null) }
-    catch (e) { setError(describeFailure(e, 'Could not load this order.')) }
+    try { setD(await apiFetch<Detail>(`/api/orders/${id}`)); setError(null); setMissing(false) }
+    catch (e) {
+      if (e instanceof ApiError && (e.status === 400 || e.status === 404)) { setMissing(true); setError(null) }
+      else setError(describeFailure(e, 'Could not load this order.'))
+    }
   }, [id])
   useEffect(() => { void load() }, [load])
 
@@ -76,11 +88,18 @@ export default function OrderDetail() {
     setChangeError(null); setMoved(null)
     if (!isRealDate(date)) return setChangeError('Choose the new ex-factory date.')
     if (!reason.trim()) return setChangeError('Give a reason for the change.')
+    // A date that has already gone is allowed (an order can be rebooked after the fact) but never by accident: say which day, and ask.
+    const today = d?.today ?? istDate()
+    if (date < today && !(await confirm({
+      title: 'Move ex-factory to a day that has passed?',
+      body: `${shortDateIn(date, today)} is before today (${shortDateIn(today, today)}). The stage dates move with it and may show as late.`,
+      confirmLabel: 'Change date', cancelLabel: 'Cancel',
+    }))) return
     setBusy(true)
     try {
       const r = await apiFetch<{ exFactory: { old: string; new: string }; milestones: unknown[]; leftAlone: string[] }>(
         `/api/orders/${id}/ex-factory`, { method: 'POST', body: JSON.stringify({ exFactory: date, reason }) })
-      setMoved(`Ex-factory moved from ${shortDate(r.exFactory.old)} to ${shortDate(r.exFactory.new)}. ${r.milestones.length} stage date${r.milestones.length === 1 ? '' : 's'} moved with it.${r.leftAlone.length ? ` Left where they were (set by hand): ${r.leftAlone.map(cap).join(', ')}.` : ''}`)
+      setMoved(`Ex-factory moved from ${shortDateIn(r.exFactory.old, today)} to ${shortDateIn(r.exFactory.new, today)}. ${r.milestones.length} stage date${r.milestones.length === 1 ? '' : 's'} moved with it.${r.leftAlone.length ? ` Left where they were (set by hand): ${r.leftAlone.map(cap).join(', ')}.` : ''}`)
       setDate(''); setReason('')
       await load()
     } catch (err) { setChangeError(err instanceof ApiError ? err.message : 'Could not change the date.') }
@@ -94,6 +113,12 @@ export default function OrderDetail() {
         <TextLink className="back" to={boardPath}>← Order board</TextLink>
         {!d && !error && <Loading label="Loading order" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
+        {missing && (
+          <Card as="div" role="alert">
+            <p>This order could not be found.</p>
+            <p><ButtonLink to={boardPath}>Back to the order board</ButtonLink></p>
+          </Card>
+        )}
 
         {d && (
           <>
@@ -200,7 +225,7 @@ export default function OrderDetail() {
                 {d.notes.map((n) => (
                   <li key={n.id} className="stagecard">
                     <div className="stagecard__top">
-                      <b>{cap(n.stage)}</b><span className="sub">{n.takenOn}</span>
+                      <b>{cap(n.stage)}</b><span className="sub">{shortDateIn(n.takenOn, d.today ?? istDate())}</span>
                       {n.category && <span className="sub">· {reasonById(usableReasons(d.reasons), n.category)?.en}{n.categoryBy === 'merchandiser' ? ' (set by you)' : ''}</span>}
                       <span className="sub stagecard__end">{n.reviewed ? 'Reviewed' : 'Not reviewed yet'}</span>
                     </div>
@@ -216,6 +241,7 @@ export default function OrderDetail() {
             />
           </>
         )}
+        {dialog}
     </MerchandiserShell>
   )
 }

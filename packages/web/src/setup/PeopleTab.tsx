@@ -120,7 +120,7 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
         </table>
       )}
 
-      <AddPersonForm units={units} onAdd={addPerson} />
+      <AddPersonForm units={units} onAdd={addPerson} onSubmit={() => { setError(null); setNotice(null) }} />
 
       <h2 id="add-unit" tabIndex={-1}>Add a unit</h2>
       <Card as="form" className="change" onSubmit={addUnit} noValidate>

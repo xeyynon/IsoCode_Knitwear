@@ -61,6 +61,7 @@ const en = {
   'chunk.reload': 'Reload',
   // Sign in (the supervisor parts and the shared parts; the merchandiser's email and password stay English)
   'login.title': 'Sign in',
+  'login.sessionEnded': 'Your session ended. Sign in again.',
   'login.who': 'Who is signing in',
   'login.merchandiser': 'Merchandiser',
   'login.supervisor': 'Supervisor',
@@ -68,7 +69,7 @@ const en = {
   'login.pin': '4-digit PIN',
   'login.signingIn': 'Signing in…',
   'err.rejected': 'Incorrect details. Check and try again.',
-  'err.locked': 'Too many wrong attempts. Try again in {min} minutes.',
+  'err.locked': 'Too many wrong attempts. Try again in {min} minutes. If you forgot your PIN or password, ask your merchandiser to reset it.',
   'err.rateLimited': 'Too many attempts. Please wait a few minutes.',
   'err.invalid': 'Please fill in every field.',
   'err.clock': "This device's date or time looks wrong, so the sign-in could not be kept. Set the correct date and time, then try again.",
@@ -177,6 +178,8 @@ const en = {
   'stage.checking': 'Checking',
   'stage.packing': 'Packing',
   'stage.dispatch': 'Dispatch',
+  'stage.stitching': 'Stitching',
+  'stage.printing': 'Printing',
 } as const
 export type Key = keyof typeof en
 
@@ -211,6 +214,7 @@ const ta: Partial<Record<Key, string>> = {
   'chunk.body': 'ஆப் புதுப்பிக்கப்பட்டிருக்கலாம். புதிய பதிப்பைப் பெற மீண்டும் ஏற்றவும்.',
   'chunk.reload': 'மீண்டும் ஏற்று',
   'login.title': 'உள்நுழை',
+  'login.sessionEnded': 'உங்கள் உள்நுழைவு முடிந்தது. மீண்டும் உள்நுழையுங்கள்.',   // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'login.who': 'யார் உள்நுழைகிறார்',
   'login.merchandiser': 'மெர்ச்சண்டைசர்',
   'login.supervisor': 'மேற்பார்வையாளர்',
@@ -218,7 +222,7 @@ const ta: Partial<Record<Key, string>> = {
   'login.pin': '4 இலக்க PIN',
   'login.signingIn': 'உள்நுழைகிறது…',
   'err.rejected': 'விவரங்கள் தவறு. சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
-  'err.locked': 'பல முறை தவறு. {min} நிமிடம் கழித்து முயற்சிக்கவும்.',
+  'err.locked': 'பல முறை தவறு. {min} நிமிடம் கழித்து முயற்சிக்கவும். PIN மறந்துவிட்டால், மெர்ச்சண்டைசரிடம் அதை மாற்றச் சொல்லுங்கள்.',   // second sentence DRAFT, unreviewed (TAMIL-REVIEW.md)
   'err.rateLimited': 'பல முயற்சிகள். சில நிமிடங்கள் காத்திருக்கவும்.',
   'err.invalid': 'எல்லா இடங்களையும் நிரப்பவும்.',
   'err.clock': 'இந்த போனின் தேதி அல்லது நேரம் தவறாக உள்ளது, அதனால் உள்நுழைவு நிற்கவில்லை. சரியான தேதி, நேரத்தை அமைத்து மீண்டும் முயற்சிக்கவும்.',
@@ -314,6 +318,8 @@ const ta: Partial<Record<Key, string>> = {
   'stage.checking': 'சோதனை',
   'stage.packing': 'பேக்கிங்',
   'stage.dispatch': 'அனுப்புதல்',
+  'stage.stitching': 'ஸ்டிச்சிங்',   // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'stage.printing': 'பிரிண்டிங்',   // DRAFT, unreviewed (TAMIL-REVIEW.md)
 }
 
 /** Both tables, read-only, for the tests that check coverage and placeholders. */
@@ -404,7 +410,8 @@ export function setLang(lang: Lang) {
 export function applySignInLanguage(role: Role | undefined) {
   if (!role) return
   const next = languageAfterSignIn(role, readStored())
-  writeStored(next.lang, next.chosen)
+  // A merchandiser is shown English without writing it down: what is stored on this phone may be a supervisor's own choice.
+  if (role !== 'merchandiser') writeStored(next.lang, next.chosen)
   show(next.lang)
 }
 

@@ -34,8 +34,8 @@ Thumbs.db
 /md/
 /company-a-build-plan.md
 
-# local assistant settings
-.claude/settings.local.json
+# local assistant settings and notes
+.claude/
 
 # browser-driving tool output (accessibility snapshots, console logs) and TypeScript build info
 .playwright-mcp/

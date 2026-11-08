@@ -1,6 +1,6 @@
 # Tamil to be read and corrected by supervisors
 
-Decision D1 (8 Nov 2026): new words on supervisor screens get **draft Tamil, written by the front-end session and unreviewed**, kept in this one list for the pilot review. The same applies to all the Tamil that existed before (`packages/web/src/i18n.ts`, the `ta` block); this list holds only what UI/UX 2.0 added, so the supervisors can see what is new. Nobody who reads Tamil has checked any of it yet.
+Decision D1 (8 Nov 2026): new words on supervisor screens get **draft Tamil, written by the front-end team and unreviewed**, kept in this one list for the pilot review. The same applies to all the Tamil that existed before (`packages/web/src/i18n.ts`, the `ta` block); this list holds only what UI/UX 2.0 added, so the supervisors can see what is new. Nobody who reads Tamil has checked any of it yet.
 
 How to review: show the screen (or the line below) to three supervisors; ask what they understand it to mean and what word they would use on the floor; write their wording and the date in the last column; then change the string in `i18n.ts` and delete the "DRAFT" comment beside it.
 
@@ -14,6 +14,10 @@ How to review: show the screen (or the line below) to three supervisors; ask wha
 | `err.notFoundTitle` | The title of the screen for an address that does not exist (a mistyped or old link) | `Page not found` | `பக்கம் இல்லை` | Plain enough as a title? | |
 | `err.notFound` | The same screen, the sentence | `That page does not exist.` | `அந்தப் பக்கம் இல்லை.` | Does it read as "this address is wrong", not "the app is broken"? | |
 | `err.notFoundBack` | The same screen, the button | `Back to today's orders` | `இன்றைய ஆர்டர்களுக்குத் திரும்பு` | "திரும்பு" (go back): does the button clearly lead to the list? | |
+| `stage.stitching` | The stage name wherever a stage is shown (the demo templates call it Stitching) | `Stitching` | `ஸ்டிச்சிங்` | Is "ஸ்டிச்சிங்" what the floor says, or "தையல்" (which this list already uses for Sewing)? Are they two different stages in the unit? | |
+| `stage.printing` | The stage name wherever a stage is shown (the demo's printed styles) | `Printing` | `பிரிண்டிங்` | Is "பிரிண்டிங்" what the floor says, or "அச்சிடுதல்"? | |
+| `err.locked` (second sentence) | Sign-in, after too many wrong PINs. The first sentence and the minutes were already in Tamil; this sentence is new | `If you forgot your PIN or password, ask your merchandiser to reset it.` | `PIN மறந்துவிட்டால், மெர்ச்சண்டைசரிடம் அதை மாற்றச் சொல்லுங்கள்.` | Does "மாற்றச் சொல்லுங்கள்" (ask them to change it) read as "get a new PIN"? A supervisor has a PIN and no password, so the Tamil names only the PIN. | |
+| `login.sessionEnded` | The sign-in screen, when the person was sent back because their sign-in ran out or was no longer accepted | `Your session ended. Sign in again.` | `உங்கள் உள்நுழைவு முடிந்தது. மீண்டும் உள்நுழையுங்கள்.` | Does "உள்நுழைவு முடிந்தது" (the sign-in has finished) read as "you were signed out, nothing is wrong with your PIN"? | |
 
 Existing Tamil that the first audit already flagged for review (words to ask about first): "கெடு" for Due, "இதுவரை" for so far, "பதிவு செய்" for Update.
 

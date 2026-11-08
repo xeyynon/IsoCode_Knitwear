@@ -15,7 +15,7 @@ import {
 } from './adminService.js'
 import { confirmNote, listPendingNotes, loadReasons } from './noteService.js'
 import { suggestNotes, type NoteClassifier } from './noteAi.js'
-import { approvePhoto, getBuyerPhotoBytes, listApprovedPhotos, purgeRejectedPhotos, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
+import { approvePhoto, demoPhotoQuota, getBuyerPhotoBytes, listApprovedPhotos, purgeRejectedPhotos, getPhotoBytes, listPendingPhotos, MAX_PHOTO_BYTES, rejectPhoto, savePhoto } from './photoService.js'
 import type { MediaStore } from './mediaStore.js'
 import { createBuyerLink, getBuyerView, getBuyerViewFor, listBuyerLinks, resolveBuyerToken, revokeBuyerLink, type BuyerView } from './buyerService.js'
 import { buyerExportCsv, exportFileName } from './buyerExport.js'
@@ -25,6 +25,8 @@ import { isStageName, istDate } from './today.js'
 import { createLoginLimiter, type LoginLimiter } from './loginLimiter.js'
 import { AUTH_CACHE_MS, createAuthCache, type AccountState, type AuthCache } from './authCache.js'
 import { registerHttpCache } from './httpCache.js'
+import { DEMO_READ_ONLY_MESSAGE, isDemoMode } from './demoMode.js'
+import { isDemoLoginName, topUpDemoIfDue } from './demoSeed.js'
 
 export interface AppOptions {
   db: Db
@@ -46,6 +48,12 @@ export interface AppOptions {
    * locks and link expiry are measured in real time and checked against the phone's own clock.
    */
   dayClock?: () => Date
+  /**
+   * Is this a shared, public demo (demoMode.ts)? Default: yes when `dayClock` is given. In demo mode accounts, buyer links, templates and the
+   * calendar are read-only, the published demo logins never lock, photos have a daily and a total limit, an update dated after the pinned day is
+   * kept on the pinned day, and the seeded notes come back once a day. Off (the default without a dayClock): none of that exists.
+   */
+  demo?: boolean
   /**
    * true = log to stdout. One short line per request (method, route pattern, status, milliseconds), no body, no header, no address,
    * nothing from the query string: the route pattern is used, never the address as written, so a link token can not reach a log.
@@ -92,6 +100,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   }
   const clock = opts.clock ?? (() => new Date())
   const dayClock = opts.dayClock ?? clock
+  const demo = isDemoMode(opts)
+  /** Demo mode only: the shared demo's accounts, links and templates are read-only (N-1). */
+  const demoLocked = (): void => { if (demo) throw new AppError(403, 'demo_read_only', DEMO_READ_ONLY_MESSAGE) }
   const origins = new Set(opts.allowedOrigins ?? [])
   // Fastify 5.12 treats a bare number as "trust nobody" (it cannot check the immediate peer), which put every visitor behind a proxy in one
   // sign-in bucket. So a hop count is turned into the function it stands for: the first `hops` addresses (the socket, then each proxy's
@@ -233,7 +244,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     // of requests in flight together cannot all pass the check above.
     const spent = limiter.spend(req.ip, now.getTime())
     try {
-      const result = await login(opts.db, body as LoginInput, opts.tokenSecret, now)
+      const result = await login(opts.db, body as LoginInput, opts.tokenSecret, now, demo ? { neverLock: isDemoLoginName } : {})
       // A successful sign-in does not spend the budget, but it does not refund failures already spent either.
       spent.refund()
       return result
@@ -278,7 +289,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     // No transaction is open while the photo store works (savePhoto, BE-046).
     return savePhoto(opts.db, ctx, media, {
       clientUuid: String(h['x-client-uuid'] ?? ''), orderId: String(h['x-order-id'] ?? ''), stage, date: String(h['x-date'] ?? ''), bytes: req.body as Buffer,
-    }, istDate(dayClock()), (_key, err) => req.log.warn({ err }, 'photo upload: could not delete an object that has no row'))
+    }, istDate(dayClock()), (_key, err) => req.log.warn({ err }, 'photo upload: could not delete an object that has no row'),
+    demo ? { clampFuture: true, quota: demoPhotoQuota } : {})
   })
   app.get<{ Params: { id: string } }>('/api/photos/:id/file', async (req, reply) => {
     const ctx = ctxOf(req)
@@ -324,18 +336,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   const changingAccount = async <T>(id: unknown, work: () => Promise<T>): Promise<T> => {
     try { return await work() } finally { authCache.invalidate(typeof id === 'string' ? id : undefined) }
   }
-  app.post('/api/accounts/supervisors', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await changingAccount(undefined, () => opts.db.tx(ctx, (tx) => createSupervisor(tx, ctx, (req.body ?? {}) as never, req.claims!.sub)))) })
-  app.post('/api/accounts/merchandisers', async (req, reply) => { const ctx = ctxOf(req); return reply.code(201).send(await changingAccount(undefined, () => opts.db.tx(ctx, (tx) => createMerchandiser(tx, ctx, (req.body ?? {}) as never, req.claims!.sub)))) })
-  app.post<{ Params: { id: string } }>('/api/accounts/:id/pin', async (req) => { const ctx = ctxOf(req); await changingAccount(req.params.id, () => opts.db.tx(ctx, (tx) => resetPin(tx, ctx, req.params.id, (req.body as { pin?: unknown } | null)?.pin, req.claims!.sub))); return { ok: true } })
-  app.post<{ Params: { id: string } }>('/api/accounts/:id/sign-out', async (req) => { const ctx = ctxOf(req); await changingAccount(req.params.id, () => opts.db.tx(ctx, (tx) => signOutEverywhere(tx, ctx, req.params.id, req.claims!.sub))); return { ok: true } })
-  app.post<{ Params: { id: string } }>('/api/accounts/:id/disabled', async (req) => { const ctx = ctxOf(req); await changingAccount(req.params.id, () => opts.db.tx(ctx, (tx) => setDisabled(tx, ctx, req.claims!.sub, req.params.id, (req.body as { disabled?: unknown } | null)?.disabled))); return { ok: true } })
+  app.post('/api/accounts/supervisors', async (req, reply) => { demoLocked(); const ctx = ctxOf(req); return reply.code(201).send(await changingAccount(undefined, () => opts.db.tx(ctx, (tx) => createSupervisor(tx, ctx, (req.body ?? {}) as never, req.claims!.sub)))) })
+  app.post('/api/accounts/merchandisers', async (req, reply) => { demoLocked(); const ctx = ctxOf(req); return reply.code(201).send(await changingAccount(undefined, () => opts.db.tx(ctx, (tx) => createMerchandiser(tx, ctx, (req.body ?? {}) as never, req.claims!.sub)))) })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/pin', async (req) => { demoLocked(); const ctx = ctxOf(req); await changingAccount(req.params.id, () => opts.db.tx(ctx, (tx) => resetPin(tx, ctx, req.params.id, (req.body as { pin?: unknown } | null)?.pin, req.claims!.sub))); return { ok: true } })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/sign-out', async (req) => { demoLocked(); const ctx = ctxOf(req); await changingAccount(req.params.id, () => opts.db.tx(ctx, (tx) => signOutEverywhere(tx, ctx, req.params.id, req.claims!.sub))); return { ok: true } })
+  app.post<{ Params: { id: string } }>('/api/accounts/:id/disabled', async (req) => { demoLocked(); const ctx = ctxOf(req); await changingAccount(req.params.id, () => opts.db.tx(ctx, (tx) => setDisabled(tx, ctx, req.claims!.sub, req.params.id, (req.body as { disabled?: unknown } | null)?.disabled))); return { ok: true } })
   app.get('/api/calendar', async (req, reply) => {
     const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store')
     const unitId = (req.query as { unitId?: string }).unitId
     return { days: await opts.db.tx(ctx, (tx) => listCalendar(tx, ctx, unitId)) }
   })
-  app.post('/api/calendar', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setCalendarDay(tx, ctx, (req.body ?? {}) as never)); await refreshAfter(req, { unitId: String((req.body as { unitId?: unknown }).unitId) }); return { ok: true } })
-  app.post('/api/calendar/clear', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => clearCalendarDay(tx, ctx, (req.body ?? {}) as never)); await refreshAfter(req, { unitId: String((req.body as { unitId?: unknown }).unitId) }); return { ok: true } })
+  app.post('/api/calendar', async (req) => { demoLocked(); const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => setCalendarDay(tx, ctx, (req.body ?? {}) as never)); await refreshAfter(req, { unitId: String((req.body as { unitId?: unknown }).unitId) }); return { ok: true } })
+  app.post('/api/calendar/clear', async (req) => { demoLocked(); const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => clearCalendarDay(tx, ctx, (req.body ?? {}) as never)); await refreshAfter(req, { unitId: String((req.body as { unitId?: unknown }).unitId) }); return { ok: true } })
   app.get('/api/templates', async (req, reply) => { const ctx = ctxOf(req); reply.header('Cache-Control', 'no-store'); return { templates: await opts.db.tx(ctx, (tx) => listTemplates(tx, ctx)) } })
   app.post('/api/templates', async (req, reply) => {
     const ctx = ctxOf(req)
@@ -343,7 +355,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const saved = await opts.db.tx(ctx, (tx) => saveTemplate(tx, ctx, input as never))
     return reply.code(input.id === undefined || input.id === null ? 201 : 200).send(saved)   // like every other create: 201 for a new one, 200 for a change
   })
-  app.post<{ Params: { id: string } }>('/api/templates/:id/delete', async (req) => { const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => deleteTemplate(tx, ctx, req.params.id)); return { ok: true } })
+  app.post<{ Params: { id: string } }>('/api/templates/:id/delete', async (req) => { demoLocked(); const ctx = ctxOf(req); await opts.db.tx(ctx, (tx) => deleteTemplate(tx, ctx, req.params.id)); return { ok: true } })
 
   // ---- the buyer's read-only view (link token, not a sign-in)
   app.get('/api/buyer/orders', async (req, reply) => {
@@ -369,8 +381,20 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   })
 
   // ---- the review gate and buyer links (merchandisers)
+  // Demo mode only: the first review of a new real day puts the seeded notes, warnings and demo accounts back (demoSeed.ts topUpDemoIfDue).
+  // Once per process per day here, and the database holds the day too, so any number of instances share one top-up. Never blocks the page.
+  let topUpDay = ''
+  const demoDaily = async (req: FastifyRequest): Promise<void> => {
+    if (!demo) return
+    const now = clock()
+    const day = now.toISOString().slice(0, 10)
+    if (topUpDay === day) return
+    topUpDay = day
+    try { await opts.db.tx({ role: 'system' }, (tx) => topUpDemoIfDue(tx, now)) } catch (e) { topUpDay = ''; req.log.error({ err: e }, 'demo daily top-up failed') }
+  }
   app.get('/api/review', async (req, reply) => {
     const ctx = ctxOf(req)
+    await demoDaily(req)
     // Bring the warnings up to date first, as the system, so the queue is never stale. A failed refresh never blocks the list.
     await warnings.ensureFresh((e) => req.log.error({ err: e }, 'warning refresh failed'))   // a full refresh only if something is dirty, the day changed or it has been a while
     reply.header('Cache-Control', 'no-store')
@@ -439,12 +463,14 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     return { links: await opts.db.tx(ctx, (tx) => listBuyerLinks(tx, ctx, clock())) }
   })
   app.post('/api/buyer-links', async (req, reply) => {
+    demoLocked()
     const ctx = ctxOf(req)
     reply.header('Cache-Control', 'no-store')
     const made = await opts.db.tx(ctx, (tx) => createBuyerLink(tx, ctx, (req.body ?? {}) as { buyerId: string; days?: number; label?: string }, clock()))
     return reply.code(201).send(made)
   })
   app.post<{ Params: { id: string } }>('/api/buyer-links/:id/revoke', async (req) => {
+    demoLocked()
     const ctx = ctxOf(req)
     await opts.db.tx(ctx, (tx) => revokeBuyerLink(tx, ctx, req.params.id))
     return { ok: true }
@@ -495,7 +521,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post('/api/events', async (req) => {
     const ctx = ctxOf(req)
-    const result = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, req.body as EventInput, istDate(dayClock()), req.claims!.sub))
+    const result = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, req.body as EventInput, istDate(dayClock()), req.claims!.sub, { clampFuture: demo }))
     await refreshAfter(req, { orderId: (req.body as EventInput).orderId })   // updates change colours, as in the batch route below
     return { ok: true, duplicate: result.duplicate }
   })
@@ -512,7 +538,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     for (const raw of events as EventInput[]) {
       const clientUuid = (raw as { clientUuid?: unknown } | null)?.clientUuid
       try {
-        const r = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, raw, today, req.claims!.sub))
+        const r = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, raw, today, req.claims!.sub, { clampFuture: demo }))
         results.push({ clientUuid, result: r.duplicate ? 'duplicate' : 'accepted' })
         touched.add(raw.orderId)
       } catch (e) {

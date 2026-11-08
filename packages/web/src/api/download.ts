@@ -1,4 +1,4 @@
-import { API_BASE, clearToken, getToken } from './session'
+import { API_BASE, endSession, getToken } from './session'
 import { downloadProblem } from '../review/exportLogic'
 
 /**
@@ -11,7 +11,7 @@ export async function downloadFile(path: string, fileName: string, linkToken?: s
   let res: Response
   try { res = await fetch(`${API_BASE}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} }) }
   catch { throw new Error(downloadProblem(0)) }
-  if (res.status === 401 && !linkToken) clearToken()
+  if (res.status === 401 && !linkToken) endSession()
   if (!res.ok) throw new Error(downloadProblem(res.status))
   const url = URL.createObjectURL(await res.blob())
   const a = document.createElement('a')

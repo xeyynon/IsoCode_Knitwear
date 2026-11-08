@@ -1,25 +1,15 @@
 # Interface snapshots
 
-Pictures of every screen on demo data (not real orders). Nothing here is ever deleted: each set is kept so the screens can be compared over time.
+Pictures of every screen on the small test fixture data (invented, not real orders, and not the hosted demo's seed data). Nothing here is ever deleted: each set is kept so the screens can be compared over time.
 
 | Set | What it is | Where |
 | --- | --- | --- |
 | **1.0** | The app as it was at build 1006 (3 Nov 2026), before the UI/UX 2.0 work. **Frozen: never regenerate or edit.** 31 pictures | [1.0/README.md](1.0/README.md) |
 | **2.0** | The app as the UI/UX 2.0 work changes it (plan: `audit/POA-UIUX.md`). Written by `npm run snapshots`; each earlier run of 2.0 is kept in `2.0/previous/` | [2.0/README.md](2.0/README.md) |
 
-## Be honest about what 2.0 shows today
+## Which pictures are current
 
-The 2.0 pictures in this folder were last taken in **phase 0 (InBul11)**, before the supervisor and merchandiser screens were reworked. They **do not show** the later work: the Violet theme and soft wash, the status stamp, the Today and Update hero cards, the board status tiles, the order-page bento, the Setup checklist, the sign-in and error changes. They are due to be retaken (`npm run snapshots`) once the screens settle; until then, treat them as the early 2.0 set, not the current look.
-
-Where the current look is photographed instead (kept, not copied here):
-
-| Folder | What it shows |
-| --- | --- |
-| `audit/redesign-supervisor/` | Today and Update, before and after the supervisor redesign (English and Tamil, keyboard up) |
-| `audit/redesign-merchandiser/` | The board and the order page, before and after the dashboard redesign (1280 and 390 px) |
-| `audit/theme-sweep/` | Before and after pictures of the remaining screens when the theme was swept |
-| `audit/setup-phase5/` | The Setup checklist, the Add a person form and Activity, in each state |
-| `audit/phone/` | Pictures taken on a real Android phone (phase 1) |
+The 2.0 pictures are current: they were last taken on 2026-11-08, after the supervisor and merchandiser screens were reworked. They show the small test fixture data (a different set from the hosted demo), so figures and names differ from the live demo. The earlier 2.0 pictures are kept in `2.0/previous/`.
 
 ## Commands
 

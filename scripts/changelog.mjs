@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bookkeeping for builds and InBuls. See the versioning notes in the internal docs (md/version_control.md, kept private).
+// Bookkeeping for builds and InBuls (see the Development workflow section of the README).
 //
 //   node scripts/changelog.mjs --next-build          print the next build number
 //   node scripts/changelog.mjs --next-internal       print the next InBul id
@@ -26,7 +26,7 @@ import { repoRoot } from './repoRoot.mjs'
 const FIRST_BUILD = 1000
 const ROOT = repoRoot(import.meta.url, 'changelog')
 // Build reports are public-safe by design (what changed, not budget or client detail), so they live
-// in docs/builds, which is tracked. The internal md/ folder stays private (DEC-013).
+// in docs/builds, which is tracked. Budget, rates and client detail never go in a report.
 const REPORTS = path.join(ROOT, 'docs', 'builds')
 const CHANGELOG = path.join(ROOT, 'CHANGELOG.md')
 const BUILD_INFO = path.join(ROOT, 'build-info.json')

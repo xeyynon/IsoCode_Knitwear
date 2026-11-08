@@ -2,7 +2,7 @@
 
 Audited: `frontend-audit` at `d3b7705` (InBul18: Violet theme, stamps, tiles, hero cards, Setup checklist), run from the main checkout's dev servers (web 5173, API 8787), demo data, fake clock from `/api/status` (4 Nov 2026 10:00 IST).
 Devices: Edge (Chromium 157) emulating a phone at 390x844 with touch (English and Tamil), 320x640 and 195x422 (= a 390 px phone at 200% zoom or the largest Android font), the merchandiser at 1280x900 and at 390 and 320.
-Method: Playwright scripts (kept in the session scratchpad, not in the repo) plus `npm run ux` and `npm run a11y`. **Nothing was changed in the app**; this is the only file added, with the pictures in `audit/audit-03/`.
+Method: Playwright scripts (not kept in the repo) plus `npm run ux` and `npm run a11y`. **Nothing was changed in the app**; this is the only file added, with the pictures in `audit/audit-03/`.
 
 ## Numbers from the repo's own tools
 
@@ -35,7 +35,7 @@ No S1 (nothing blocks use). Two S2. Sixteen S3.
    Effort: S.
 
 2. **The board's progress bar still says "Sewing 0/1 done" for orders that are 38% made** (S2)
-   Where: board rows (`mer-1280-02-board.png`) and the phone cards (`mer-390-01-board.png`). The order page and Today show 1,750 of 4,550 pieces; the board shows an empty bar. Already known as slice 3.4, waiting on the backend field (`audit/HANDOFF-backend-3.4.md`); listed here because it is now the most visible gap on the main screen of the redesign.
+   Where: board rows (`mer-1280-02-board.png`) and the phone cards (`mer-390-01-board.png`). The order page and Today show 1,750 of 4,550 pieces; the board shows an empty bar. Already known as slice 3.4, waiting on a backend field; listed here because it is now the most visible gap on the main screen of the redesign.
    Fix: the backend field, then pieces words on the board. Effort: S on the UI side once the field exists.
 
 3. **The stamp text is 11 px and the same status appears three times on the order page** (S3)
@@ -90,7 +90,7 @@ No S1 (nothing blocks use). Two S2. Sixteen S3.
 
 ## Not checked
 
-- A real phone (no adb in this session): daylight and glare on the soft Violet tints, a real on-screen keyboard, the cheap-phone speed.
+- A real phone (no adb available): daylight and glare on the soft Violet tints, a real on-screen keyboard, the cheap-phone speed.
 - An iPhone or Safari, a low-end phone, any browser except Edge.
 - A screen reader (NVDA, TalkBack): the announcements are read from the markup only.
 - The supervisor "sent" state: sending an update would change the shared demo data, so I stopped at the offline queue; the e2e (`npm run e2e`, 22 of 22 at InBul18) covers the real send.

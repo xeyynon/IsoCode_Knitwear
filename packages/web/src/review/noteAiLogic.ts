@@ -25,6 +25,10 @@ export interface NoteForAi {
 
 export const MAX_AI_ATTEMPTS = 3
 
+/** The page asks in rounds, at most this many a visit, and rests this long after a round that asked nothing (the server pauses a busy batch for a minute). */
+export const MAX_AI_ROUNDS = 6
+export const AI_REST_MS = 60_000
+
 /** Notes the page should still ask the server about: words to read and no answer yet (or a failure that may be tried again). */
 export const waitingForAi = (n: NoteForAi): boolean =>
   !!n.original && (n.ai === null || (n.ai.status === 'failed' && n.ai.attempts < MAX_AI_ATTEMPTS))
@@ -45,13 +49,17 @@ export type AiLine =
   | { kind: 'waiting'; text: string }
   | { kind: 'suggested' | 'unsure' | 'failed'; text: string; detail: string | null }
 
-/** One plain sentence for the suggestion's state, and a second line with the AI's own reason when there is one. */
-export function aiLine(n: NoteForAi, reasons: Reason[], aiEnabled: boolean): AiLine | null {
+/**
+ * One plain sentence for the suggestion's state, and a second line with the AI's own reason when there is one. `gaveUp` is the page saying it has stopped asking
+ * (the call failed or the rounds ran out), so a note with no answer is not shown as "Asking" for ever; `message` is the server's own sentence when it refused (busy, asked enough).
+ */
+export function aiLine(n: NoteForAi, reasons: Reason[], aiEnabled: boolean, state: { gaveUp?: boolean; message?: string | null } = {}): AiLine | null {
   if (!n.original) return null
   if (!n.ai) {
-    return aiEnabled
-      ? { kind: 'waiting', text: 'Asking AI for a suggestion…' }
-      : { kind: 'off', text: 'AI suggestions are off on this server. Read the note and choose the reason yourself.' }
+    if (!aiEnabled) return { kind: 'off', text: 'AI suggestions are off on this server. Read the note and choose the reason yourself.' }
+    if (state.message) return { kind: 'failed', text: state.message, detail: null }
+    if (state.gaveUp) return { kind: 'failed', text: `No suggestion: ${FAILURES.unreachable}. Choose the reason yourself, or ask again.`, detail: null }
+    return { kind: 'waiting', text: 'Asking AI for a suggestion…' }
   }
   const a = n.ai
   const label = a.category ? reasonById(reasons, a.category)?.en ?? a.category : null

@@ -36,12 +36,16 @@ export function BuyerNotice({ severity }: { severity: Severity }) {
 export const orderKey = (o: { po: string; style: string; colour: string }) => `${o.po}|${o.style}|${o.colour}`
 
 /** Read the token from the address once, keep it for this tab only, and take it out of the address bar. */
-function takeToken(): string | null {
+function takeToken(fragmentOnly = false): string | null {
   const fromHash = readBuyerToken(window.location.hash)
   if (fromHash) {
     try { window.sessionStorage.setItem(KEY, fromHash) } catch { /* private window: it will live in memory below */ }
     window.history.replaceState(null, '', window.location.pathname)   // no token left to copy, share by accident or bookmark
     return fromHash
+  }
+  if (fragmentOnly) {
+    try { window.sessionStorage.removeItem(KEY) } catch { /* nothing kept */ }
+    return null
   }
   try { return window.sessionStorage.getItem(KEY) } catch { return null }
 }
@@ -72,6 +76,20 @@ export default function Buyer() {
     else setProblem('invalid')
   }, [])
 
+  // A link pasted into a tab that already shows a buyer is a fragment change, not a page load: read it again. An empty or unreadable fragment
+  // must not leave the previous buyer's orders on screen, so what was kept for the tab goes too.
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash === '#main') return   // the skip link, not a new link
+      const found = takeToken(true)
+      setView(null); setSaveError('')
+      if (found) { setProblem(null); setToken(found); setAttempt((n) => n + 1) }
+      else { setToken(null); setProblem('invalid') }
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
   useEffect(() => {
     if (!token) return
     setProblem(null)
@@ -87,10 +105,11 @@ export default function Buyer() {
   }, [token, attempt])
 
   // The page's one h1, whatever state it is in; the order cards below use h2.
-  const heading = <h1>{view ? view.buyer.name : problem === 'invalid' ? 'This link is not valid' : problem === 'unreachable' ? 'Cannot load right now' : 'Order status'}</h1>
+  const headingText = view ? view.buyer.name : problem === 'invalid' ? 'This link is not valid' : problem === 'unreachable' ? 'Cannot load right now' : 'Order status'
+  const heading = <h1>{headingText}</h1>
 
   return (
-    <PublicShell className="buyer">
+    <PublicShell className="buyer" title={headingText}>
       {view && <p className="sub">Order status</p>}
       {!problem && heading}
       {!view && !problem && <Loading label="Loading your orders" />}

@@ -24,8 +24,11 @@ export function parseSizes(rows: SizeRow[]): ParsedSizes {
     const key = size.toLowerCase()
     if (seen.has(key)) { errors.push(`Size ${size} is listed twice.`); continue }
     seen.add(key)
-    if (!/^\d+$/.test(qtyText)) { errors.push(`Size ${size}: enter the quantity as a whole number.`); continue }
-    const qty = Number(qtyText)
+    // The forms the Update screen accepts (dates.ts parsePieces): "1,000", "1 000" and "1,00,000" all mean the same number. Anything else is refused outright
+    // (stripping "-3" or "1.5" down to digits would change what was meant).
+    const digits = qtyText.replace(/\D/g, '')
+    if (!/^[\d\s,]+$/.test(qtyText) || !digits) { errors.push(`Size ${size}: enter the quantity as a whole number.`); continue }
+    const qty = Number(digits)
     if (qty > 10_000_000) { errors.push(`Size ${size}: that quantity is too large.`); continue }
     sizes[size] = qty
   }

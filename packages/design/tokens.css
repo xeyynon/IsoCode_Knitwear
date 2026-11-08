@@ -1,4 +1,4 @@
-/* Design tokens. Source: md/design_system.md. One light theme (floor screens are
+/* Design tokens. One light theme (floor screens are
    read in bright light). Indigo is the only action colour; red, amber and green
    are reserved for status. Contrast pairs are checked by scripts/check_contrast.mjs. */
 :root {

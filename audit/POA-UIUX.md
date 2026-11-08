@@ -1,7 +1,7 @@
 # Plan of action: UI/UX improvement with Atomic Design, 2026-11-08 (v2, reviewed)
 
-Status: **in progress (8 Nov 2026). Decisions D1 to D4 taken; D5 decided. Done: 0.1 to 0.9, phase 1 in full (1.0 to 1.10), phase 3 except 3.4 (3.1 to 3.3, 3.5 to 3.10), and the keyboard test on a real Android phone** (see `audit/PROGRESS.md`). Phase 0 is complete (0.8 and 0.9 done: the per-screen touch and width audit, and the picture diff that makes phase 2 safe). Next: 3.4 to 3.10, then phase 2. Draft Tamil to review: `audit/TAMIL-REVIEW.md`. Not committed. Start a new session with `audit/NEXT-SESSION.md`.
-Inputs: `audit/AUDIT-01-supervisor-phone.md`, `audit/AUDIT-02-merchandiser-and-public.md`, `audit/DESIGN-DIRECTION.md`, `md/production_visibility_uiux_research_and_design_strategy.md` (section 8), `frontendskill.md` (hard rules section 2; shipping section 10), and the code.
+Status: **in progress (8 Nov 2026). Decisions D1 to D4 taken; D5 decided. Done: 0.1 to 0.9, phase 1 in full (1.0 to 1.10), phase 3 except 3.4 (3.1 to 3.3, 3.5 to 3.10), and the keyboard test on a real Android phone** (see `audit/PROGRESS.md`). Phase 0 is complete (0.8 and 0.9 done: the per-screen touch and width audit, and the picture diff that makes phase 2 safe). Next: 3.4 to 3.10, then phase 2. Draft Tamil to review: `audit/TAMIL-REVIEW.md`.
+Inputs: `audit/AUDIT-01-supervisor-phone.md`, `audit/AUDIT-02-merchandiser-and-public.md`, `audit/DESIGN-DIRECTION.md`, the UI/UX research and design strategy (section 8), the front-end hard rules (section 2) and shipping checklist (section 10), and the code.
 v2 folds in an independent review of v1 and checks of its claims against the code (section 9).
 
 ## 1. Goal and limits
@@ -10,7 +10,7 @@ v2 folds in an independent review of v1 and checks of its claims against the cod
 
 **Will not change:** the hard rules (honesty, never colour alone, offline safety, buyer isolation, Tamil); the status model and its rules (DEC-010); no new runtime dependency.
 
-**Tamil constraint (found in review, verified):** `packages/web/test/i18n.test.ts` fails `npm run verify` if any key shown to a supervisor (`SUPERVISOR_PREFIXES` in `i18n.ts:176`) has no Tamil. So new supervisor words **cannot** ship in English, contrary to what `frontendskill.md` rule 14 says. Every existing Tamil string was written without supervisors and is marked unreviewed. Decision needed (section 7, D1). Until then, supervisor slices are designed to add **no new words** where possible.
+**Tamil constraint (found in review, verified):** `packages/web/test/i18n.test.ts` fails `npm run verify` if any key shown to a supervisor (`SUPERVISOR_PREFIXES` in `i18n.ts:176`) has no Tamil. So new supervisor words **cannot** ship in English, contrary to what the front-end guide, rule 14 says. Every existing Tamil string was written without supervisors and is marked unreviewed. Decision needed (section 7, D1). Until then, supervisor slices are designed to add **no new words** where possible.
 
 ## 2. Research and what it changed
 
@@ -58,7 +58,7 @@ Every slice ends with section 6. "Guards" lists the source-reading tests and scr
 ### Phase 0: foundation (no visible change)
 | # | Slice | Acceptance and guards |
 | --- | --- | --- |
-| 0.1 | **Fix the demo clock trap**: `scripts/snapshots.ts` sets the browser clock like `a11y.ts:77`; document it in `frontendskill.md` section 3. Then record the baseline by script, with touch emulation | Snapshots run on any real date; section 3 numbers re-measured by script |
+| 0.1 | **Fix the demo clock trap**: `scripts/snapshots.ts` sets the browser clock like `a11y.ts:77`; document it in the front-end guide, section 3. Then record the baseline by script, with touch emulation | Snapshots run on any real date; section 3 numbers re-measured by script |
 | 0.2 | Tokens: spacing (4, 8, 12, 16, 24, 32), radius (6, 8, 10), elevation (menu, dialog), disabled colours (**not** `--status-grey`, which means "No update"); `--tap-min` 48 on coarse pointers if D2 is yes | `check_contrast.mjs` covers the new pairs; `tapTargets.test.ts` extended so new class names are checked too |
 | 0.3 | Folders and a naming README | Typecheck green |
 | 0.4 | Component test harness, **only if D3 is yes** (Vitest with Testing Library and jsdom; `vitest.config.ts` must include `.test.tsx`) | One example test for `StatusBadge` |
@@ -116,7 +116,7 @@ Every slice ends with section 6. "Guards" lists the source-reading tests and scr
 | --- | --- | --- |
 | 5.1 | Pilot setup checklist: units, closed days, templates, people, with what is done | States read from data |
 | 5.2 | One "Add a person" form with a role choice (Add a unit stays separate: a unit is not a person); template summary in words | Fewer filled primaries |
-| 5.3 | Setup > People "Activity" (who stopped, allowed, reset or added an account, and when) | **Blocked on the backend session's BE6** (`GET /api/accounts/audit`); UI only once that route and its contract exist in `md/api.md` |
+| 5.3 | Setup > People "Activity" (who stopped, allowed, reset or added an account, and when) | Needed the backend's account-activity route (`GET /api/accounts/audit`) first; built once that route existed (see `audit/PROGRESS.md`) |
 
 ### Phase 6: templates, pages and the file move
 | # | Slice | Acceptance |
@@ -137,11 +137,11 @@ A merchandiser sidebar or navigation rail and list-detail panes on wide screens 
 5. `npm run a11y` when a screen or a state changed (add new screens and states to `scripts/a11y.ts`); buyer page checked when shared CSS changed.
 6. `npm run e2e` when the supervisor flow changed (stop `dev:api` first).
 7. Snapshots and `uiux/README.md` captions updated where a screen changed.
-8. Docs: README status; `frontendskill.md` when a rule or lesson changes.
+8. Docs: README status; the front-end guide when a rule or lesson changes.
 9. One line in an `audit/` progress log: what changed, measured before and after, and what was not checked.
 10. Browser checks record **where the action landed** (what is on screen), not only that a click happened (TARANG TF-031).
-11. Commit only when you ask, **staging by explicit file path** (never `git add -A`): a backend session works in this same checkout (`md/poa_backend.md`), so mixed files would end up in one commit. Use a git worktree if both sessions keep running.
-12. A new decision gets the next free DEC number in `md/decisions.md`, checked at write time (another session also adds them).
+11. Commit only when you ask, **staging by explicit file path** (never `git add -A`), so work on the backend and work on the screens never end up in one commit. Use a git worktree when both run at once.
+12. A new decision gets the next free DEC number in the decisions log, checked at write time (the backend work adds them too).
 13. Commit only when you ask (user-visible slices batch into a build, the rest are InBuls).
 
 ## 7. Decisions needed from you
@@ -160,7 +160,7 @@ Outside help: a real Android phone (and an iPhone if one exists); supervisors fo
 
 ## 8. Second strategy document: what we take, adapt or decline
 
-Source: `md/production_visibility_uiux_research_and_design_strategy.md`, written without the code.
+Source: the UI/UX research and design strategy, written without the code.
 
 **Taken:** atomic core with context-driven surface; Calm Industrial SaaS; a state table per component (0.5); order status and sync status kept apart (already true; kept as checks); build components inside real pages; GOV.UK Design System as a reference for errors, banners, summary lists and buttons; Today's context line (1.8); the human-centred loop with supervisors on real phones (phase 7).
 
@@ -185,10 +185,9 @@ Sources: the TARANG frontend guide, the ORCA top bar and frontend guides, and th
 | One accent stripe is banned, in any colour, and the ban ships a grep (TARANG 4.6) | `.historyitem { border-left: 4px solid var(--ink) }` (`styles.css:294`), on the date-change history cards. (`.timeline__item` border is a structural spine, which that rule exempts) | **3.10** remove it, and a guard test with that allowlist |
 | After Send, the next action is the closest one (Calley "Call next", the dial, outcome, next loop) | After a send the supervisor goes back to the list, then taps the next stage. Supervisors typically have a few stages | **1.9** "Next stage" under the saved line (the next stage with no update today); new words (D1) |
 | A visible progress count on the repeated task (Calley "12 of 50 logged") | The product's biggest risk is supervisors stopping. Today has no "how many have I done" | **1.10** Today: "N of M stages updated today", derived from real counts, never invented; new words (D1) |
-| Two sessions, one folder: stage by file name, never `git add -A`; consider a worktree (Dukaan A3) | `md/poa_backend.md` shows a backend session in this same checkout; about 165 files are modified | Commit hygiene rule in section 6 |
-| Two sessions gave out the same decision number (Dukaan A3) | `md/decisions.md` has DEC-024 to DEC-026 that this session did not write | Check the last number at write time; record UI decisions as DEC entries |
-| One start prompt per session so a new session knows the rules (Dukaan 0, Calley 0) | Several sessions touch this repo | `audit/NEXT-SESSION.md` |
-| The registers are used: tried and failed, tried and implemented (all guides) | `md/tried_and_failed.md` and `tried_and_implemented.md` are still empty templates | Filled with the UI lessons so far |
+| Backend and screen work in one folder: stage by file name, never `git add -A`; consider a worktree (Dukaan A3) | The backend work was going on in the same checkout; about 165 files were modified | Commit hygiene rule in section 6 |
+| Two people gave out the same decision number (Dukaan A3) | The decisions log had DEC-024 to DEC-026 that the UI work did not write | Check the last number at write time; record UI decisions as DEC entries |
+| The registers are used: tried and failed, tried and implemented (all guides) | Both were still empty templates | Filled with the UI lessons so far |
 
 **Adapted**
 
@@ -199,7 +198,7 @@ Sources: the TARANG frontend guide, the ORCA top bar and frontend guides, and th
 | ORCA and TARANG: CSS beside each component (`Button.tsx` and `Button.css`) | Used for new atoms and molecules; the global base stays in `styles.css`. Vite splits CSS per lazy screen, so supervisors may download less CSS: measured in 4.2, not assumed |
 | ORCA layers table: atoms and molecules never fetch; pages and hooks fetch; `lib` is pure | Added to `ui/README.md` as rule 8 |
 | Calley's three kinds of wait (a button's spinner, a skeleton for a small block, a loader for a whole section) and a start-up screen before JavaScript | Only after measuring (4.2); a first-paint shell in `index.html` is **4.5**: a language-free brand mark and a spinner, shown until the app mounts |
-| Dukaan's activity log (who did what) | Setup > People "Activity" **after the backend's BE6 audit route exists** (slice 5.3, blocked on it) |
+| Dukaan's activity log (who did what) | Setup > People "Activity" **once the backend's account-activity route exists** (slice 5.3; it does now and the slice is built) |
 | Calley's centring rule (centre one focal block, left-align what is scanned, cap the column) | Already how Login and Update behave; the supervisor column is capped at 560 px; no change |
 | "Browser checks record where they landed, not only that the click happened" (TARANG 13.5, TF-031) | Added to the definition of done |
 
@@ -221,5 +220,5 @@ Sources: the TARANG frontend guide, the ORCA top bar and frontend guides, and th
 | Baseline tests | `npm run verify` exit 0: 1277 passed, 16 skipped, 67 files |
 | Code facts in this plan | Confirmed by grep and reading: viewport lacks `interactive-widget` (`index.html:6`); no undo route (`app.ts:310` dismiss only) and dismiss clears confirmation (`warningService.ts:171`); board row lacks pieces (`boardService.ts:31-33`); supervisor keys must have Tamil (`i18n.test.ts:15-18`, `i18n.ts:176`); focus effect on `[queue]` (`Update.tsx:59`); `en-IN` grouping (`Board.tsx:233`, `OrderSetup.tsx:141`); `.plan td` breaks anywhere (`styles.css:192`); media query counts; markup counts (as prefix counts) |
 | Independent review of v1 | Two blockers (Tamil test; Undo scope) and nine should-fix items, each checked against the code and folded into v2: Send selector guards, the new-version bar clash, `aria-invalid` misuse, global disabled rule, sign-in guards in `a11y.ts`, source-reading tests per slice, progress-bar honesty, `.plan` scope, the snapshot clock trap, and acceptance that desktop Playwright cannot prove |
-| Hard rules | Every slice checked against `frontendskill.md` section 2; status colours never used for sync, disabled or neutral bars; buyer rules untouched except 4.1, which is limited so nothing reaches a buyer without a fresh confirmation |
+| Hard rules | Every slice checked against the front-end guide, section 2; status colours never used for sync, disabled or neutral bars; buyer rules untouched except 4.1, which is limited so nothing reaches a buyer without a fresh confirmation |
 | Not verifiable here | Phone keyboard and `interactive-widget`, real touch, real 3G on a 2 GB phone, the Tamil wording, merchandiser and supervisor reactions |

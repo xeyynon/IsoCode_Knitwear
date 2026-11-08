@@ -148,16 +148,87 @@ export async function confirmNote(tx: Tx, ctx: Ctx, userId: string, id: string, 
 
 export interface NoteToSuggest { id: string; text: string; language: 'ta' | 'en'; stage: string; category: string | null }
 
-/** Unreviewed notes with words that have no suggestion yet, or whose last try failed and may be tried again. Oldest first. */
-export async function notesToSuggest(tx: Tx, ctx: Ctx, limit: number, maxAttempts: number, onlyId?: string): Promise<NoteToSuggest[]> {
+/** A claim younger than this keeps other requests away from a note: the provider call is cut off after 20 s, so an older claim is a dead one. */
+export const AI_CLAIM_SECONDS = 20
+/** After a rate limit, a timeout or an unreachable service, a note is left alone for this long and the failure is not counted as a try. */
+export const AI_RETRY_AFTER_SECONDS = 60
+/** How many times a merchandiser may press "Ask again" on one note. The automatic tries (3) are counted apart, in ai_attempts. */
+export const MAX_ASK_AGAIN = 3
+export const DEFAULT_AI_DAILY_BUDGET = 300
+
+/** Failures that say nothing about the note itself: the service is busy, slow or out of reach. */
+export const TRANSIENT_AI_FAILURES: readonly string[] = ['rate_limited', 'timeout', 'unreachable']
+
+export type ClaimOutcome = { notes: NoteToSuggest[] } | { refused: 'not_found' | 'unreadable' | 'ask_limit' | 'in_progress' }
+
+/**
+ * Take the notes a request will ask the AI about, in one statement: `for update skip locked` and the claim time mean that requests
+ * arriving together get different notes, and a note someone is already asking about (a claim younger than the provider timeout)
+ * is skipped. Automatic: notes with no suggestion yet, or whose last try failed for the note's own reasons fewer than maxAttempts
+ * times, and not paused after a busy service. One note by id ("Ask again"): any unreviewed note with words, at most MAX_ASK_AGAIN times.
+ */
+export async function claimNotesToSuggest(tx: Tx, ctx: Ctx, limit: number, maxAttempts: number, onlyId?: string): Promise<ClaimOutcome> {
   if (!isStaff(ctx)) throw forbidden()
-  const rows = await tx.query<{ id: string; text: string; language: 'ta' | 'en'; stage: string; category: string | null }>(
-    `select n.id::text as id, coalesce(n.text_ta, n.text_en) as text, n.language, n.stage, n.category
-       from note n
-      where n.confirmed_by is null and coalesce(n.text_ta, n.text_en) is not null and n.language is not null
-        and ${onlyId ? 'n.id = $2' : `(n.ai_status is null or (n.ai_status = 'failed' and n.ai_attempts < ${Math.max(1, Math.floor(maxAttempts))}))`}
-      order by n.created_at, n.id limit $1`, onlyId ? [limit, onlyId] : [limit])
-  return rows
+  const unclaimed = `(n.ai_claimed_at is null or n.ai_claimed_at < now() - interval '${AI_CLAIM_SECONDS} seconds')`
+  const which = onlyId
+    ? `n.id = $2 and n.ai_manual_asks < ${MAX_ASK_AGAIN}`
+    : `(n.ai_status is null or (n.ai_status = 'failed' and n.ai_attempts < ${Math.max(1, Math.floor(maxAttempts))}))
+        and (n.ai_retry_after is null or n.ai_retry_after <= now())`
+  const rows = await tx.query<{ id: string; text: string; language: 'ta' | 'en'; stage: string; category: string | null; created_at: Date | string }>(
+    `update note set ai_claimed_at = now()${onlyId ? ', ai_manual_asks = ai_manual_asks + 1' : ''}
+      where id in (select n.id from note n
+                    where n.confirmed_by is null and coalesce(n.text_ta, n.text_en) is not null and n.language is not null
+                      and ${unclaimed} and ${which}
+                    order by n.created_at, n.id limit $1 for update skip locked)
+      returning id::text as id, coalesce(text_ta, text_en) as text, language, stage, category, created_at`, onlyId ? [limit, onlyId] : [limit])
+  if (rows.length || !onlyId) {
+    rows.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() || (a.id < b.id ? -1 : 1))
+    return { notes: rows.map(({ created_at: _c, ...n }) => n) }
+  }
+  const why = (await tx.query<{ reviewed: boolean; words: boolean; asks: number }>(
+    `select n.confirmed_by is not null as reviewed, (coalesce(n.text_ta, n.text_en) is not null and n.language is not null) as words,
+            n.ai_manual_asks as asks
+       from note n where n.id = $1`, [onlyId]))[0]
+  if (!why) return { refused: 'not_found' }
+  if (why.reviewed || !why.words) return { refused: 'unreadable' }
+  return { refused: why.asks >= MAX_ASK_AGAIN ? 'ask_limit' : 'in_progress' }
+}
+
+/** Let go of notes that were claimed but will not be asked about now (the budget ran out, or the batch stopped). */
+export async function releaseNotes(tx: Tx, ids: string[], undoAsk = false): Promise<void> {
+  if (!ids.length) return
+  await tx.query(`update note set ai_claimed_at = null${undoAsk ? ', ai_manual_asks = greatest(0, ai_manual_asks - 1)' : ''} where id = any($1::uuid[]) and confirmed_by is null`, [ids])
+}
+
+/**
+ * The service said it is busy, slow or out of reach: every note still waiting for an automatic try is left alone for a minute,
+ * so the next requests (the review page asks again right away) do not go on knocking on it note by note.
+ */
+export async function pauseWaitingNotes(tx: Tx): Promise<void> {
+  await tx.query(
+    `update note set ai_retry_after = now() + make_interval(secs => $1::int)
+      where confirmed_by is null and (ai_status is null or ai_status = 'failed')`, [AI_RETRY_AFTER_SECONDS])
+}
+
+/** The most AI calls a day: the setting (a client may change it without a release), unless the deployment sets one. */
+export async function loadAiDailyBudget(tx: Tx): Promise<number> {
+  const v = (await tx.query<{ value: unknown }>(`select value from settings where key = 'ai_daily_budget'`))[0]?.value
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_AI_DAILY_BUDGET
+}
+
+/**
+ * Take up to `want` calls from today's budget (day = the database's UTC day) and say how many were granted, 0 to want.
+ * The row is locked while it is counted, so requests arriving together cannot overspend it. Old days are tidied away.
+ */
+export async function reserveAiCalls(tx: Tx, ctx: Ctx, want: number, budget: number): Promise<number> {
+  if (!isStaff(ctx)) throw forbidden()
+  await tx.query(`insert into ai_budget (day, calls) values (current_date, 0) on conflict (day) do nothing`)
+  const used = (await tx.query<{ calls: number }>(`select calls from ai_budget where day = current_date for update`))[0]!.calls
+  const take = Math.max(0, Math.min(want, budget - used))
+  if (take > 0) await tx.query(`update ai_budget set calls = calls + $1 where day = current_date`, [take])
+  await tx.query(`delete from ai_budget where day < current_date - 7`)
+  return take
 }
 
 /** The threshold under which a suggestion is only "unsure". Settings hold it; a missing or odd value falls back to 0.7. */
@@ -172,15 +243,20 @@ export async function saveSuggestion(tx: Tx, ctx: Ctx, id: string, j: { status: 
   if (!isStaff(ctx)) throw forbidden()
   await tx.query(
     `update note set ai_status = $2, ai_text_en = $3, ai_category = $4, confidence = $5, ai_why = $6, ai_model = $7, ai_error = null,
-            ai_attempts = ai_attempts + 1, ai_at = now()
+            ai_attempts = ai_attempts + 1, ai_at = now(), ai_claimed_at = null, ai_retry_after = null
       where id = $1 and confirmed_by is null`, [id, j.status, j.textEn || null, j.category, j.confidence, j.why || null, j.model || null])
 }
 
-/** Record that no usable answer came back. An earlier good suggestion is kept (asking again must not lose it). */
+/**
+ * Record that no usable answer came back. An earlier good suggestion is kept (asking again must not lose it).
+ * A busy, slow or unreachable service is not the note's fault: it is not counted as a try, and the note waits a minute.
+ */
 export async function saveSuggestionFailure(tx: Tx, ctx: Ctx, id: string, code: string): Promise<void> {
   if (!isStaff(ctx)) throw forbidden()
+  const transient = TRANSIENT_AI_FAILURES.includes(code)
   await tx.query(
     `update note set ai_status = case when ai_status in ('suggested', 'unsure') then ai_status else 'failed' end,
-            ai_error = $2, ai_attempts = ai_attempts + 1, ai_at = now()
-      where id = $1 and confirmed_by is null`, [id, code.slice(0, 40)])
+            ai_error = $2, ai_attempts = ai_attempts + $3::int, ai_at = now(), ai_claimed_at = null,
+            ai_retry_after = case when $3::int = 0 then now() + make_interval(secs => $4::int) else null end
+      where id = $1 and confirmed_by is null`, [id, code.slice(0, 40), transient ? 0 : 1, AI_RETRY_AFTER_SECONDS])
 }

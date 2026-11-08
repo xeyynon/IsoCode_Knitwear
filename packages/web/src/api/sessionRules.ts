@@ -28,6 +28,17 @@ export const storeKind = (role: Role): 'local' | 'session' => (role === 'supervi
 
 export const homeFor = (role: Role): string => (role === 'supervisor' ? '/today' : '/board')
 
+// The screens each role can open (App.tsx): a person signed out from one of them goes back to it after signing in again.
+const OPENABLE: Record<Role, RegExp> = {
+  merchandiser: /^\/(board|review|setup|orders\/[^/?#]+)(\?[^#]*)?$/,
+  supervisor: /^\/today(\/[^/?#]+\/[^/?#]+)?(\?[^#]*)?$/,
+}
+
+/** Where a sign-in goes: the screen the person was trying to open (`from`, remembered by the guard) when this role can open it, else the role's home. Never another site. */
+export function returnTarget(from: unknown, role: Role): string {
+  return typeof from === 'string' && OPENABLE[role].test(from) ? from : homeFor(role)
+}
+
 export type FetchFailure = 'cancelled' | 'unreachable'
 
 /**

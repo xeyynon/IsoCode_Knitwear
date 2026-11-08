@@ -5,7 +5,7 @@
 //   B-PO-88240  Company B (UK)       Men's polo, white            8000  2026-11-12  Finishing  5200
 //   C-PO-0488   Company C (Germany)  Kids printed tee, yellow    10000  2026-11-28  Printing   3100
 //
-// Everything else here is an ASSUMPTION, labelled in the TDD: the units and their names, the TNA templates and offsets, the size
+// Everything else here is an ASSUMPTION, labelled in deployment.md and README.md: the units and their names, the TNA templates and offsets, the size
 // split, the daily rates that add up to each "Qty done", the four extra orders (marked ILLUSTRATIVE), the Deepavali closure, the
 // Tamil notes and the demo accounts. Nothing is real: no real person, phone number, buyer or address.
 //
@@ -16,6 +16,7 @@ import { addDays, isWorking, type IsoDate, type UnitCalendar } from '@isocode/en
 import { hashSecret } from './auth.js'
 import type { Tx } from './db.js'
 import { createOrder } from './orderService.js'
+import { normalisePhone } from './authService.js'
 
 /** "Today" for the demo. The brief's "Qty done" figures are read as at the end of the day before. */
 export const DEMO_TODAY: IsoDate = '2026-11-06'
@@ -32,6 +33,16 @@ export const DEMO_LOGINS = {
 
 /** Fixed buyer links so a reviewer can open a buyer's page straight from deployment.md. Demo only: a real link is random. */
 export const DEMO_BUYER_TOKENS = { companyB: 'bl_demoCompanyB_readonly_2026', companyC: 'bl_demoCompanyC_readonly_2026' } as const
+
+/** The name each published demo login is known by at sign-in: the email in lower case, the phone as ten digits. */
+const DEMO_LOGIN_NAMES: ReadonlySet<string> = new Set([
+  DEMO_LOGINS.merchandiser.email.toLowerCase(), ...DEMO_LOGINS.supervisors.map((s) => normalisePhone(s.phone)!),
+])
+/** Is this sign-in name (email, or ten-digit phone) one of the published demo logins? Demo mode never locks those (authService.ts). */
+export const isDemoLoginName = (name: string): boolean => DEMO_LOGIN_NAMES.has(name.trim().toLowerCase())
+
+/** The published buyer links last about ten real years, however long ago the demo day is: they are printed in deployment.md. */
+export const DEMO_LINK_DAYS = 3650
 
 const U = {
   unit1: '10000000-0000-4000-8000-000000000001',
@@ -142,8 +153,11 @@ const uuidFrom = (s: string): string => {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`
 }
 
-/** Load the demo data into an empty, migrated database. `tx` must already act as 'system' inside a transaction. */
-export async function seedDemo(tx: Tx, today: IsoDate = DEMO_TODAY): Promise<{ orders: number; events: number; notes: number }> {
+/**
+ * Load the demo data into an empty, migrated database. `tx` must already act as 'system' inside a transaction.
+ * `now` is the real time: the buyer links are measured against the real clock, not the demo day.
+ */
+export async function seedDemo(tx: Tx, today: IsoDate = DEMO_TODAY, now: Date = new Date()): Promise<{ orders: number; events: number; notes: number }> {
   if ((await tx.query('select 1 from orders limit 1')).length) throw new Error('The database already has orders: the demo seed only loads into an empty database')
 
   await tx.query(`insert into buyer (id, name, country) values ($1, 'Company B', 'UK'), ($2, 'Company C', 'Germany')`, [B.companyB, B.companyC])
@@ -163,10 +177,10 @@ export async function seedDemo(tx: Tx, today: IsoDate = DEMO_TODAY): Promise<{ o
     await tx.query(`insert into account (role, phone, pin_hash, unit_id, label) values ('supervisor', $1, $2, $3, $4)`, [s.phone.replace(/\s/g, ''), hashSecret(s.pin), supUnits[i], s.label])
   }
 
-  // Buyer links: valid for 60 days from the demo's today.
-  const expires = `${addDays(today, 60)}T00:00:00Z`
+  // Buyer links: about ten real years from now (N-9). They were 60 days from the demo day, but expiry is measured in real time, so they died.
+  const expires = demoLinkExpiry(now)
   await tx.query(`insert into buyer_link (buyer_id, token_hash, expires_at, label) values ($1, $2, $3, 'Demo link for reviewers'), ($4, $5, $3, 'Demo link for reviewers')`,
-    [B.companyB, createHash('sha256').update(DEMO_BUYER_TOKENS.companyB).digest('hex'), expires, B.companyC, createHash('sha256').update(DEMO_BUYER_TOKENS.companyC).digest('hex')])
+    [B.companyB, demoTokenHash(DEMO_BUYER_TOKENS.companyB), expires, B.companyC, demoTokenHash(DEMO_BUYER_TOKENS.companyC)])
 
   const cal = calendarOf()
   const yesterday = (() => { let d = addDays(today, -1); while (!isWorking(cal, d)) d = addDays(d, -1); return d })()
@@ -195,6 +209,112 @@ export async function seedDemo(tx: Tx, today: IsoDate = DEMO_TODAY): Promise<{ o
     }
   }
   return { orders: ORDERS.length, events, notes }
+}
+
+const demoTokenHash = (token: string): string => createHash('sha256').update(token).digest('hex')
+const demoLinkExpiry = (now: Date): string => new Date(now.getTime() + DEMO_LINK_DAYS * 86_400_000).toISOString()
+
+// ---- keeping a shared demo usable (N-1, N-3, N-9, S-7)
+//
+// The demo database lives for months and is used by many reviewers at once. Three things keep it usable:
+//   ensureDemo       every production deploy: load the demo into an empty database, or put the demo accounts, PINs and links back in one that has it
+//   topUpDemo        the seeded notes and warnings come back for the next reviewer; photos nobody approved are cleaned up
+//   topUpDemoIfDue   the same, but only when the real day has changed since the last time (a small row in settings holds the day), so any
+//                    number of instances share one top-up a day. app.ts calls it on the first review of a new day, in demo mode only.
+// Each takes an advisory lock first, so two at the same moment (two deploys, or a deploy and a request) take turns.
+
+const DEMO_LOCK = ['isocode', 'seed_demo'] as const
+const TOP_UP_KEY = 'demo_topup_on'
+
+/** The notes the seed writes: their ids are fixed (a hash of the PO and stage), so they can be found again. Nothing here needs a date. */
+function demoNotes(): { id: string; text: string; language: 'ta' | 'en' }[] {
+  const out: { id: string; text: string; language: 'ta' | 'en' }[] = []
+  for (const o of ORDERS) for (const h of o.history) if (h.note) out.push({ id: uuidFrom(`note:${o.po}:${h.stage}`), text: h.note.text, language: /[஀-௿]/.test(h.note.text) ? 'ta' : 'en' })
+  return out
+}
+
+/**
+ * Put the demo accounts and the two buyer links back as the seed made them: not stopped, not locked, links open for another ten years.
+ * `rehash` also writes the password and PINs again (a deploy does; the daily top-up does not, because hashing is the slow part and
+ * nothing in demo mode can change one). Only rows the seed made are touched.
+ */
+async function reassertDemoAccess(tx: Tx, now: Date, rehash: boolean): Promise<void> {
+  const state = 'disabled_at = null, failed_attempts = 0, locked_until = null'
+  const m = DEMO_LOGINS.merchandiser
+  await tx.query(`update account set ${state}${rehash ? ', password_hash = $2' : ''} where id = $1`, rehash ? [MERCH_ID, hashSecret(m.password)] : [MERCH_ID])
+  for (const s of DEMO_LOGINS.supervisors) {
+    const phone = s.phone.replace(/\s/g, '')
+    await tx.query(`update account set ${state}${rehash ? ', pin_hash = $2' : ''} where role = 'supervisor' and phone = $1`, rehash ? [phone, hashSecret(s.pin)] : [phone])
+  }
+  const expires = demoLinkExpiry(now)
+  for (const t of Object.values(DEMO_BUYER_TOKENS)) {
+    await tx.query('update buyer_link set revoked_at = null, expires_at = $2 where token_hash = $1', [demoTokenHash(t), expires])
+  }
+}
+
+/**
+ * Give the next reviewer something to review. Notes that were reviewed (or whose AI answer failed for good) go back to the state the seed
+ * wrote: their own words, no reason, no English meaning, no AI answer. A note nobody has touched is left alone, so its AI answer is not
+ * thrown away and asked for again. The AI columns are found by name (`ai_...`) and set to their defaults, so a column added later is reset
+ * too. Warnings that were confirmed or hidden wait for review again. Photos nobody approved after a day are cleaned up (their bytes too,
+ * when they are kept in the database), so the stored total can come back under the demo's limit.
+ * Notes are updated in place, never deleted: an update points at its note, and updates are append-only.
+ */
+export async function topUpDemo(tx: Tx): Promise<void> {
+  const aiColumns = (await tx.query<{ column_name: string }>(
+    `select column_name::text as column_name from information_schema.columns where table_schema = 'public' and table_name = 'note' and left(column_name, 3) = 'ai_'`)).map((r) => r.column_name)
+  const resetAi = aiColumns.map((c) => `, "${c}" = default`).join('')
+  for (const n of demoNotes()) {
+    await tx.query(
+      `update note set text_ta = $2, text_en = $3, category = null, category_by = null, confidence = null, confirmed_by = null, confirmed_at = null${resetAi}
+        where id = $1 and (confirmed_by is not null or ai_status = 'failed')`,
+      [n.id, n.language === 'ta' ? n.text : null, n.language === 'en' ? n.text : null])
+  }
+  await tx.query(
+    `update warning set confirmed_by = null, confirmed_at = null, dismissed_at = null, dismissed_was_confirmed = null
+      where resolved_at is null and (confirmed_by is not null or dismissed_at is not null)`)
+  const old = await tx.query<{ storage_key: string }>(
+    `update photo set purged_at = now(), rejected_at = coalesce(rejected_at, now())
+      where approved_by is null and purged_at is null and created_at < now() - interval '1 day' returning storage_key`)
+  if (old.length) await tx.query('delete from media_object where key = any($1::text[])', [old.map((r) => r.storage_key)])
+}
+
+const lockDemo = (tx: Tx) => tx.query('select pg_advisory_xact_lock(hashtext($1), hashtext($2))', [...DEMO_LOCK])
+const markTopUp = (tx: Tx, now: Date) => tx.query(
+  `insert into settings (key, value) values ($1, to_jsonb($2::text)) on conflict (key) do update set value = excluded.value`, [TOP_UP_KEY, now.toISOString().slice(0, 10)])
+
+/**
+ * The deploy step (npm run seed:demo -- --if-empty). In one transaction, behind an advisory lock (S-7: two deploys close together on an
+ * empty database used to both pass the "is it empty" check, and the second one failed half way):
+ *   empty database             -> load the demo ('seeded')
+ *   a database the seed made   -> put the accounts, PINs and links back and top up the notes ('refreshed')
+ *   any other database         -> do nothing ('skipped'): demo logins are never added to a database that holds real orders
+ */
+export async function ensureDemo(tx: Tx, today: IsoDate = DEMO_TODAY, now: Date = new Date()): Promise<{ action: 'seeded' | 'refreshed' | 'skipped'; orders: number; events: number; notes: number }> {
+  await lockDemo(tx)
+  if (!(await tx.query('select 1 from orders limit 1')).length) {
+    const r = await seedDemo(tx, today, now)
+    await markTopUp(tx, now)
+    return { action: 'seeded', ...r }
+  }
+  if (!(await tx.query('select 1 from account where id = $1', [MERCH_ID])).length) return { action: 'skipped', orders: 0, events: 0, notes: 0 }
+  await reassertDemoAccess(tx, now, true)
+  await topUpDemo(tx)
+  await markTopUp(tx, now)
+  return { action: 'refreshed', orders: 0, events: 0, notes: 0 }
+}
+
+/** The once-a-day top-up of a running demo. Returns true when it ran. `now` is the real time. */
+export async function topUpDemoIfDue(tx: Tx, now: Date): Promise<boolean> {
+  await lockDemo(tx)
+  const day = now.toISOString().slice(0, 10)
+  const last = (await tx.query<{ value: unknown }>('select value from settings where key = $1', [TOP_UP_KEY]))[0]?.value
+  if (last === day) return false
+  if (!(await tx.query('select 1 from account where id = $1', [MERCH_ID])).length) return false   // not a database the seed made
+  await reassertDemoAccess(tx, now, false)
+  await topUpDemo(tx)
+  await markTopUp(tx, now)
+  return true
 }
 
 /** The figures the brief gives, so a test can check the seed still says what the brief says. */

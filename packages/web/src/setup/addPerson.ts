@@ -4,6 +4,8 @@ import { tenDigits, weakPin } from './setupLogic'
 // The checks for a supervisor are the ones the old "Add a supervisor" form made; the merchandiser's were only on the server, so a few
 // obvious ones (name, email, password length) are said here first. The server checks everything again.
 
+export const INDIAN_MOBILE = 'Enter an Indian mobile number: ten digits starting with 6, 7, 8 or 9'
+
 export type PersonRole = 'supervisor' | 'merchandiser'
 
 export interface PersonFields { label: string; phone: string; pin: string; unitId: string; email: string; password: string }
@@ -13,7 +15,10 @@ export const EMPTY_PERSON: PersonFields = { label: '', phone: '', pin: '', unitI
 export function personProblem(role: PersonRole, f: PersonFields): string | null {
   if (!f.label.trim()) return role === 'supervisor' ? "Enter the supervisor's name." : "Enter the merchandiser's name."
   if (role === 'supervisor') {
-    if (!tenDigits(f.phone)) return 'Enter a 10-digit phone number.'
+    const phone = tenDigits(f.phone)
+    if (!phone) return 'Enter a 10-digit phone number.'
+    // The server's rule for a new account (adminService.ts): an Indian mobile number starts with 6, 7, 8 or 9.
+    if (!/^[6-9]/.test(phone)) return INDIAN_MOBILE
     const weak = weakPin(f.pin); if (weak) return weak
     if (!f.unitId) return 'Choose the unit this supervisor works in.'
     return null

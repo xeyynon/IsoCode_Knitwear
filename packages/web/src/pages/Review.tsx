@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { downloadFile } from '../api/download'
 import { ApiError, apiFetch } from '../api/session'
+import { shortDateIn } from '../board/boardLogic'
 import { istDate } from '../dates'
 import { exportFileName } from '../review/exportLogic'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
@@ -12,7 +13,7 @@ import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
 import { reasonById, type Reason } from '../notes/reasons'
-import { aiLine, defaultMeaning, defaultReason, disagreement, reasonSource, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
+import { AI_REST_MS, aiLine, defaultMeaning, defaultReason, disagreement, MAX_AI_ROUNDS, reasonSource, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
 import { Banner } from '../ui/atoms/Banner'
@@ -43,6 +44,11 @@ export default function Review() {
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // A refusal is drawn above the list, often far from the button that was pressed: focus goes to it once it has rendered (same as the new-order form).
+  const [actionFailures, setActionFailures] = useState(0)
+  const actionErrorRef = useRef<HTMLParagraphElement>(null)
+  const fail = (message: string) => { setActionError(message); setActionFailures((n) => n + 1) }
+  useEffect(() => { if (actionFailures > 0) actionErrorRef.current?.focus() }, [actionFailures])
   const [announce, setAnnounce] = useState('')
   // Warnings hidden from the waiting list during this visit, each with an Undo line where its card was (slice 4.1). Local to the page: a reload ends them.
   const [hidden, setHidden] = useState<HiddenItem[]>([])
@@ -78,27 +84,50 @@ export default function Review() {
     apiFetch<Options>('/api/orders/options').then((o) => setBuyers(o.buyers)).catch(() => undefined)
   }, [load])
 
-  // AI suggestions for notes still waiting for one: a few per call, again while any are left, at most a handful of rounds per
-  // visit (a failure is shown on the note and can be asked again by hand). Nothing here moves focus or blocks the page.
+  // AI suggestions for notes still waiting for one: a few per call, again while any are left, at most MAX_AI_ROUNDS rounds per visit. A round
+  // that asked nothing (the server is pausing a rate-limited batch) is followed by a rest of a minute. When the page stops (a failure, or the rounds
+  // are used) the notes still without an answer say so and can be asked again by hand. Nothing here moves focus or blocks the page.
   const aiRounds = useRef(0)
   const [aiBusy, setAiBusy] = useState<string | null>(null)
+  const [aiResting, setAiResting] = useState(false)
+  const [gaveUp, setGaveUp] = useState(false)
+  const [allMessage, setAllMessage] = useState<string | null>(null)                           // the server's sentence when it refused the whole batch
+  const [noteMessage, setNoteMessage] = useState<Record<string, string>>({})                  // ...or one note (asked enough times)
+  const restTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(restTimer.current), [])
   useEffect(() => {
-    if (!data?.aiEnabled || aiBusy || aiRounds.current >= 6 || !data.notes.some(waitingForAi)) return
+    if (!data?.aiEnabled || aiBusy || aiResting || gaveUp || !data.notes.some(waitingForAi)) return
+    if (aiRounds.current >= MAX_AI_ROUNDS) { setGaveUp(true); return }
     aiRounds.current++
     setAiBusy('all')
-    apiFetch('/api/notes/suggest', { method: 'POST', body: '{}' })
-      .then(() => load())
-      .catch(() => { aiRounds.current = 6 })   // the service is down or AI was switched off: stop asking on this visit
+    apiFetch<{ asked?: number }>('/api/notes/suggest', { method: 'POST', body: '{}' })
+      .then((r) => {
+        if (!r?.asked) {
+          setAiResting(true)
+          restTimer.current = window.setTimeout(() => setAiResting(false), AI_REST_MS)
+        }
+        return load()
+      })
+      .catch((e) => {   // the service is down, busy for the day, or AI was switched off: stop asking on this visit and say so on the notes
+        aiRounds.current = MAX_AI_ROUNDS
+        if (e instanceof ApiError && e.code === 'ai_busy') setAllMessage(e.message)
+        setGaveUp(true)
+      })
       .finally(() => setAiBusy(null))
-  }, [data, aiBusy, load])
+  }, [data, aiBusy, aiResting, gaveUp, load])
 
   async function askAgain(n: PendingNote) {
     setAiBusy(n.id); setActionError(null)
+    setNoteMessage(({ [n.id]: _gone, ...rest }) => rest)
     try {
       await apiFetch(`/api/notes/${n.id}/suggest`, { method: 'POST', body: '{}' })
       setAnnounce(`Asked the AI again about the note on ${n.po}.`)
       await load()
-    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    } catch (e) {
+      // "Asked enough" and "busy today" are about this note's suggestion, so they are said on the note; anything else is a message for the page.
+      if (e instanceof ApiError && (e.code === 'ai_ask_limit' || e.code === 'ai_busy')) setNoteMessage((m) => ({ ...m, [n.id]: e.message }))
+      else fail(e instanceof ApiError ? e.message : 'That did not work. Please try again.')
+    }
     setAiBusy(null)
   }
 
@@ -121,7 +150,7 @@ export default function Review() {
       await load()
       heading.current?.focus()      // the card that had focus is gone: back to the heading of its own section
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.')
+      fail(e instanceof ApiError ? e.message : 'That did not work. Please try again.')
       if (e instanceof ApiError && e.code === 'changed') await load()      // show the new colour and wording
     }
     setBusy(null)
@@ -163,7 +192,7 @@ export default function Review() {
       })
       setAnnounce(`Reviewed the note on ${n.po}.`)
       await load(); heading.current?.focus()
-    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    } catch (e) { fail(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
     setBusy(null)
   }
 
@@ -173,7 +202,7 @@ export default function Review() {
       await apiFetch(`/api/photos/${p.id}/${action}`, { method: 'POST', body: '{}' })
       setAnnounce(action === 'approve' ? `Approved. The ${p.stage} photo for ${p.po} is now visible to ${p.buyerName}.` : 'Rejected. It will not be shown.')
       await load(); heading.current?.focus()
-    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    } catch (e) { fail(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
     setBusy(null)
   }
 
@@ -232,6 +261,7 @@ export default function Review() {
     finally { setBusy(null) }
   }
 
+  const today = istDate()
   const active = activeLinkCount(links)
   const { working, past } = splitLinks(links)
   const shownLinks = showPast ? [...working, ...past] : working
@@ -243,7 +273,7 @@ export default function Review() {
         <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
         {!data && !error && <Loading label="Loading" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
-        {actionError && <Banner>{actionError}</Banner>}
+        {actionError && <Banner tabIndex={-1} ref={actionErrorRef}>{actionError}</Banner>}
 
         {data && (
           <>
@@ -299,11 +329,12 @@ export default function Review() {
                   <ul className="plain stagelist">
                     {data.notes.map((n) => {
                       const chosen = defaultReason(n, noteReason[n.id])
-                      const line = aiLine(n, data.reasons, !!data.aiEnabled)
+                      const message = noteMessage[n.id] ?? (n.ai ? null : allMessage)
+                      const line = aiLine(n, data.reasons, !!data.aiEnabled, { gaveUp, message })
                       const clash = disagreement(n, data.reasons)
                       return (
                         <li key={n.id} className="stagecard">
-                          <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {n.takenOn}</span></div>
+                          <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {shortDateIn(n.takenOn, today)}</span></div>
                           {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
                           {line && (
                             <div className={`ai-box ai-box--${line.kind}`} role="status" aria-live="polite">
@@ -311,7 +342,8 @@ export default function Review() {
                               <span>{line.text}</span>
                               {'detail' in line && line.detail && <p className="sub ai-box__why">Why: {line.detail}</p>}
                               {clash && <p className="ai-box__clash">{clash}</p>}
-                              {data.aiEnabled && n.ai && (
+                              {message && n.ai && <p className="sub ai-box__why">{message}</p>}
+                              {data.aiEnabled && (n.ai || line.kind === 'failed') && !(noteMessage[n.id] || allMessage) && (
                                 <Button size="small" disabled={aiBusy !== null} onClick={() => void askAgain(n)}>{aiBusy === n.id ? 'Asking…' : 'Ask AI again'}</Button>
                               )}
                             </div>
@@ -342,7 +374,7 @@ export default function Review() {
                   {data.photos.map((p) => (
                     <li key={p.id} className="stagecard">
                       <AuthImage zoomable path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
-                      <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
+                      <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {shortDateIn(p.takenOn, today)}</p>
                       <div className="actions">
                         <Button variant="primary" size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve', photosHeading)}>Approve for buyer</Button>
                         <Button size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', photosHeading)}>Reject</Button>
@@ -360,7 +392,7 @@ export default function Review() {
                   {data.approvedPhotos.map((p) => (
                     <li key={p.id} className="stagecard">
                       <AuthImage zoomable path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
-                      <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
+                      <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {shortDateIn(p.takenOn, today)}</p>
                       <div className="actions"><Button size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', approvedHeading)}>Withdraw from buyer</Button></div>
                     </li>
                   ))}

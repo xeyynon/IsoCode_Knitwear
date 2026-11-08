@@ -1036,3 +1036,58 @@ describe('check_bugs: bug.md, bugfixed.md and the tests they name agree', { time
     expect(r.status, r.stderr).toBe(0)
   })
 })
+
+// R-19: every environment variable the server (or the Vercel build script) reads must be written down somewhere a reader looks.
+describe('R-19: check_docs wants every environment variable the code reads to be documented', { timeout: SLOW }, () => {
+  const docsOf = (files: Record<string, string>) => {
+    const d = repo('docsenv')
+    for (const [rel, text] of Object.entries(files)) write(d, rel, text)
+    return checkDocs(d)
+  }
+  const src = [
+    'const a = process.env.ALPHA_KEY',
+    'const b = env.BETA_KEY',
+    "const c = env['GAMMA_KEY']",
+    "const d = need(env, 'DELTA_KEY')",
+    "const e = need('EPSILON_KEY')",
+    '',
+  ].join('\n')
+
+  it('names the variable and the file that reads it when no document mentions it', () => {
+    const r = docsOf({ 'README.md': 'ALPHA_KEY BETA_KEY GAMMA_KEY DELTA_KEY\n', 'packages/server/src/x.ts': src })
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('EPSILON_KEY')
+    expect(r.stderr).toContain('packages/server/src/x.ts')
+    expect(r.stderr).not.toContain('ALPHA_KEY')
+  })
+
+  it('also reads scripts/vercel_build.mjs, and a name in deployment.md or .env.example counts', () => {
+    const d = repo('docsenv2')
+    for (const [rel, text] of Object.entries({
+      'README.md': 'ALPHA_KEY\n', 'deployment.md': 'BETA_KEY GAMMA_KEY\n', 'packages/server/.env.example': '# DELTA_KEY=\nEPSILON_KEY=\n',
+      'packages/server/src/x.ts': src, 'scripts/vercel_build.mjs': 'const z = env.ZETA_KEY\n',
+    })) write(d, rel, text)
+    git(d, 'add', '-f', 'scripts/vercel_build.mjs')   // the fixture hides its own scripts folder from git; this one file is the subject of the test
+    const r = checkDocs(d)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('ZETA_KEY')
+    expect(r.stderr).toContain('scripts/vercel_build.mjs')
+    expect(r.stderr).not.toContain('EPSILON_KEY')
+  })
+
+  it('a name that only appears inside a longer name does not count, and everything documented passes', () => {
+    let r = docsOf({ 'README.md': 'ALPHA_KEY_EXTRA\n', 'packages/server/src/x.ts': 'const a = process.env.ALPHA_KEY\n' })
+    expect(r.status).toBe(1)
+    r = docsOf({ 'README.md': '`ALPHA_KEY` `BETA_KEY` `GAMMA_KEY` `DELTA_KEY` `EPSILON_KEY`\n', 'packages/server/src/x.ts': src })
+    expect(r.status, r.stderr).toBe(0)
+  })
+
+  it('does nothing in a repository that has no server source (the other fixtures here)', () => {
+    expect(docsOf({ 'README.md': 'hello\n' }).status).toBe(0)
+  })
+
+  it('the real repository passes it', () => {
+    const r = run(CHECK_DOCS, ROOT)
+    expect(r.status, r.stderr).toBe(0)
+  })
+})

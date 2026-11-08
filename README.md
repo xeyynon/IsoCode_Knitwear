@@ -13,9 +13,11 @@
 
 <img src="uiux/2.0/03-board-desktop.png" alt="The merchandiser order board: orders worst first, each with the sum behind its colour" width="900">
 
-<sub>The merchandiser's board on demo data. Every colour comes with an icon, a word and the working behind it.</sub>
+<sub>The merchandiser's board, on the test fixture data (illustrative orders). Every colour comes with an icon, a word and the working behind it.</sub>
 
 </div>
+
+[What it does](#what-it-does) · [Three screens](#three-people-three-screens) · [A tour](#a-tour) · [Colours](#how-the-colours-are-decided) · [Status](#status) · [Architecture](#architecture) · [Layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security](#security-model) · [Testing](#testing) · [Workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
 
 ## What it does
 
@@ -84,7 +86,7 @@ The order's colour is its worst stage. Thresholds live in a settings table. Ever
 
 ## Status
 
-An early build, **tested but not yet tried in production**. The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (nearly 2,000, including a real Postgres 16 run in CI). AI suggestions for notes from the floor (an English meaning and a reason, and what happens when the AI is unsure or wrong) are built and tested; voice notes are **not built**. A demo runs at **https://isocode-knitwear.vercel.app** (free plans; how it is deployed and the demo logins: [deployment.md](deployment.md)).
+An early build, **tested but not yet tried in production**. The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (about 2,400, including a real Postgres 16 run in CI). AI suggestions for notes from the floor (an English meaning and a reason, and what happens when the AI is unsure or wrong) are built and tested; voice notes are **not built**. A demo runs at **https://isocode-knitwear.vercel.app** (free plans; how it is deployed and the demo logins: [deployment.md](deployment.md)).
 
 Not yet verified: a production-size Postgres server (the demo runs on Neon's free plan), a real S3 bucket, real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
 
@@ -115,19 +117,20 @@ packages/
   server/    Fastify API, services, SQL migrations and row-level security tests
   web/       React app: board, order screens, review, setup, supervisor screens, buyer page, status page
   design/    Colour tokens
-scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser tools
+scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser and measuring tools (e2e, a11y, snapshots, ux, load, phone, diff: see Testing)
 docs/        status.md, optimisation-research.md, and builds/ (one report per numbered build)
-uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) and 2.0
+uiux/        Screenshots of every screen on the test fixture data: 1.0 (frozen, build 1006) and 2.0
+audit/       The UI/UX audits, the plan of action and its progress log, design direction, and the Tamil wording to review
 optimised.md  The speed-and-cost log
 deployment.md How to run it locally, how it is deployed, and the demo logins
 .github/     CI, release and Dependabot configuration
 ```
 
 ## Getting started
-**Prerequisites:** Node.js 20.19 or newer (22 recommended) and npm 10 or newer. Docker is not needed.
+**Prerequisites:** Node.js 22 recommended; Node 20.19 also works, with warnings from two dependencies (the AWS SDK and one of its helpers) that ask for a newer Node. npm 10 or newer. Docker is not needed.
 
 ```bash
-npm install
+npm ci                # on a clean clone: installs exactly what package-lock.json says and changes no file
 npm run verify        # static checks, typecheck and every test (not the web build: CI also runs npm run build)
 ```
 
@@ -155,9 +158,6 @@ VITE_API_BASE=https://api.example.com npm run build
 ```
 The build deliberately fails without `VITE_API_BASE`: the value is baked into the bundle, and a missing one would silently point production at the wrong place.
 
-## Contents
-[What it does](#what-it-does) · [Three screens](#three-people-three-screens) · [A tour](#a-tour) · [Colours](#how-the-colours-are-decided) · [Status](#status) · [Architecture](#architecture) · [Layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security](#security-model) · [Testing](#testing) · [Workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
-
 ## Configuration
 **API** (`packages/server/.env.example`)
 
@@ -168,7 +168,7 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `ALLOWED_ORIGINS` | Comma-separated browser origins. Cleaned of stray quotes, brackets and slashes; invalid entries are dropped with a warning |
 | `TRUST_PROXY` | How many reverse proxies sit in front: `1` (the usual), `2` to `10`, or a list of proxy addresses or ranges (`10.0.0.0/8,192.168.1.5`, also `loopback`, `linklocal`, `uniquelocal`). `0`, `false` or unset means none. The caller's address is then read from the end of `X-Forwarded-For`, where the proxies add theirs, never from the front, which the caller writes. Any other value stops the server at start-up with a message that names the variable |
 | `MEDIA_DIR` | Folder where uploaded photos are kept. Leave it unset (with `MEDIA_STORE` unset) to switch photos off: the photo routes then answer 503 |
-| `MEDIA_STORE` | Where photos live: `disk` (needs `MEDIA_DIR`), `memory` (trials; photos vanish on restart) or `s3`. Unset means `disk` if `MEDIA_DIR` is set, else photos off. Any other value, or a missing S3 variable, stops the server at start-up with a message that names the variable (never a value) |
+| `MEDIA_STORE` | Where photos live: `disk` (needs `MEDIA_DIR`), `memory` (trials; photos vanish on restart), `s3`, or `db` (the bytes go into Postgres, migration 019: for a host with no disk, such as the hosted demo). Unset means `disk` if `MEDIA_DIR` is set, else photos off. Any other value, or a missing S3 variable, stops the server at start-up with a message that names the variable (never a value) |
 | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Required when `MEDIA_STORE=s3`. The bucket must be private, in an Indian region (for example `ap-south-1`), and block public access. The key needs only get, put and delete on the bucket (plus list on it, so a missing photo reads as "not found" and not as "denied") |
 | `S3_ENDPOINT` | Optional. For Cloudflare R2, MinIO, Backblaze or another S3-compatible service; leave unset for AWS. Must be `https://` (`http://` only for localhost) and must not hold a user name or password |
 | `S3_FORCE_PATH_STYLE` | Optional, `1` or `true`. Puts the bucket in the path instead of the host name; MinIO needs it |
@@ -176,19 +176,28 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `S3_SSE` | Optional, `AES256` (default) or `none` for a service that rejects the encryption header. Photos are stored encrypted at rest |
 | `PORT` | Defaults to 8787 (empty counts as unset). Must be a whole number from 1 to 65535, otherwise the server stops at start-up with a plain message |
 | `LOG_LEVEL` | `fatal`, `error`, `warn`, `info` (default), `debug`, `trace` or `silent`. At `info` each request writes one short line (method, route pattern, status, milliseconds), never a body, a header or a query string. Any other value stops the server at start-up |
-| `DB_POOL_MAX` | Database connections, 1 to 50, default 5. Each is a Postgres process and the work is mostly CPU, so more do not help a small server. A request that cannot get one within 5 seconds answers 503 `busy` |
+| `DB_POOL_MAX` | Database connections, 1 to 50, default 5 (2 on the Vercel entry, where each instance serves one request at a time and many instances share the database). Each is a Postgres process and the work is mostly CPU, so more do not help a small server. A request that cannot get one within 5 seconds answers 503 `busy` |
 | `DB_STATEMENT_TIMEOUT_MS` | The database ends any single statement that runs longer than this, default 30000; 0 means no limit. A transaction left idle is ended after 15 seconds |
 | `AI_PROVIDER` | `groq`, `gemini` or `anthropic`: who reads the notes from the floor. Unset: whichever key below is set (Anthropic, then Gemini, then Groq). Neither key: AI is off and the review queue says so (never a made-up suggestion) |
 | `GROQ_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | That provider's key. Keep it in the host's secret settings |
+| `AI_DAILY_BUDGET` | Optional. The most AI calls a day, a whole number. Unset: the setting held in the database (300). When it is spent, asking for suggestions answers 429 `ai_busy` and the merchandiser writes the English by hand |
 | `AI_MODEL` | Optional. The provider's model; defaults `openai/gpt-oss-120b`, `gemini-3.8-flash` and `claude-opus-5-5` |
-| `DEMO_TODAY` | Hosted demo only: every real day reads as this date (`demoClock.ts`), so the seeded figures stay meaningful |
+| `WARNING_FULL_REFRESH_MS` | Optional. A full refresh of every order's warnings runs at least this often, in real milliseconds; default 300000 (5 minutes), 0 makes every refresh a full one (the Vercel entry sets 0, because its instances come and go) |
+| `MIGRATE_DATABASE_URL` | Hosted build only. The table owner's connection, used by `scripts/vercel_build.mjs` to run the migrations on a production deploy. The API never reads it |
+| `SEED_DEMO` | Hosted build only. `1` loads the demo data into an empty database on a production deploy (`npm run seed:demo -- --if-empty`). Leave unset in a real deployment |
+| `DEMO_TODAY` | Hosted demo only: every real day reads as this date (`demoClock.ts`), so the seeded figures stay meaningful. The Vercel build also turns the demo logins on in the web app when it is set |
 | `ALLOW_UNSAFE_DB_ROLE` | `1` lets the server start even though `DATABASE_URL` is a superuser, `BYPASSRLS` or table-owner login, which silently turns row-level security off. For local development only; leave it unset in every real deployment (the default is to refuse to start) |
 
 **Start the real API** with `npm run start:api` (it runs `packages/server/src/server.ts` through `tsx`, which is installed with `npm ci --omit=dev`). Nothing loads `packages/server/.env.example` or a `.env` file: export the variables in the environment of the process (the host's settings, `export`, a systemd `EnvironmentFile`, `docker run --env-file`). `npm run dev:api` is the in-memory demo, not this.
 
-Run `DATABASE_URL=postgres://owner:...@host/db npm run migrate` as the table owner (it applies `packages/server/db/migrations` in order, once each, and is safe to repeat; details in `md/deployment.md`), then give `app_user` login and a password separately. Secrets never belong in the repository (see [Security model](#security-model)).
+Run `DATABASE_URL=postgres://owner:...@host/db npm run migrate` as the table owner (it applies `packages/server/db/migrations` in order, once each, and is safe to repeat; how it is deployed is in [deployment.md](deployment.md)), then give `app_user` login and a password separately. Secrets never belong in the repository (see [Security model](#security-model)).
 
-**Web:** `VITE_API_BASE`, build time, required for production builds.
+**Web** (read when the app is built, not when it runs)
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_BASE` | Required for a production build. The API's address (`https://api.example.com`), or `same-origin` when the API is served from the same address as the app (the hosted demo; `scripts/vercel_build.mjs` sets it). An empty value is a mistake and the build refuses |
+| `VITE_DEMO_ACCESS` | `1` shows the Evaluator access panel (the demo logins) on the sign-in screen. Only that build contains the logins at all: a build without it has no file that holds them (a test builds one and checks). The Vercel build sets it when `DEMO_TODAY` is set. Leave it unset in a real deployment |
 
 ## API
 Errors always have the shape `{ "error": { "code", "message" } }`. Messages are safe to show; detail is logged on the server only. A request body over the limit answers 413 `too_large`, and a photo over 3 MB answers 413 `photo_too_large` (a phone should not retry either). Every route needs a token unless listed as public, so a route added later is protected by default.
@@ -197,6 +206,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | --- | --- | --- |
 | `GET /api/health`, `GET /api/status` | public | Liveness; plain Up/Down status of the API and database |
 | `POST /api/auth/login` | public | Email and password, or phone and 4-digit PIN |
+| `GET /api/me` | signed in | Who the token belongs to: the role and, for a supervisor, the unit |
 | `GET /api/board` | merchandiser | Every order with colour and working, worst first; also the units that own its stages and how many stages are finished (`units`, `stagesDone`, `stagesTotal`, `currentStage`) |
 | `GET /api/orders/options` | merchandiser | Buyers and TNA templates for the order form |
 | `POST /api/orders/preview` | merchandiser | The dates an order would get, without creating it |
@@ -235,7 +245,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 - **PINs:** easy ones (the same digit, a run such as 1234, a repeated pair, common choices) are refused when a supervisor is added or a PIN is reset.
 - **History is append-only:** a database trigger rejects edits and deletes of daily events and date changes, even by the table owner.
 - **No detail leaks:** unexpected errors return a plain message with no stack trace, path or SQL.
-- **Never commit** keys, `.env` files, real worker or buyer data, recordings, or photos (`media/`, `uploads/`). `scripts/check_repo.mjs` refuses these and key-shaped strings (cloud and API keys, private keys, a database URL with a password, `TOKEN_SECRET=` and `S3_SECRET_ACCESS_KEY=` values, signed tokens), in tracked and new files, including file names with Tamil or accented characters. The private `md/` folder and `company-a-build-plan.md` are refused even if added with `git add -f`. In CI the `BANNED_TERMS` list must be present on pushes, tags and same-repository pull requests (a missing one fails the run); pull requests from forks and from Dependabot cannot receive the secret, so there the log says the guard did not run.
+- **Never commit** keys, `.env` files, real worker or buyer data, recordings, or photos (`media/`, `uploads/`). `scripts/check_repo.mjs` refuses these and key-shaped strings (cloud and API keys, private keys, a database URL with a password, `TOKEN_SECRET=` and `S3_SECRET_ACCESS_KEY=` values, signed tokens), in tracked and new files, including file names with Tamil or accented characters. Private notes and the client build plan stay on the owner's machine and are refused even if added with `git add -f`. The `BANNED_TERMS` guard (words that must never appear in a tracked file) is opt-in in CI: it runs whenever the `BANNED_TERMS` secret exists, and once the repository variable `REQUIRE_BANNED_TERMS` is set to `1` an empty list fails the run on pushes, tags and same-repository pull requests. Pull requests from forks and from Dependabot cannot receive the secret, so there the log says the guard did not run.
 
 Report a vulnerability privately to the repository owner rather than in a public issue.
 
@@ -248,8 +258,14 @@ npm run check          # repo checks (secrets, tags, duplicate InBul ids), Markd
 npm run verify         # check, typecheck and test; CI also runs a production web build (npm run build, which needs VITE_API_BASE)
 npm run e2e            # the offline test in a real browser (see below)
 npm run a11y           # axe-core on every screen, in a real browser (needs the two dev servers)
+npm run ux             # measure overflow and tap sizes on 10 screens at 5 widths (needs the two dev servers)
+npm run snapshots      # retake the pictures in uiux/2.0 (needs the two dev servers; start the API with DEMO_DATA=fixture)
+npm run load           # measure first paint and time to a usable screen on an emulated slow network (not a real phone)
+npm run phone          # the keyboard check on a real Android phone over USB (needs adb and a phone signed in)
+npm run diff           # compare two sets of pictures (2.0 with the set kept before it, or any two folders), reading only
 ```
 - **Real Postgres:** `npm run test:pg` with `TEST_DATABASE_URL=postgres://postgres:...@localhost:5432/postgres` runs `packages/server` against a real server instead of PGlite: each test file gets its own throwaway database, and the app connects as `app_user` through the production pool. CI does this in the `test-postgres` job (Postgres 16, plus the row-level-security SQL file run with `psql` as a non-superuser owner and the real migration runner). Never point it at a server you care about.
+- **Dependency audit:** `npm audit` reports 6 vulnerabilities, all in the test tool chain (vitest 2.x with vite and esbuild); `npm audit --omit=dev` reports none. They are dev-only: nothing that is shipped to a user or a server is affected. Moving to the next vitest major version is a manual follow-up, as its own pull request.
 - **Slow tests:** a few files start PGlite or run git many times; they carry a longer time limit of their own (`scripts/slowTests.mjs`). In CI the 10 slowest tests are printed at the end of the run (`SLOWEST_TESTS=1` does it locally).
 - **Engine:** table-driven tests for every rule and edge case (zero history, completed stage, past milestone, over-production, duplicate event, closed days).
 - **Database:** the SQL assertions in `packages/server/db/tests/rls.test.sql` run on PGlite under `npm test`, once as a non-superuser table owner so FORCE RLS binds the owner too, and are plain Postgres so they also run under `psql`.
@@ -280,7 +296,7 @@ Every change is either a **build** or an **InBul** (internal build):
 | **Build** | Something a user would notice: a screen, wording, a status rule, sync behaviour | `build-1000`, `build-1001`, ... |
 | **InBul** | Everything else: docs, tests, tooling, research | `InBul01`, `InBul02`, ... |
 
-The tag is the source of truth for the number; commit titles never carry it. Builds are batched (about ten fixes each) so the list stays meaningful.
+The tag is the source of truth for the number. A build's commit title never carries its number (no "(Build N)"), and its report lists the pull requests and InBul ids it covers. An InBul's id starts its pull request title, so the one commit that squash merging leaves on `main` is titled `InBulNN: ...`, and `node scripts/changelog.mjs --tag` tags it. Builds are batched (about ten fixes each) so the list stays meaningful.
 
 **Fewer, bigger commits.** One day of work once produced 94 commits on `main` (about 65 of them real changes, the rest merges), most of them one fix each. That buries what matters. The rule from now on:
 
@@ -305,7 +321,7 @@ node scripts/changelog.mjs --tag
 # push with tags
 git push origin main --tags
 ```
-- `node scripts/changelog.mjs --status` shows the next free numbers. Check it just before committing; never guess. The next InBul id is the highest one in any tag **or any commit title on any branch**, plus one, so a session that has not tagged yet still holds its id. `check_repo.mjs` fails when one id is the title of two commits (InBul17 and InBul18 already were, before this rule; they are listed in `scripts/inbul.mjs`), and `--tag` refuses a build whose report still holds placeholder text such as `(write one or two plain sentences)`.
+- `node scripts/changelog.mjs --status` shows the next free numbers. Check it just before committing; never guess. The next InBul id is the highest one in any tag **or any commit title on any branch**, plus one, so work that has not been tagged yet still holds its id. `check_repo.mjs` fails when one id is the title of two commits (InBul17 and InBul18 already were, before this rule; they are listed in `scripts/inbul.mjs`), and `--tag` refuses a build whose report still holds placeholder text such as `(write one or two plain sentences)`.
 - The scripts act on the repository that holds them, wherever you start them from.
 - `CHANGELOG.md` and `build-info.json` are generated. Never edit them by hand. `node scripts/changelog.mjs --regenerate` rebuilds both from `docs/builds` without making a new build; `--pending` does the same as part of a build.
 - **The app shows the build.** `build-info.json` is imported into the web bundle (`packages/web/src/release/buildInfo.ts`), so the label ("Build 1006 - 3 Nov 2026") is the build that was shipped. It is at the foot of the app menu on every screen and on the public status page. Merchandisers also get **What's new** in the menu: a dialog with the title, date and summary of the last three builds. The summary is the whole "What changed" paragraph of the build report, so write it as release wording a merchandiser can read: plain, public, no budgets, rates or client detail. `build-info.json` keeps the last 10 builds. Date and label formatting is `release/releaseInfo.ts`; the file written by the script is shaped in `scripts/buildInfo.mjs` (both tested in `packages/web/test/releaseInfo.test.ts`). Supervisors do not get the dialog (it is English only), only the label.
@@ -318,7 +334,7 @@ git push origin main --tags
 | Workflow | Trigger | Does |
 | --- | --- | --- |
 | **CI** (`ci.yml`) | Pull requests and pushes to `main` | Repo checks, Markdown links, colour contrast, bug log, typecheck, all tests, a production web build, and the server tests on Postgres 16 (`test-postgres`). A push to `main` is never cancelled by the next push; a pull request's older run is |
-| **Release** (`release.yml`) | A `build-N` tag | Runs the repo checks (banned terms required), typecheck and tests on the tagged commit first, then publishes a GitHub Release whose notes are the build report's "What changed" paragraph only. A report that still holds placeholder text is refused |
+| **Release** (`release.yml`) | A `build-N` tag | Runs the repo checks (banned terms required when `REQUIRE_BANNED_TERMS` is `1`), typecheck and tests on the tagged commit first, then publishes a GitHub Release whose notes are the build report's "What changed" paragraph only. A report that still holds placeholder text is refused |
 | **Dependabot** | Weekly | Proposes npm and GitHub Actions updates |
 
 ## Roadmap

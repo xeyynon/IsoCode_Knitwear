@@ -14,3 +14,10 @@ uploads
 media
 data
 *.log
+*.pem
+*.key
+*.p12
+local_config.*
+*.sqlite*
+*.db
+*.dump

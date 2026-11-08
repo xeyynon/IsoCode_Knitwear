@@ -32,7 +32,7 @@ Measured in the page: horizontal overflow (none at 390), `h1` count (1 on every 
    Same correction as 3: the coarse-pointer rule covers `.back`. Nothing to fix for touch; verify on a real phone.
 
 5. **Disabled Send and Sign in look broken** (S3)
-   Where: Update and Login. `opacity: .55` on indigo gives a washed-out lavender. The only hint is the grey helper text above. Already listed in `frontendskill.md` 8.8.
+   Where: Update and Login. `opacity: .55` on indigo gives a washed-out lavender. The only hint is the grey helper text above. Already listed in the front-end guide, section 8.8.
    Fix: a clear disabled treatment (grey fill, ink text) plus a one-line reason under the button when the cause is "no number yet".
 
 6. **The too-many warning is far from the field it is about** (S3)

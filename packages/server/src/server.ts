@@ -11,8 +11,8 @@
 //   DB_POOL_MAX      database connections, 1 to 50. Default 5 (each is a Postgres process; the work is CPU-bound)
 //   DB_STATEMENT_TIMEOUT_MS   the database ends any statement that runs longer than this. Default 30000; 0 = no limit
 //   PORT             default 8787 (empty counts as unset); a value that is not a whole number from 1 to 65535 stops the server
-//   AI_PROVIDER      anthropic | gemini: AI suggestions for notes from the floor (English meaning + reason). See aiFromEnv.ts
-//   ANTHROPIC_API_KEY / GEMINI_API_KEY   the provider's key. Neither set: AI is off, a person does it
+//   AI_PROVIDER      anthropic | gemini | groq: AI suggestions for notes from the floor (English meaning + reason). See aiFromEnv.ts
+//   ANTHROPIC_API_KEY / GEMINI_API_KEY / GROQ_API_KEY   the provider's key. None set: AI is off, a person does it
 //   AI_MODEL         optional; the provider's model
 //   ALLOW_UNSAFE_DB_ROLE   1 = start even if DATABASE_URL is a superuser / BYPASSRLS / table-owner login. LOCAL DEVELOPMENT ONLY; unset in every real deployment
 import pg from 'pg'
