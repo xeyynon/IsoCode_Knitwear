@@ -1,6 +1,6 @@
 // Runs axe-core on every screen, at a phone (390x844, touch) and a desktop (1280x900) size, in Edge.
 //
-//   npm run dev:api                    (terminal 1)
+//   DEMO_DATA=fixture npm run dev:api                    (terminal 1)
 //   npm run dev -w @isocode/web        (terminal 2)
 //   npm run a11y                       (terminal 3)
 //
@@ -9,7 +9,7 @@
 // that stays: the buyer link it needs is cancelled again at the end, and no update is ever sent.
 //
 // axe cannot judge everything (reading order, whether an alt text is useful, how a screen reader sounds). A clean
-// run is a floor, not a pass: still try the screens with NVDA or TalkBack (frontendskill.md section 8.5).
+// run is a floor, not a pass: still try the screens with NVDA or TalkBack (a manual check).
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,7 +37,7 @@ let screens = 0
 
 async function up(): Promise<void> {
   try { if ((await fetch(`${WEB}/api/health`)).ok) return } catch { /* handled below */ }
-  console.error(`The app is not running at ${WEB}. Start it first:\n  npm run dev:api\n  npm run dev -w @isocode/web`)
+  console.error(`The app is not running at ${WEB}. Start it first:\n  DEMO_DATA=fixture npm run dev:api\n  npm run dev -w @isocode/web`)
   process.exit(2)
 }
 

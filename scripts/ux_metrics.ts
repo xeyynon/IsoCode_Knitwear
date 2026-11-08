@@ -1,7 +1,7 @@
 // Measures the numbers the UI/UX plan (audit/POA-UIUX.md, section 3) is judged by, so every slice can be compared
 // with the one before it. It reads the running demo app and never changes any data:
 //
-//   npm run dev:api                    (terminal 1)
+//   DEMO_DATA=fixture npm run dev:api                    (terminal 1)
 //   npm run dev -w @isocode/web        (terminal 2)
 //   npm run ux                         (terminal 3)
 //
@@ -20,7 +20,7 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 const DESKTOP = { viewport: { width: 1280, height: 900 } } as const
 
 try { if (!(await fetch(`${WEB}/api/health`)).ok) throw new Error('not ok') } catch {
-  console.error(`The app is not running at ${WEB}. Start it first:\n  npm run dev:api\n  npm run dev -w @isocode/web`)
+  console.error(`The app is not running at ${WEB}. Start it first:\n  DEMO_DATA=fixture npm run dev:api\n  npm run dev -w @isocode/web`)
   process.exit(1)
 }
 

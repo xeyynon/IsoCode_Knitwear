@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 // UI/UX 2.0 phase 8B, after the user's feedback: a tinted or coloured card "feels generated". A status is an icon and a word in its colour
 // (the badge pill keeps its own tint); a tile, a stage card, a board row or any other card stays a plain neutral surface.
-// Theme sweep (8C): the guard now reads EVERY stylesheet under src, and red, amber and green are for order status only (frontendskill.md rule 10):
+// Theme sweep (8C): the guard now reads EVERY stylesheet under src, and red, amber and green are for order status only (design rule):
 // a form error is ink with a "!" mark, not red.
 const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 const cssFiles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? cssFiles(join(dir, e.name)) : e.name.endsWith('.css') ? [join(dir, e.name)] : []))

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
 // An action that removes the control that had focus must hand focus on, or it falls to <body>
-// and the next Tab starts again from the top of the page (frontendskill.md 8.3).
+// and the next Tab starts again from the top of the page (a design rule).
 const src = (file: string) => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
 
 describe('focus after a control is removed', () => {

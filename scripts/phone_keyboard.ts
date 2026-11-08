@@ -3,7 +3,7 @@
 //
 // One-off set-up (phone: USB debugging on, screen on and unlocked, Chrome installed; the phone must trust this computer):
 //   adb devices -l                                              (the phone must say "device")
-//   npm run dev:api                                             (terminal 1)
+//   DEMO_DATA=fixture npm run dev:api                                             (terminal 1)
 //   npm run dev -w @isocode/web -- --host 127.0.0.1 --port 5174 --strictPort    (terminal 2: Vite's default listens on IPv6 only, which
 //                                                                                the USB tunnel cannot reach: ERR_EMPTY_RESPONSE)
 //   adb reverse tcp:5174 tcp:5174                               (the phone's localhost:5174 is now this computer's; localhost keeps

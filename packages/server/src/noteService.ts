@@ -67,16 +67,39 @@ export interface ReviewNote {
   textEn: string | null
   category: string | null
   categoryBy: 'supervisor' | 'merchandiser' | null
+  /** The AI's suggestion, beside the original and never in place of it. null = not asked yet (or AI is off). */
+  ai: NoteSuggestion | null
+}
+
+export interface NoteSuggestion {
+  status: 'suggested' | 'unsure' | 'failed'
+  textEn: string | null
+  category: string | null
+  confidence: number | null
+  why: string | null
+  model: string | null
+  /** Why there is no usable suggestion (a short code such as timeout or refused); null when there is one. */
+  error: string | null
+  attempts: number
+  at: string | null
 }
 
 const NOTE_SELECT = `select n.id::text as id, n.order_id::text as order_id, o.po, b.name as buyer_name, n.stage, n.taken_on::text as taken_on,
-       n.language, n.text_ta, n.text_en, n.category, n.category_by
+       n.language, n.text_ta, n.text_en, n.category, n.category_by,
+       n.ai_status, n.ai_text_en, n.ai_category, n.confidence::float8 as ai_confidence, n.ai_why, n.ai_model, n.ai_error, n.ai_attempts, n.ai_at
   from note n join orders o on o.id = n.order_id join buyer b on b.id = n.buyer_id`
 
-type NoteRow = { id: string; order_id: string; po: string; buyer_name: string; stage: string; taken_on: string; language: 'ta' | 'en' | null; text_ta: string | null; text_en: string | null; category: string | null; category_by: 'supervisor' | 'merchandiser' | null }
+type NoteRow = {
+  id: string; order_id: string; po: string; buyer_name: string; stage: string; taken_on: string; language: 'ta' | 'en' | null; text_ta: string | null; text_en: string | null; category: string | null; category_by: 'supervisor' | 'merchandiser' | null
+  ai_status: NoteSuggestion['status'] | null; ai_text_en: string | null; ai_category: string | null; ai_confidence: number | null; ai_why: string | null; ai_model: string | null; ai_error: string | null; ai_attempts: number; ai_at: Date | string | null
+}
 const toReviewNote = (r: NoteRow): ReviewNote => ({
   id: r.id, orderId: r.order_id, po: r.po, buyerName: r.buyer_name, stage: r.stage, takenOn: r.taken_on, language: r.language,
   original: r.language === 'ta' ? r.text_ta : r.text_en, textEn: r.text_en, category: r.category, categoryBy: r.category_by,
+  ai: r.ai_status ? {
+    status: r.ai_status, textEn: r.ai_text_en, category: r.ai_category, confidence: r.ai_confidence, why: r.ai_why, model: r.ai_model,
+    error: r.ai_error, attempts: r.ai_attempts, at: r.ai_at === null ? null : new Date(r.ai_at).toISOString(),
+  } : null,
 })
 
 /** Notes nobody has reviewed yet, oldest first. */
@@ -118,4 +141,46 @@ export async function confirmNote(tx: Tx, ctx: Ctx, userId: string, id: string, 
     const exists = await tx.query('select 1 from note where id = $1', [id])
     throw exists.length ? new AppError(409, 'already_reviewed', 'This note has already been reviewed') : notFound('No such note')
   }
+}
+
+
+// ---- AI suggestions (noteAi.ts asks the model; this file decides what is stored)
+
+export interface NoteToSuggest { id: string; text: string; language: 'ta' | 'en'; stage: string; category: string | null }
+
+/** Unreviewed notes with words that have no suggestion yet, or whose last try failed and may be tried again. Oldest first. */
+export async function notesToSuggest(tx: Tx, ctx: Ctx, limit: number, maxAttempts: number, onlyId?: string): Promise<NoteToSuggest[]> {
+  if (!isStaff(ctx)) throw forbidden()
+  const rows = await tx.query<{ id: string; text: string; language: 'ta' | 'en'; stage: string; category: string | null }>(
+    `select n.id::text as id, coalesce(n.text_ta, n.text_en) as text, n.language, n.stage, n.category
+       from note n
+      where n.confirmed_by is null and coalesce(n.text_ta, n.text_en) is not null and n.language is not null
+        and ${onlyId ? 'n.id = $2' : `(n.ai_status is null or (n.ai_status = 'failed' and n.ai_attempts < ${Math.max(1, Math.floor(maxAttempts))}))`}
+      order by n.created_at, n.id limit $1`, onlyId ? [limit, onlyId] : [limit])
+  return rows
+}
+
+/** The threshold under which a suggestion is only "unsure". Settings hold it; a missing or odd value falls back to 0.7. */
+export async function loadAiMinConfidence(tx: Tx): Promise<number> {
+  const v = (await tx.query<{ value: unknown }>(`select value from settings where key = 'ai_min_confidence'`))[0]?.value
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.7
+}
+
+/** Store a judged answer. Only on a note nobody has reviewed yet: a reviewed note keeps what the merchandiser decided. */
+export async function saveSuggestion(tx: Tx, ctx: Ctx, id: string, j: { status: 'suggested' | 'unsure'; textEn: string; category: string | null; confidence: number; why: string; model: string }): Promise<void> {
+  if (!isStaff(ctx)) throw forbidden()
+  await tx.query(
+    `update note set ai_status = $2, ai_text_en = $3, ai_category = $4, confidence = $5, ai_why = $6, ai_model = $7, ai_error = null,
+            ai_attempts = ai_attempts + 1, ai_at = now()
+      where id = $1 and confirmed_by is null`, [id, j.status, j.textEn || null, j.category, j.confidence, j.why || null, j.model || null])
+}
+
+/** Record that no usable answer came back. An earlier good suggestion is kept (asking again must not lose it). */
+export async function saveSuggestionFailure(tx: Tx, ctx: Ctx, id: string, code: string): Promise<void> {
+  if (!isStaff(ctx)) throw forbidden()
+  await tx.query(
+    `update note set ai_status = case when ai_status in ('suggested', 'unsure') then ai_status else 'failed' end,
+            ai_error = $2, ai_attempts = ai_attempts + 1, ai_at = now()
+      where id = $1 and confirmed_by is null`, [id, code.slice(0, 40)])
 }
