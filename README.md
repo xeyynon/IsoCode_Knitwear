@@ -5,7 +5,7 @@
 
 Order tracking for a knitwear exporter. Supervisors on the floor send a daily count from a phone, in Tamil, even without a signal. A server works out, for every order, whether it will ship on time and shows the reasoning. Merchandisers see the orders that need attention first; buyers get a read-only view of only their own orders.
 
-> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate and the buyer's read-only view work and are tested; photos and notes are not built yet. See [Status](#status) and [Roadmap](#roadmap).
+> **Status: early build.** The calculation engine, database, API, the merchandiser's order board, order setup and order detail, and the supervisor's offline daily update work and are tested. The review gate, the buyer's read-only view, photos on a daily update and typed notes work and are tested; voice notes and automatic translation are not built. See [Status](#status) and [Roadmap](#roadmap).
 
 ## Contents
 [Why](#why) · [Status](#status) · [How the colours are decided](#how-the-colours-are-decided) · [Architecture](#architecture) · [Repository layout](#repository-layout) · [Getting started](#getting-started) · [Configuration](#configuration) · [API](#api) · [Security model](#security-model) · [Testing](#testing) · [Development workflow](#development-workflow) · [CI and releases](#ci-and-releases) · [Roadmap](#roadmap)
@@ -21,7 +21,7 @@ Orders slip because progress on the floor reaches the merchandiser late, by phon
 
 | Area | State |
 | --- | --- |
-| Run-rate engine (status, projected finish, working-day calendars, TNA back-scheduling) | Built, 40 tests |
+| Run-rate engine (status, projected finish, working-day calendars, TNA back-scheduling) | Built, tested |
 | Database schema with row-level security | Built, tested |
 | HTTP API: sign-in with lockout, board, daily updates (single and batch), order creation, ex-factory change with logged reason, status check | Built, tested |
 | Web app: sign-in, order board, public status page | Built (`build-1000`) |
@@ -83,7 +83,7 @@ packages/
   server/    Fastify API, services, SQL migrations and row-level security tests
   web/       React app: sign-in, board, status page
   design/    Colour tokens
-scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_contrast.mjs
+scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser tools
 docs/builds/ One report per numbered build
 uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) and 2.0 (npm run snapshots writes it; earlier 2.0 sets are kept)
 .github/     CI, release and Dependabot configuration
@@ -94,7 +94,7 @@ uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) 
 
 ```bash
 npm install
-npm run verify        # static checks, typecheck and every test
+npm run verify        # static checks, typecheck and every test (not the web build: CI also runs npm run build)
 ```
 
 **Run the whole app locally on demo data** (an in-memory database with illustrative orders; today is fixed to 4 Nov 2026 so the figures line up):
@@ -125,7 +125,7 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `DATABASE_URL` | Postgres connection. Connect as the non-owner `app_user` role |
 | `TOKEN_SECRET` | At least 32 random characters. The server refuses to start without it |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins. Cleaned of stray quotes, brackets and slashes; invalid entries are dropped with a warning |
-| `TRUST_PROXY` | Set to `1` behind a reverse proxy so rate limits see real addresses |
+| `TRUST_PROXY` | How many reverse proxies sit in front: `1` (the usual), `2` to `10`, or a list of proxy addresses or ranges (`10.0.0.0/8,192.168.1.5`, also `loopback`, `linklocal`, `uniquelocal`). `0`, `false` or unset means none. The caller's address is then read from the end of `X-Forwarded-For`, where the proxies add theirs, never from the front, which the caller writes. Any other value stops the server at start-up with a message that names the variable |
 | `MEDIA_DIR` | Folder where uploaded photos are kept. Leave it unset (with `MEDIA_STORE` unset) to switch photos off: the photo routes then answer 503 |
 | `MEDIA_STORE` | Where photos live: `disk` (needs `MEDIA_DIR`), `memory` (trials; photos vanish on restart) or `s3`. Unset means `disk` if `MEDIA_DIR` is set, else photos off. Any other value, or a missing S3 variable, stops the server at start-up with a message that names the variable (never a value) |
 | `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Required when `MEDIA_STORE=s3`. The bucket must be private, in an Indian region (for example `ap-south-1`), and block public access. The key needs only get, put and delete on the bucket (plus list on it, so a missing photo reads as "not found" and not as "denied") |
@@ -133,14 +133,20 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `S3_FORCE_PATH_STYLE` | Optional, `1` or `true`. Puts the bucket in the path instead of the host name; MinIO needs it |
 | `S3_PREFIX` | Optional folder inside the bucket, for example `pilot/`. Photos are stored under random keys inside it |
 | `S3_SSE` | Optional, `AES256` (default) or `none` for a service that rejects the encryption header. Photos are stored encrypted at rest |
-| `PORT` | Defaults to 8787 |
+| `PORT` | Defaults to 8787 (empty counts as unset). Must be a whole number from 1 to 65535, otherwise the server stops at start-up with a plain message |
+| `LOG_LEVEL` | `fatal`, `error`, `warn`, `info` (default), `debug`, `trace` or `silent`. At `info` each request writes one short line (method, route pattern, status, milliseconds), never a body, a header or a query string. Any other value stops the server at start-up |
+| `DB_POOL_MAX` | Database connections, 1 to 50, default 5. Each is a Postgres process and the work is mostly CPU, so more do not help a small server. A request that cannot get one within 5 seconds answers 503 `busy` |
+| `DB_STATEMENT_TIMEOUT_MS` | The database ends any single statement that runs longer than this, default 30000; 0 means no limit. A transaction left idle is ended after 15 seconds |
+| `ALLOW_UNSAFE_DB_ROLE` | `1` lets the server start even though `DATABASE_URL` is a superuser, `BYPASSRLS` or table-owner login, which silently turns row-level security off. For local development only; leave it unset in every real deployment (the default is to refuse to start) |
+
+**Start the real API** with `npm run start:api` (it runs `packages/server/src/server.ts` through `tsx`, which is installed with `npm ci --omit=dev`). Nothing loads `packages/server/.env.example` or a `.env` file: export the variables in the environment of the process (the host's settings, `export`, a systemd `EnvironmentFile`, `docker run --env-file`). `npm run dev:api` is the in-memory demo, not this.
 
 Run `DATABASE_URL=postgres://owner:...@host/db npm run migrate` as the table owner (it applies `packages/server/db/migrations` in order, once each, and is safe to repeat; details in `md/deployment.md`), then give `app_user` login and a password separately. Secrets never belong in the repository (see [Security model](#security-model)).
 
 **Web:** `VITE_API_BASE`, build time, required for production builds.
 
 ## API
-Errors always have the shape `{ "error": { "code", "message" } }`. Messages are safe to show; detail is logged on the server only. Every route needs a token unless listed as public, so a route added later is protected by default.
+Errors always have the shape `{ "error": { "code", "message" } }`. Messages are safe to show; detail is logged on the server only. A request body over the limit answers 413 `too_large`, and a photo over 3 MB answers 413 `photo_too_large` (a phone should not retry either). Every route needs a token unless listed as public, so a route added later is protected by default.
 
 | Route | Who | Purpose |
 | --- | --- | --- |
@@ -157,6 +163,8 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET/POST /api/buyer-links`, `POST /api/buyer-links/:id/revoke` | merchandiser | Make, list and cancel a buyer's private link |
 | `GET /api/outbox` | merchandiser | The mocked alerts (nothing is sent): the latest 50, newest first, `Cache-Control: no-store`; 403 for a supervisor, 401 for a buyer link |
 | `GET /api/buyer/orders` | buyer link | The buyer's own orders, planned dates and confirmed warnings. A link opens only this |
+| `GET /api/buyer/export.csv` | buyer link | The same orders as a CSV file (PO, style, colour, quantity, ex-factory, each stage's planned finish, confirmed notices), built from what the buyer page already shows and nothing more |
+| `GET /api/buyers/:id/export.csv` | merchandiser | The file one buyer would get, for checking it or sending it on |
 | `GET /api/reasons` | signed in | The fixed list of reasons for a slow stage |
 | `POST /api/notes/:id/confirm` | merchandiser | Review a note: add the English meaning of a Tamil note and settle the reason |
 | `POST /api/photos` | supervisor | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). Checked to be a real JPEG, 1 KB to 3 MB |
@@ -166,7 +174,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET/POST /api/units` | merchandiser | List and add units (your own floors and subcontractors) |
 | `GET /api/accounts`, `POST /api/accounts/supervisors`, `.../merchandisers`, `.../:id/pin`, `.../:id/sign-out`, `.../:id/disabled` | merchandiser | Who can sign in; add people; reset a PIN; sign out everywhere; stop or allow an account |
 | `GET/POST /api/calendar`, `POST /api/calendar/clear` | merchandiser | Closed days and extra worked days per unit |
-| `GET/POST /api/templates`, `POST /api/templates/:id/delete` | merchandiser | List, create, edit and delete TNA templates (orders already made keep their dates) |
+| `GET/POST /api/templates`, `POST /api/templates/:id/delete` | merchandiser | List, create, edit and delete TNA templates (orders already made keep their dates). Creating answers 201, saving over an existing one answers 200 |
 | `GET /api/buyer/photos/:id` | buyer link | An approved photo of the buyer's own |
 | `GET /api/my/stages` | supervisor | The stages in the supervisor's own unit, with progress and today's total |
 | `POST /api/events`, `POST /api/events/batch` | supervisor, merchandiser | Send daily counts, optionally with a photo and a note (a reason and/or words); the batch form serves the offline queue. A supervisor posts only for their own unit's stages. A merchandiser may post for any stage (a subcontractor has no one to send a count): the row is stored as entered on behalf, with who entered it, and the board (`lowConfidenceStages`) and the order page (`lowConfidence`, plus `today`) show "Entered by a merchandiser, low confidence" for a stage whose newest update days include such an entry. The engine still just counts the pieces; buyers never see any of it |
@@ -180,19 +188,22 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 - **PINs:** easy ones (the same digit, a run such as 1234, a repeated pair, common choices) are refused when a supervisor is added or a PIN is reset.
 - **History is append-only:** a database trigger rejects edits and deletes of daily events and date changes, even by the table owner.
 - **No detail leaks:** unexpected errors return a plain message with no stack trace, path or SQL.
-- **Never commit** keys, `.env` files, real worker or buyer data, recordings, or photos (`media/`, `uploads/`). `scripts/check_repo.mjs` refuses these and key-shaped strings, in tracked and new files.
+- **Never commit** keys, `.env` files, real worker or buyer data, recordings, or photos (`media/`, `uploads/`). `scripts/check_repo.mjs` refuses these and key-shaped strings (cloud and API keys, private keys, a database URL with a password, `TOKEN_SECRET=` and `S3_SECRET_ACCESS_KEY=` values, signed tokens), in tracked and new files, including file names with Tamil or accented characters. The private `md/` folder and `company-a-build-plan.md` are refused even if added with `git add -f`. In CI the `BANNED_TERMS` list must be present on pushes, tags and same-repository pull requests (a missing one fails the run); pull requests from forks and from Dependabot cannot receive the secret, so there the log says the guard did not run.
 
 Report a vulnerability privately to the repository owner rather than in a public issue.
 
 ## Testing
 ```bash
-npm test               # engine, API, database and web logic (Vitest)
-npm run typecheck
-npm run check          # repo checks (secrets, tags), Markdown links, colour contrast
-npm run verify         # all of the above
+npm test               # engine, API, database and web logic (Vitest), on PGlite (Postgres in WebAssembly)
+npm run test:pg        # the server tests on a real Postgres: set TEST_DATABASE_URL to a SUPERUSER connection string of a disposable server
+npm run typecheck      # the web app and engine, the server without browser types, and the scripts and config files
+npm run check          # repo checks (secrets, tags, duplicate InBul ids), Markdown links, colour contrast, bug log
+npm run verify         # check, typecheck and test; CI also runs a production web build (npm run build, which needs VITE_API_BASE)
 npm run e2e            # the offline test in a real browser (see below)
 npm run a11y           # axe-core on every screen, in a real browser (needs the two dev servers)
 ```
+- **Real Postgres:** `npm run test:pg` with `TEST_DATABASE_URL=postgres://postgres:...@localhost:5432/postgres` runs `packages/server` against a real server instead of PGlite: each test file gets its own throwaway database, and the app connects as `app_user` through the production pool. CI does this in the `test-postgres` job (Postgres 16, plus the row-level-security SQL file run with `psql` as a non-superuser owner and the real migration runner). Never point it at a server you care about.
+- **Slow tests:** a few files start PGlite or run git many times; they carry a longer time limit of their own (`scripts/slowTests.mjs`). In CI the 10 slowest tests are printed at the end of the run (`SLOWEST_TESTS=1` does it locally).
 - **Engine:** table-driven tests for every rule and edge case (zero history, completed stage, past milestone, over-production, duplicate event, closed days).
 - **Database:** the SQL assertions in `packages/server/db/tests/rls.test.sql` run on PGlite under `npm test`, once as a non-superuser table owner so FORCE RLS binds the owner too, and are plain Postgres so they also run under `psql`.
 - **Mutation-checked:** the security and engine rules were each deliberately broken once to confirm a test fails. A test that has never failed has not been shown to test anything.
@@ -232,9 +243,11 @@ node scripts/changelog.mjs --tag
 # push with tags
 git push origin main --tags
 ```
-- `node scripts/changelog.mjs --status` shows the next free numbers. Check it just before committing; never guess.
+- `node scripts/changelog.mjs --status` shows the next free numbers. Check it just before committing; never guess. The next InBul id is the highest one in any tag **or any commit title on any branch**, plus one, so a session that has not tagged yet still holds its id. `check_repo.mjs` fails when one id is the title of two commits (InBul17 and InBul18 already were, before this rule; they are listed in `scripts/inbul.mjs`), and `--tag` refuses a build whose report still holds placeholder text such as `(write one or two plain sentences)`.
+- The scripts act on the repository that holds them, wherever you start them from.
 - `CHANGELOG.md` and `build-info.json` are generated. Never edit them by hand. `node scripts/changelog.mjs --regenerate` rebuilds both from `docs/builds` without making a new build; `--pending` does the same as part of a build.
 - **The app shows the build.** `build-info.json` is imported into the web bundle (`packages/web/src/release/buildInfo.ts`), so the label ("Build 1006 - 3 Nov 2026") is the build that was shipped. It is at the foot of the app menu on every screen and on the public status page. Merchandisers also get **What's new** in the menu: a dialog with the title, date and summary of the last three builds. The summary is the whole "What changed" paragraph of the build report, so write it as release wording a merchandiser can read: plain, public, no budgets, rates or client detail. `build-info.json` keeps the last 10 builds. Date and label formatting is `release/releaseInfo.ts`; the file written by the script is shaped in `scripts/buildInfo.mjs` (both tested in `packages/web/test/releaseInfo.test.ts`). Supervisors do not get the dialog (it is English only), only the label.
+- **Bugs:** a bug found by an audit gets an id (`BE-nnn`) in `bug.md`. When it is fixed, `bugfixed.md` gets an entry that starts with the id and names its test on a line `Test: <file> :: <start of the test's name>`. `scripts/check_bugs.mjs` (part of `npm run check`) fails when a fixed bug has no entry, an entry's id is not in `bug.md`, or a named test file or test does not exist.
 - Never put "(Build N)" in a title, move a tag, or add attribution lines to commits.
 - Build reports in `docs/builds` are public. They say what changed and how it was checked, never budgets, rates or client detail.
 - Run `npm run verify` before every commit. Pull requests use the template in `.github`.
@@ -242,15 +255,15 @@ git push origin main --tags
 ## CI and releases
 | Workflow | Trigger | Does |
 | --- | --- | --- |
-| **CI** (`ci.yml`) | Pull requests and pushes to `main` | Repo checks, Markdown links, colour contrast, typecheck, all tests, and a production web build |
-| **Release** (`release.yml`) | A `build-*` tag | Publishes a GitHub Release whose notes are the build report's "What changed" paragraph only |
+| **CI** (`ci.yml`) | Pull requests and pushes to `main` | Repo checks, Markdown links, colour contrast, bug log, typecheck, all tests, a production web build, and the server tests on Postgres 16 (`test-postgres`). A push to `main` is never cancelled by the next push; a pull request's older run is |
+| **Release** (`release.yml`) | A `build-N` tag | Runs the repo checks (banned terms required), typecheck and tests on the tagged commit first, then publishes a GitHub Release whose notes are the build report's "What changed" paragraph only. A report that still holds placeholder text is refused |
 | **Dependabot** | Weekly | Proposes npm and GitHub Actions updates |
 
 ## Roadmap
 1. **Supervisor app, remaining:** supervisors reading and correcting the Tamil (it is written for every supervisor screen but unreviewed), voice notes, and trying it on real low-end phones. (The daily update, offline queue, photos and typed notes are built.)
 2. **Order screens, remaining:** setting an order's stages by hand, and an option to re-date existing orders when a holiday is added.
 3. **Review gate:** done for warnings, photos and notes.
-4. **Buyer view, remaining:** a real-Postgres run of the isolation tests.
+4. **Buyer view:** done, including the isolation tests on real Postgres (`test-postgres` in CI).
 5. **Notes, remaining:** voice notes, and automatic translation and reason suggestions with low-confidence ones sent to review. The original is always kept beside any translation.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 

@@ -1,7 +1,7 @@
 // Errors that are safe to show a caller. Anything else becomes a plain 500 with no
 // detail (no stack, file path or SQL), logged on the server only.
 export class AppError extends Error {
-  constructor(readonly status: 400 | 401 | 403 | 404 | 409 | 429 | 503, readonly code: string, message: string) {
+  constructor(readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 503, readonly code: string, message: string) {
     super(message)
   }
 }
@@ -29,6 +29,7 @@ export const isUniqueViolation = (e: unknown): boolean => (e as { code?: unknown
 const DUPLICATE_WORDS: Record<string, string> = {
   account_phone_key: 'That phone number already has an account',
   account_email_key: 'That email already has an account',
+  account_email_lower_key: 'That email already has an account',
   orders_buyer_id_po_style_colour_key: 'That order already exists for this buyer',
   unit_name_lower_key: 'A unit with that name already exists',
   tna_template_name_lower_key: 'A template with that name already exists',

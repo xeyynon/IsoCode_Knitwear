@@ -5,7 +5,7 @@ import {
 import { compareDates } from '@isocode/engine/dates'
 import { forbidden } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
-import { lowConfidenceStages } from './confidence.js'
+import { calendarOfStages, lowConfidenceStages } from './confidence.js'
 import { loadEngineData } from './engineData.js'
 
 export interface BoardRow {
@@ -61,7 +61,7 @@ export async function getBoard(tx: Tx, ctx: Ctx, today: string): Promise<BoardRo
     const stages = stagesBy.get(o.id) ?? []
     const events = eventsBy.get(o.id) ?? []
     const result = projectOrder({ id: o.id, exFactory: o.exFactory }, stages, events, calendars, today, settings)
-    const flagged = lowConfidenceStages(events, onBehalf, today, settings.windowDays)
+    const flagged = lowConfidenceStages(events, onBehalf, today, settings, calendarOfStages(stages, calendars))
     // The stage that sets the colour; among equals the one furthest behind.
     const setting = result.stages
       .filter((s) => s.status === result.status && !s.complete)

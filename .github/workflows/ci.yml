@@ -7,9 +7,11 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a pull request replaces the run in progress. A push to main is never cancelled by the next one: its group is its
+# own commit, so a red commit on main always ends with a result.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -29,10 +31,15 @@ jobs:
         run: node scripts/check_repo.mjs
         env:
           BANNED_TERMS: ${{ secrets.BANNED_TERMS }}
+          # Opt in: once the BANNED_TERMS secret exists, set the repository variable REQUIRE_BANNED_TERMS to 1 and an empty list fails the run on pushes and on pull requests from this repository. Pull requests from forks and from
+          # Dependabot get no secrets, so there the guard cannot run: check_repo says so in the log and the merge to main runs it.
+          REQUIRE_BANNED_TERMS: ${{ vars.REQUIRE_BANNED_TERMS == '1' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && '1' || '' }}
       - name: Markdown links
         run: node scripts/check_docs.mjs
       - name: Colour contrast of the design tokens
         run: node scripts/check_contrast.mjs
+      - name: Bug log and fix log agree
+        run: node scripts/check_bugs.mjs
 
   test:
     name: Typecheck and tests
@@ -44,7 +51,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Typecheck
+      - name: Typecheck (web and engine, server without browser types, scripts and config files)
         run: npm run typecheck
       - name: Tests (engine, API, database and row-level security, web logic)
         run: npm test

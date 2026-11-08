@@ -215,6 +215,123 @@ do $$ begin
 end $$;
 commit;
 
+-- ------------------------------------------------ supervisor inserts are new, unreviewed rows (migration 016: BE-036, BE-037)
+-- an ordinary photo, note and count still go in; entered_by may name a supervisor of the same unit (what the service writes)
+begin;
+select set_config('app.role', 'system', true);
+insert into account (id, role, phone, unit_id) values ('00000000-0000-0000-0000-0000000000ef', 'supervisor', '9000000001', '00000000-0000-0000-0000-00000000aa01');
+set local role app_user;
+select set_config('app.role', 'supervisor', true), set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+insert into photo (order_id, buyer_id, stage, unit_id, storage_key)
+  values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'photos/6f1c2a3b-0000-4000-8000-000000000001.jpg');
+select test_expect('supervisor can add an ordinary photo', (select count(*) from photo), 1);
+insert into note (order_id, buyer_id, stage, unit_id, text_en, category, category_by)
+  values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'x', 'machine', 'supervisor');
+select test_expect('supervisor can add an ordinary note', (select count(*) from note), 1);
+insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty, entered_by)
+  values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', '2026-11-04', 5, '00000000-0000-0000-0000-0000000000ef');
+select test_expect('supervisor can add a count naming a supervisor of their unit as the sender', (select count(*) from update_event), 2);
+rollback;
+
+-- each of these must be refused by the policy, one case per way a supervisor could skip the review or forge a name
+do $$ begin
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into photo (order_id, buyer_id, stage, unit_id, storage_key, approved_by, approved_at)
+      values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'photos/a.jpg', '00000000-0000-0000-0000-0000000000ee', now());
+    raise exception 'FAIL supervisor inserted an approved photo';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot insert an approved photo (%)', sqlerrm;
+  end;
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into photo (order_id, buyer_id, stage, unit_id, storage_key, rejected_at, purged_at)
+      values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'photos/a.jpg', now(), now());
+    raise exception 'FAIL supervisor inserted a rejected or purged photo';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot insert a rejected or purged photo (%)', sqlerrm;
+  end;
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into photo (order_id, buyer_id, stage, unit_id, storage_key)
+      values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'approved-c');
+    raise exception 'FAIL supervisor named a storage key outside photos/';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot name any storage key (%)', sqlerrm;
+  end;
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into note (order_id, buyer_id, stage, unit_id, text_en, confirmed_by, confirmed_at)
+      values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'x', '00000000-0000-0000-0000-0000000000ee', now());
+    raise exception 'FAIL supervisor inserted a confirmed note';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot insert a confirmed note (%)', sqlerrm;
+  end;
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into note (order_id, buyer_id, stage, unit_id, text_en, category, category_by)
+      values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', 'x', 'machine', 'merchandiser');
+    raise exception 'FAIL supervisor wrote a note whose reason claims a merchandiser chose it';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot claim a merchandiser chose the reason (%)', sqlerrm;
+  end;
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty, entered_by)
+      values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', '2026-11-04', 1, '00000000-0000-0000-0000-0000000000ee');
+    raise exception 'FAIL supervisor named a merchandiser as the sender of a count';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot set entered_by to a merchandiser (%)', sqlerrm;
+  end;
+  begin
+    set local role app_user;
+    perform set_config('app.role', 'supervisor', true);
+    perform set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+    insert into update_event (client_uuid, order_id, buyer_id, stage, unit_id, date, qty, received_at)
+      values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '00000000-0000-0000-0000-00000000aa01', '2026-11-04', 1, '2020-01-01');
+    raise exception 'FAIL supervisor set received_at';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok   supervisor cannot set received_at (%)', sqlerrm;
+  end;
+end $$;
+
+-- a supervisor still cannot read accounts, and the entered_by check does not widen that
+begin;
+set local role app_user;
+select set_config('app.role', 'supervisor', true), set_config('app.unit_id', '00000000-0000-0000-0000-00000000aa01', true);
+select test_expect('supervisor still sees no accounts after the entered_by check exists', (select count(*) from account), 0);
+rollback;
+
+-- ------------------------------------------------ account email is unique ignoring case (migration 016: BE-040)
+do $$ begin
+  begin
+    perform set_config('app.role', 'system', true);
+    insert into account (role, email) values ('merchandiser', 'M@EXAMPLE.test');
+    raise exception 'FAIL a second account with the same email in other letters was accepted';
+  exception when unique_violation then
+    raise notice 'ok   email is unique ignoring case';
+  end;
+end $$;
+
 -- ------------------------------------------------ sign-in role: reads and updates accounts, nothing else
 begin;
 set local role app_user;

@@ -28,3 +28,21 @@ export function contextParams(ctx: Ctx): string[] {
 }
 
 export const isStaff = (ctx: Ctx): boolean => ctx.role === 'merchandiser' || ctx.role === 'system'
+
+/**
+ * Why an operation failed, in words, for a log line or a start-up message. `error.message` alone can be empty: Node 20 raises an
+ * AggregateError with no message when a connection to `localhost` fails on both IPv6 and IPv4. So fall back to the error code,
+ * then to the messages (or codes) of the errors inside it.
+ */
+export function errorReason(e: unknown): string {
+  if (typeof e === 'string') return e.trim() || 'unknown error'
+  if (typeof e !== 'object' || e === null) return 'unknown error'
+  const err = e as { message?: unknown; code?: unknown; errors?: unknown }
+  if (typeof err.message === 'string' && err.message.trim()) return err.message.trim()
+  if (typeof err.code === 'string' && err.code) return err.code
+  if (Array.isArray(err.errors)) {
+    const inner = [...new Set(err.errors.map((x) => errorReason(x)).filter((x) => x !== 'unknown error'))]
+    if (inner.length) return inner.join('; ')
+  }
+  return 'unknown error'
+}

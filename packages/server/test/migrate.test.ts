@@ -162,7 +162,7 @@ describe('the real migrations', () => {
     const r = await runMigrations(pgliteSession(pg))
     const files = readMigrations()
     expect(r.applied).toEqual(files.map((f) => f.file))
-    expect(files.at(-1)!.file).toBe('015_warning_undo.sql')
+    expect(files.at(-1)!.file).toBe('017_read_indexes.sql')
     expect(await versions()).toEqual(files.map((f) => f.version))
 
     const shape = async (db: PGlite): Promise<string[]> => (await db.query<{ s: string }>(
