@@ -2,10 +2,20 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* A faint drafting grid behind every page (a pattern cutter's paper): 96 px squares in --grid-line, on the page colour. It is on html,
+   which index.html already paints, so it fills the whole window however short the page; the body is clear over it. Cards are white on
+   top, so it never sits behind text. Fixed, so it does not scroll with long lists. */
+html:root {
+  background-color: var(--page);
+  background-image: linear-gradient(to right, var(--grid-line) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 96px 96px;
+  background-attachment: fixed;
+}
 body {
-  margin: 0; background: var(--page); color: var(--ink);
+  margin: 0; background: transparent; color: var(--ink);
   font: 16px/1.5 var(--font-latin);
 }
+@media print { html:root { background-image: none; } }
 /* Tamil is a tall script: more line height and size, as the design doc requires. */
 html[lang='ta'] body { font-family: var(--font-tamil); font-size: 18px; line-height: 1.6; }
 h1, h2 { line-height: 1.25; margin: 0 0 .5rem; }
@@ -69,7 +79,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .chip { min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
 .chip b { font-variant-numeric: tabular-nums; margin-left: 4px; }
 .chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.strip__buyer { min-width: 150px; }
+.strip__buyer { min-width: 150px; max-width: 220px; }   /* a very long buyer name does not widen the choice (AUDIT-03) */
+.strip__buyer .input { width: 100%; text-overflow: ellipsis; }
 .strip__meta { margin-left: auto; color: var(--muted); font-size: 14px; }
 .strip__search { flex: 1 1 240px; max-width: 420px; }
 .strip__sort { flex: 0 1 260px; min-width: 190px; }
@@ -98,6 +109,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 /* A row is not tinted: the status is the badge (icon, word, colour), and a filled row reads as generated (UI/UX 2.0 feedback). */
 .why { margin-top: 2px; }
 .po { min-width: 0; }
+/* a long buyer name: two lines, then an ellipsis; the full name is the tooltip and is on the order page (AUDIT-03) */
+.board__buyer { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .flag { color: var(--status-grey); font-style: italic; }
 /* A figure a merchandiser entered on a visit: a person icon plus the words, in the flag grey (readable on the red tint too). Not a status colour. */
 .lowconf { display: flex; align-items: flex-start; gap: 6px; color: var(--status-grey); font-size: 14px; }
@@ -105,9 +118,11 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 /* Stage progress: a thin neutral bar (never a status colour) with the stage in words beside it. */
 .prog { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--muted); font-size: 14px; }
 .prog__bar { flex: 0 0 96px; height: 6px; border-radius: 3px; background: var(--page); border: 1px solid var(--border); overflow: hidden; box-sizing: content-box; }
-.prog__fill { display: block; height: 100%; background: var(--muted); }
+.prog__fill { display: block; height: 100%; background: var(--accent); }   /* the action colour, as every progress fill: how far, never how well */
 .prog__text { min-width: 0; }
 .prog__n { font-variant-numeric: tabular-nums; }
+.prog__n--line { display: block; }   /* "1 of 4 stages done" on a second line, only for an order with several stages */
+.prog__flag { font-style: italic; }
 .more { color: var(--muted); }
 
 @media (max-width: 720px) {
@@ -121,6 +136,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   .strip--find .strip__search { flex: 1 1 160px; max-width: none; }
   .board td { border: 0; padding: 4px 12px; display: flex; gap: 8px; justify-content: space-between; }
   .board td::before { content: attr(data-label); color: var(--muted); font-size: 13px; flex: 0 0 56px; }
+  /* the stamp and the PO are the card's own rows: no "Status" and "PO" label column pushing them in (AUDIT-03) */
+  .board td[data-label='Status']::before, .board td[data-label='PO']::before { display: none; }
   .board td > * { text-align: right; }
   .board td .po { text-align: left; flex: 1; }   /* the PO cell is one block: PO, style, then the maths */
   .board td .po .sub { text-align: left; }
@@ -404,8 +421,14 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 .orig { font-size: 18px; margin: 6px 0; }
 
 /* ---- setup */
-.seg--tabs { max-width: 640px; margin-bottom: 8px; flex-wrap: wrap; }
-.seg--tabs .seg__btn { min-width: 120px; }
+/* The five tabs are one row of equal widths (AUDIT-03 finding 8: they were 120 to 149 px and wrapped to three rows on a phone). On a phone the row scrolls
+   sideways instead, with the next tab half in view; Setup.tsx scrolls the current one into view. */
+.seg--tabs { width: 100%; max-width: 640px; margin-bottom: 8px; flex-wrap: nowrap; }
+.seg--tabs .seg__btn { flex: 1 1 0; min-width: 120px; white-space: nowrap; }
+@media (max-width: 720px) {
+  .seg--tabs { max-width: none; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .seg--tabs .seg__btn { flex: 0 0 auto; scroll-snap-align: start; }
+}
 .people__actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 /* A word stays whole here: the shared .plan td rule lets any word break anywhere, which split "Merchandiser" and "Active" in the middle. */
 .people td, .people th { overflow-wrap: normal; word-break: normal; }
@@ -479,3 +502,11 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 @media (pointer: coarse) {
   .textarea { resize: none; }
 }
+
+/* The AI's suggestion on a note in the review queue: a quiet box beside the original, never a status colour. An unsure or
+   failed suggestion is marked by its words and a dashed rule, so it reads the same in greyscale. */
+.ai-box { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: var(--radius-m); background: var(--accent-soft); display: grid; gap: 6px; justify-items: start; }
+.ai-box--unsure, .ai-box--failed, .ai-box--off { background: var(--surface); border-style: dashed; border-color: var(--border); }
+.ai-box--waiting { background: var(--surface); color: var(--muted); }
+.ai-box__why { margin: 0; }
+.ai-box__clash { margin: 0; font-weight: 600; }

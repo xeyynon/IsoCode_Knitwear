@@ -40,3 +40,6 @@ Thumbs.db
 # browser-driving tool output (accessibility snapshots, console logs) and TypeScript build info
 .playwright-mcp/
 *.tsbuildinfo
+
+# Vercel build output (scripts/vercel_build.mjs) and the CLI link
+.vercel/

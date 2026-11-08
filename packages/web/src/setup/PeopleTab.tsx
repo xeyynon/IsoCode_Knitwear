@@ -3,6 +3,12 @@ import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { useLang } from '../i18n'
 import { useConfirm } from '../ui/ConfirmDialog'
+import { Banner } from '../ui/atoms/Banner'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input, Select } from '../ui/atoms/Input'
+import { Field } from '../ui/molecules/Field'
 import { LoadFailed } from '../ui/LoadFailed'
 import { AccountActivity } from '../ui/organisms/AccountActivity'
 import { AddPersonForm } from '../ui/organisms/AddPersonForm'
@@ -76,7 +82,7 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
   return (
     <>
       {dialog}
-      {error && <p className="banner" role="alert">{error}</p>}
+      {error && <Banner>{error}</Banner>}
       {notice && <p className="notice-box" role="status">{notice}</p>}
       {loadFail && <LoadFailed unreachable={loadFail.unreachable} message={loadFail.message} onRetry={() => void load()} />}
 
@@ -96,15 +102,15 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
                 <td data-label="Unit" className="people__nowrap">{a.unitName ?? '-'}</td>
                 <td data-label="State" className="people__nowrap">{st.text}</td>
                 <td><div className="people__actions">
-                  {a.role === 'supervisor' && <button id={`reset-${a.id}`} className="btn btn--small" onClick={() => { setPinFor(pinFor === a.id ? null : a.id); setNewPin(''); setPinError(null) }}>Reset PIN</button>}
-                  <button className="btn btn--small" onClick={() => void signOutEverywhere(a)}>Sign out everywhere</button>
-                  {!self && <button className="btn btn--small" onClick={() => void toggleDisabled(a)}>{a.disabled ? 'Allow again' : 'Stop account'}</button>}
+                  {a.role === 'supervisor' && <Button id={`reset-${a.id}`} size="small" onClick={() => { setPinFor(pinFor === a.id ? null : a.id); setNewPin(''); setPinError(null) }}>Reset PIN</Button>}
+                  <Button size="small" onClick={() => void signOutEverywhere(a)}>Sign out everywhere</Button>
+                  {!self && <Button size="small" onClick={() => void toggleDisabled(a)}>{a.disabled ? 'Allow again' : 'Stop account'}</Button>}
                   {pinFor === a.id && (
                     <form className="inline" onSubmit={(e) => { e.preventDefault(); setPinError(null); const w = weakPin(newPin); if (w) return setPinError(w); void act('PIN changed. They are signed out everywhere and any lock is cleared.', async () => { await apiFetch(`/api/accounts/${a.id}/pin`, { method: 'POST', body: JSON.stringify({ pin: newPin }) }); setPinFor(null); setNewPin(''); document.getElementById(`reset-${a.id}`)?.focus() }, setPinError) }}>
                       <label className="visually-hidden" htmlFor={`pin-${a.id}`}>New 4-digit PIN</label>
-                      <input id={`pin-${a.id}`} className="input mono" inputMode="numeric" maxLength={4} placeholder="New PIN" value={newPin} aria-invalid={pinError ? true : undefined} aria-describedby={pinError ? `pin-err-${a.id}` : undefined} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} />
-                      <button className="btn btn--small">Save PIN</button>
-                      {pinError && <p className="error" id={`pin-err-${a.id}`} role="alert">{pinError}</p>}
+                      <Input id={`pin-${a.id}`} mono inputMode="numeric" maxLength={4} placeholder="New PIN" value={newPin} aria-invalid={pinError ? true : undefined} aria-describedby={pinError ? `pin-err-${a.id}` : undefined} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} />
+                      <Button size="small">Save PIN</Button>
+                      {pinError && <ErrorText id={`pin-err-${a.id}`}>{pinError}</ErrorText>}
                     </form>
                   )}
                 </div></td>
@@ -117,17 +123,17 @@ export function PeopleTab({ meId }: { meId: string | undefined }) {
       <AddPersonForm units={units} onAdd={addPerson} />
 
       <h2 id="add-unit" tabIndex={-1}>Add a unit</h2>
-      <form className="card change" onSubmit={addUnit} noValidate>
+      <Card as="form" className="change" onSubmit={addUnit} noValidate>
         <p className="sub">Units are the places work happens: your own floors, and subcontractors for printing or washing. Units: {units.map((u) => u.name).join(', ') || 'none yet'}.</p>
         <div className="grid2">
-          <label className="field"><span>Name</span><input className="input" value={unit.name} maxLength={80} onChange={(e) => setUnit({ ...unit, name: e.target.value })} /></label>
-          <label className="field"><span>Kind</span>
-            <select className="input" value={unit.type} onChange={(e) => setUnit({ ...unit, type: e.target.value as 'own' | 'subcontractor' })}>
+          <Field label="Name"><Input value={unit.name} maxLength={80} onChange={(e) => setUnit({ ...unit, name: e.target.value })} /></Field>
+          <Field label="Kind">
+            <Select value={unit.type} onChange={(e) => setUnit({ ...unit, type: e.target.value as 'own' | 'subcontractor' })}>
               <option value="own">Our own unit</option><option value="subcontractor">A subcontractor</option>
-            </select></label>
+            </Select></Field>
         </div>
-        <button className="btn">Add unit</button>
-      </form>
+        <Button>Add unit</Button>
+      </Card>
 
       <h2>Activity</h2>
       <p className="sub">Who added, stopped, allowed or reset an account, and when. The latest 100 changes, newest first. A PIN or password is never shown here.</p>

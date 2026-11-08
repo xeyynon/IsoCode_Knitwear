@@ -36,7 +36,8 @@ describe('Order detail', () => {
     expect(css).toMatch(/\.card\s*\+\s*\.card\s*\{[^}]*margin-top:\s*var\(--space-4\)/)
   })
   it('changing the date is not a second filled primary button', () => {
-    expect(detail).not.toMatch(/btn btn--primary" disabled=\{busy\}>\{busy \? 'Changing/)
-    expect(detail).toMatch(/className="btn" disabled=\{busy\}>\{busy \? 'Changing/)
+    // Same promise through the atom: "Change date" is the plain (outlined) Button, never `variant="primary"`; "Add an update" keeps the one filled button.
+    expect(detail).not.toMatch(/<Button variant="primary"[^>]*>\{busy \? 'Changing/)
+    expect(detail).toMatch(/<Button disabled=\{busy\}>\{busy \? 'Changing/)
   })
 })

@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { setLang, useLang } from '../i18n'
 import { getClaims, signOut } from '../api/session'
 import { BUILD_LABEL } from '../release/buildInfo'
+import { Button } from './atoms/Button'
+import './AppBar.css'
 import { WhatsNewDialog } from './WhatsNewDialog'
 import { NavTabs } from './molecules/NavTabs'
 import { useReviewCount } from './useReviewCount'
@@ -60,9 +62,9 @@ export function AppBar({ title, plainTitle = false }: { title: string; plainTitl
       {plainTitle ? <p className="appbar__title">{title}</p> : <h1 className="appbar__title">{title}</h1>}
       {merchandiser && <NavTabs reviewCount={reviewCount} />}
       <div className="menu" onKeyDown={onKey}>
-        <button ref={button} className="btn btn--icon" aria-haspopup="menu" aria-expanded={open} aria-label={t('nav.menu')} onClick={() => setOpen((o) => !o)}>
+        <Button ref={button} size="icon" aria-haspopup="menu" aria-expanded={open} aria-label={t('nav.menu')} onClick={() => setOpen((o) => !o)}>
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-        </button>
+        </Button>
         {open && (
           <div ref={menu} className="menu__popover" role="menu">
             <button role="menuitem" className="menu__item" onClick={() => { setLang(lang === 'en' ? 'ta' : 'en'); close() }}>

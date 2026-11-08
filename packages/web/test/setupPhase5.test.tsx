@@ -39,10 +39,13 @@ describe('SetupChecklist: its states', () => {
     expect(container.querySelector('.setupcheck__line')?.textContent).toMatch(/nothing is set up yet/i)
     expect([...container.querySelectorAll('.setupcheck__go')].map((a) => a.textContent)).toEqual(['Add a unit', 'Add closed days', 'Add a template', 'Add a person'])
   })
-  it('partly: the list is open and the line names what is left', () => {
+  it('partly: the steps are shown and the line names what is left', () => {
     const { container } = show({ result: partly })
     expect(container.querySelector('.setupcheck__line')?.textContent).toBe('1 of 4 done. Left: Closed days, Templates, People.')
-    expect((container.querySelector('details') as HTMLDetailsElement).open).toBe(true)
+    // On a wide screen the steps are simply shown: no toggle that is always open (AUDIT-03 finding 18).
+    expect(container.querySelector('details')).toBeNull()
+    expect(container.querySelector('.setupcheck__list')).not.toBeNull()
+    expect(container.textContent).not.toContain('The steps')
   })
   it('partly, on a phone: the list is folded behind "Show the steps", so the page below is not pushed down', () => {
     const original = window.matchMedia
@@ -153,11 +156,14 @@ describe('the People screen has one filled button', () => {
   const tab = read('../src/setup/PeopleTab.tsx')
   const form = read('../src/ui/organisms/AddPersonForm.tsx')
   it('the tab itself has no primary button: Save PIN and Add unit are plain', () => {
+    // Same promise through the atom: no `variant="primary"` Button in the tab, and Add unit is the plain Button.
+    expect(tab).not.toMatch(/variant="primary"/)
     expect(tab).not.toContain('btn--primary')
-    expect(tab).toContain('<button className="btn">Add unit</button>')
+    expect(tab).toContain('<Button>Add unit</Button>')
   })
   it('the person form has exactly one', () => {
-    expect(form.match(/btn--primary/g)).toHaveLength(1)
+    expect(form.match(/variant="primary"/g)).toHaveLength(1)
+    expect(form).not.toContain('btn--primary')
   })
   it('a unit is not a person: Add a unit stays its own form, with an anchor the checklist can reach', () => {
     expect(tab).toContain('<h2 id="add-unit" tabIndex={-1}>Add a unit</h2>')

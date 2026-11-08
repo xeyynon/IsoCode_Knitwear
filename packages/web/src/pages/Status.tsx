@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { API_BASE } from '../api/session'
+import { ButtonLink } from '../ui/atoms/Button'
+import { PublicShell } from '../ui/templates/PublicShell'
 import { Loading } from '../ui/Loading'
 import { BUILD_LABEL } from '../release/buildInfo'
 import { checkedText } from '../statusRules'
@@ -30,7 +31,7 @@ export default function Status() {
 
   const headline = unreachable ? 'Cannot reach the server' : !body ? 'Checking…' : body.ok ? 'Everything is working' : 'Some parts are not working'
   return (
-    <main className="page page--narrow">
+    <PublicShell narrow>
       <h1>System status</h1>
       {/* aria-live covers the headline only, so a screen reader is not interrupted every minute. */}
       <p className="status-headline" role="status" aria-live="polite">{headline}</p>
@@ -45,7 +46,7 @@ export default function Status() {
       {body && <p className="sub">{checkedText(body.checkedAt)}</p>}
       {BUILD_LABEL && <p className="sub">{BUILD_LABEL}</p>}
       {/* Not a dead end: the app opens on the right place for whoever is signed in, or on the sign-in. */}
-      <p><Link className="btn" to="/">← Back to the app</Link></p>
-    </main>
+      <p><ButtonLink to="/">← Back to the app</ButtonLink></p>
+    </PublicShell>
   )
 }

@@ -36,7 +36,8 @@ describe('3.8 the status page', () => {
   })
   it('has a way back to the app, so it is not a dead end', () => {
     // A button, not a bare text link: a 22 px line of text is under the tap size (npm run ux caught the first version).
-    expect(status).toMatch(/<Link className="btn" to="\/">/)
+    // (through the atom: ButtonLink draws `btn`, atoms.test.tsx)
+    expect(status).toMatch(/<ButtonLink to="\/">/)
   })
   it('uses the same sentence for the time on the page', () => {
     expect(status).toContain('checkedText(body.checkedAt)')
@@ -51,7 +52,7 @@ describe('3.9 New order: no placeholder zero', () => {
 })
 
 describe('3.10 no accent stripe', () => {
-  // A coloured or grey bar down one edge of a card is banned in any colour (the TARANG rule, frontendskill.md 8.8). These rules draw a
+  // A coloured or grey bar down one edge of a card is banned in any colour (a design rule). These rules draw a
   // line or a shape, not a stripe on a card: the timeline's spine and the triangles and dashed line of the horizontal timeline.
   const ALLOWED = new Set(['.timeline__item', '.timeline__item:last-child', '.tlc__exline', '.tlc__pin--plan', '.tlc__swatch--plan', '.tlc__swatch--ex'])
   it('only the timeline draws a left border', () => {

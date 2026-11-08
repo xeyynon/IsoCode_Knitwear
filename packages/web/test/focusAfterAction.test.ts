@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
 // An action that removes the control that had focus must hand focus on, or it falls to <body>
-// and the next Tab starts again from the top of the page (frontendskill.md 8.3).
+// and the next Tab starts again from the top of the page (a design rule).
 const src = (file: string) => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
 
 describe('focus after a control is removed', () => {
@@ -29,7 +29,8 @@ describe('focus after a control is removed', () => {
     const s = src('setup/PeopleTab.tsx')
     expect(s).not.toMatch(/if \(w\) return setError\(w\)/)
     expect(s).toMatch(/if \(w\) return setPinError\(w\)/)
-    expect(s).toMatch(/<p className="error" id=\{`pin-err-\$\{a\.id\}`\} role="alert">\{pinError\}<\/p>/)
+    // Same promise through the atom: ErrorText draws `<p class="error" role="alert">` (atoms.test.tsx) and carries the id the field points at.
+    expect(s).toMatch(/<ErrorText id=\{`pin-err-\$\{a\.id\}`\}>\{pinError\}<\/ErrorText>/)
     expect(s).toMatch(/aria-invalid=\{pinError \? true : undefined\} aria-describedby=\{pinError \? `pin-err-\$\{a\.id\}` : undefined\}/)
     expect(s).toMatch(/, setPinError\)/)                                    // a server refusal of the PIN lands there too
   })

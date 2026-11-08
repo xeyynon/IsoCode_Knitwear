@@ -29,6 +29,7 @@ Supervisors on the floor send a daily count from a phone, in Tamil, even without
 | **Built for a bad signal** | The app opens with no signal, saves every update on the phone first, and sends when it can. A repeated send is never counted twice. |
 | **Tamil first for supervisors** | Every supervisor screen is in Tamil (the wording still needs reading by supervisors before the pilot). |
 | **Private by construction** | Row-level security is forced on every table, so a forgotten filter cannot leak another buyer's data. |
+| **AI reads the notes, a person decides** | A supervisor's Tamil note gets an English meaning and a suggested reason with its confidence, beside the original. Unsure or failed suggestions say so; the merchandiser always decides. |
 
 ## Three people, three screens
 
@@ -83,11 +84,11 @@ The order's colour is its worst stage. Thresholds live in a settings table. Ever
 
 ## Status
 
-An early build, **tested but not yet tried in production**. The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (nearly 2,000, including a real Postgres 16 run in CI). Voice notes, automatic translation and automatic reason suggestions are **not built** (they need a speech and translation service agreement).
+An early build, **tested but not yet tried in production**. The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (nearly 2,000, including a real Postgres 16 run in CI). AI suggestions for notes from the floor (an English meaning and a reason, and what happens when the AI is unsure or wrong) are built and tested; voice notes are **not built**. A demo runs at **https://isocode-knitwear.vercel.app** (free plans; how it is deployed and the demo logins: [deployment.md](deployment.md)).
 
-Not yet verified: a production Postgres server, a real S3 bucket, real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
+Not yet verified: a production-size Postgres server (the demo runs on Neon's free plan), a real S3 bucket, real phones (the offline checks ran in a desktop browser at phone size), and the Tamil wording with floor supervisors. Every row, with the build that delivered it, is in [docs/status.md](docs/status.md); the open work is in the [Roadmap](#roadmap).
 
-Quality is tracked in the open: [`bug.md`](bug.md) lists every reproduced bug, [`bugfixed.md`](bugfixed.md) how each was fixed and the test that keeps it fixed, and [`optimised.md`](optimised.md) what was made cheaper to run, with measurements. The research behind those is in [`docs/optimisation-research.md`](docs/optimisation-research.md).
+Every bug found by an audit has a regression test named after its id (`BE-nnn`), and [`optimised.md`](optimised.md) records what was made cheaper to run, with measurements. The research behind those is in [`docs/optimisation-research.md`](docs/optimisation-research.md).
 
 ## Architecture
 ```mermaid
@@ -117,7 +118,8 @@ packages/
 scripts/     changelog.mjs (versioning), check_repo.mjs, check_docs.mjs, check_bugs.mjs, check_contrast.mjs, and the browser tools
 docs/        status.md, optimisation-research.md, and builds/ (one report per numbered build)
 uiux/        Screenshots of every screen on demo data: 1.0 (frozen, build 1006) and 2.0
-bug.md, bugfixed.md, optimised.md   The bug log, the fix log and the speed-and-cost log
+optimised.md  The speed-and-cost log
+deployment.md How to run it locally, how it is deployed, and the demo logins
 .github/     CI, release and Dependabot configuration
 ```
 
@@ -129,7 +131,7 @@ npm install
 npm run verify        # static checks, typecheck and every test (not the web build: CI also runs npm run build)
 ```
 
-**Run the whole app locally on demo data** (an in-memory database with illustrative orders; today is fixed to 4 Nov 2026 so the figures line up, and the pictures above are taken from it):
+**Run the whole app locally on demo data** (an in-memory database loaded with the brief's sample POs and four illustrative orders from `packages/server/src/demoSeed.ts`; today is fixed to 6 Nov 2026 so the figures line up):
 
 ```bash
 npm run dev:api                 # terminal 1: API on http://127.0.0.1:8787
@@ -138,10 +140,14 @@ npm run dev -w @isocode/web     # terminal 2: app on http://localhost:5173
 
 | Demo account | Sign in with |
 | --- | --- |
-| Merchandiser | `m@example.test` / `correct horse battery` |
-| Supervisor | phone `98765 43210` / PIN `4321` (My orders today and the daily update) |
+| Merchandiser | `merch@companya.test` / `demo knitwear 2026` |
+| Supervisor, Unit 1 | phone `90000 10001` / PIN `4826` (B-PO-88240 finishing, B-PO-88213 stitching) |
+| Supervisor, Unit 2 | phone `90000 10002` / PIN `5937` |
+| Supervisor, Unit 3 | phone `90000 10003` / PIN `6048` (the printed styles) |
+| Buyer, Company B (read-only) | `http://localhost:5173/buyer#bl_demoCompanyB_readonly_2026` |
+| Buyer, Company C (read-only) | `http://localhost:5173/buyer#bl_demoCompanyC_readonly_2026` |
 
-These are throwaway demo credentials for the in-memory database. Never reuse them anywhere real.
+These are throwaway demo credentials. Never reuse them anywhere real. Set `GROQ_API_KEY` (free, console.groq.com), `GEMINI_API_KEY` (free, Google AI Studio) or `ANTHROPIC_API_KEY` in terminal 1 to turn AI suggestions on. `DEMO_DATA=fixture npm run dev:api` serves the small test fixture instead (`m@example.test` / `correct horse battery`, supervisor `98765 43210` / `4321`), which `npm run a11y`, `snapshots` and `ux` check against. `npm run seed:demo` loads the same demo data into a real, migrated, empty Postgres (as `app_user`).
 
 **Production build of the web app:**
 ```bash
@@ -172,6 +178,10 @@ The build deliberately fails without `VITE_API_BASE`: the value is baked into th
 | `LOG_LEVEL` | `fatal`, `error`, `warn`, `info` (default), `debug`, `trace` or `silent`. At `info` each request writes one short line (method, route pattern, status, milliseconds), never a body, a header or a query string. Any other value stops the server at start-up |
 | `DB_POOL_MAX` | Database connections, 1 to 50, default 5. Each is a Postgres process and the work is mostly CPU, so more do not help a small server. A request that cannot get one within 5 seconds answers 503 `busy` |
 | `DB_STATEMENT_TIMEOUT_MS` | The database ends any single statement that runs longer than this, default 30000; 0 means no limit. A transaction left idle is ended after 15 seconds |
+| `AI_PROVIDER` | `groq`, `gemini` or `anthropic`: who reads the notes from the floor. Unset: whichever key below is set (Anthropic, then Gemini, then Groq). Neither key: AI is off and the review queue says so (never a made-up suggestion) |
+| `GROQ_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | That provider's key. Keep it in the host's secret settings |
+| `AI_MODEL` | Optional. The provider's model; defaults `openai/gpt-oss-120b`, `gemini-3.8-flash` and `claude-opus-5-5` |
+| `DEMO_TODAY` | Hosted demo only: every real day reads as this date (`demoClock.ts`), so the seeded figures stay meaningful |
 | `ALLOW_UNSAFE_DB_ROLE` | `1` lets the server start even though `DATABASE_URL` is a superuser, `BYPASSRLS` or table-owner login, which silently turns row-level security off. For local development only; leave it unset in every real deployment (the default is to refuse to start) |
 
 **Start the real API** with `npm run start:api` (it runs `packages/server/src/server.ts` through `tsx`, which is installed with `npm ci --omit=dev`). Nothing loads `packages/server/.env.example` or a `.env` file: export the variables in the environment of the process (the host's settings, `export`, a systemd `EnvironmentFile`, `docker run --env-file`). `npm run dev:api` is the in-memory demo, not this.
@@ -202,6 +212,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`. Messages are 
 | `GET /api/buyers/:id/export.csv` | merchandiser | The file one buyer would get, for checking it or sending it on |
 | `GET /api/reasons` | signed in | The fixed list of reasons for a slow stage |
 | `POST /api/notes/:id/confirm` | merchandiser | Review a note: add the English meaning of a Tamil note and settle the reason |
+| `POST /api/notes/suggest`, `POST /api/notes/:id/suggest` | merchandiser | AI suggestions: for up to 3 notes still waiting for one, or for one note again. 503 when AI is not set up |
 | `POST /api/photos` | supervisor, merchandiser | Upload one photo as a raw JPEG (headers carry the order, stage, day and a retry-safe id). A supervisor can add one only for a stage of their own unit; a merchandiser can add one for any stage, on a supervisor's behalf. Checked to be a real JPEG, 1 KB to 3 MB; the camera's metadata (EXIF, including any location) is removed before the file is stored |
 | `GET /api/photos/:id/file` | merchandiser, supervisor | View a photo (a supervisor only their own unit's) |
 | `POST /api/photos/:id/approve`, `.../reject` | merchandiser | Approve or withdraw a photo |
@@ -271,6 +282,13 @@ Every change is either a **build** or an **InBul** (internal build):
 
 The tag is the source of truth for the number; commit titles never carry it. Builds are batched (about ten fixes each) so the list stays meaningful.
 
+**Fewer, bigger commits.** One day of work once produced 94 commits on `main` (about 65 of them real changes, the rest merges), most of them one fix each. That buries what matters. The rule from now on:
+
+- **One pull request, one commit on `main`.** Commit as often as you like on your branch, but merge with `gh pr merge --squash` (or the Squash button; the repository allows nothing else), so `main` gets one commit per pull request, titled for the whole change. The pull request title becomes the commit title, so an internal change is titled `InBulNN: ...` with the id from `node scripts/changelog.mjs --next-internal`.
+- **One InBul per pull request, not per fix.** Related internal work (a bug round, a tooling clean-up, a docs pass) is one pull request and one InBul id. A follow-up that only fixes the same pull request's own test or typo goes into that pull request, not into a new InBul.
+- **Bundle what a user would notice into a build.** A build is a release record, so group a day's or a theme's changes into one (for example one build for the backend bug and speed work, one for a UI round) rather than one per fix. Its report lists the pull requests and InBul ids it covers under "What changed".
+- **Dependabot already groups** its weekly updates; major versions are upgraded by hand, one pull request each.
+
 ```bash
 # a build
 git add <files>
@@ -291,7 +309,7 @@ git push origin main --tags
 - The scripts act on the repository that holds them, wherever you start them from.
 - `CHANGELOG.md` and `build-info.json` are generated. Never edit them by hand. `node scripts/changelog.mjs --regenerate` rebuilds both from `docs/builds` without making a new build; `--pending` does the same as part of a build.
 - **The app shows the build.** `build-info.json` is imported into the web bundle (`packages/web/src/release/buildInfo.ts`), so the label ("Build 1006 - 3 Nov 2026") is the build that was shipped. It is at the foot of the app menu on every screen and on the public status page. Merchandisers also get **What's new** in the menu: a dialog with the title, date and summary of the last three builds. The summary is the whole "What changed" paragraph of the build report, so write it as release wording a merchandiser can read: plain, public, no budgets, rates or client detail. `build-info.json` keeps the last 10 builds. Date and label formatting is `release/releaseInfo.ts`; the file written by the script is shaped in `scripts/buildInfo.mjs` (both tested in `packages/web/test/releaseInfo.test.ts`). Supervisors do not get the dialog (it is English only), only the label.
-- **Bugs:** a bug found by an audit gets an id (`BE-nnn`) in `bug.md`. When it is fixed, `bugfixed.md` gets an entry that starts with the id and names its test on a line `Test: <file> :: <start of the test's name>`. `scripts/check_bugs.mjs` (part of `npm run check`) fails when a fixed bug has no entry, an entry's id is not in `bug.md`, or a named test file or test does not exist.
+- **Bugs:** a bug found by an audit gets an id (`BE-nnn`) and a regression test whose name starts with that id. `scripts/check_bugs.mjs` (part of `npm run check`) checks a bug log against those tests whenever a `bug.md` is present; the working logs are kept out of the repository.
 - Never put "(Build N)" in a title, move a tag, or add attribution lines to commits.
 - Build reports in `docs/builds` are public. They say what changed and how it was checked, never budgets, rates or client detail.
 - Run `npm run verify` before every commit. Pull requests use the template in `.github`.
@@ -308,7 +326,7 @@ git push origin main --tags
 2. **Order screens, remaining:** setting an order's stages by hand, and an option to re-date existing orders when a holiday is added.
 3. **Review gate:** done for warnings, photos and notes.
 4. **Buyer view:** done, including the isolation tests on real Postgres (`test-postgres` in CI).
-5. **Notes, remaining:** voice notes, and automatic translation and reason suggestions with low-confidence ones sent to review. The original is always kept beside any translation.
+5. **Notes, remaining:** voice notes (speech to text, then the same AI step), and measuring the AI's suggestions against the merchandisers' final reasons over the pilot to set the confidence threshold from data.
 6. **Pilot:** one production unit for a week, with baseline measurements.
 
 ## Licence

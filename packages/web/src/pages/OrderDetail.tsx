@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { shortDate, type Status } from '../board/boardLogic'
@@ -9,12 +9,18 @@ import { isRealDate, slipText } from '../orders/orderForm'
 import { LOW_CONFIDENCE } from '../orders/visitEntry'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
 import { DateWords } from '../ui/atoms/DateWords'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input } from '../ui/atoms/Input'
+import { TextLink } from '../ui/atoms/TextLink'
+import { Field } from '../ui/molecules/Field'
 import { KeyFacts } from '../ui/organisms/KeyFacts'
 import { BentoCell, OrderBento } from '../ui/organisms/OrderBento'
 import { dateInWords } from '../dateWords'
 import { reasonById, usableReasons, type Reason } from '../notes/reasons'
-import { AppBar } from '../ui/AppBar'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
 import { LowConfidence } from '../ui/LowConfidence'
@@ -84,10 +90,8 @@ export default function OrderDetail() {
   const last = d?.stages[d.stages.length - 1]
 
   return (
-    <>
-      <AppBar title={d ? d.order.po : 'Order'} plainTitle={!!d} />
-      <main className="page page--form page--bento">
-        <Link className="link back" to={boardPath}>← Order board</Link>
+    <MerchandiserShell title={d ? d.order.po : 'Order'} plainTitle={!!d} form bento>
+        <TextLink className="back" to={boardPath}>← Order board</TextLink>
         {!d && !error && <Loading label="Loading order" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
 
@@ -96,7 +100,7 @@ export default function OrderDetail() {
             {created && <p className="notice-box" role="status">Order created. Its stage dates were worked out from ex-factory.</p>}
             <OrderBento
               head={
-            <section className="card summary">
+            <Card className="summary">
               <div className="summary__top">
                 <h1 className="mono">{d.order.po}</h1>
                 <StatusBadge status={d.order.status} />
@@ -113,7 +117,7 @@ export default function OrderDetail() {
               {d.history[0] && (
                 <p className="sub summary__last">Last date change: {when(d.history[0].at)} by {d.history[0].by ?? 'a person not recorded'}. <a className="link" href="#history">See the history</a></p>
               )}
-            </section>
+            </Card>
               }
               timeline={
                 <BentoCell>
@@ -154,20 +158,20 @@ export default function OrderDetail() {
                 <>
             {d.stages.length > 0 && <VisitEntryForm key={d.order.id} orderId={d.order.id} stages={d.stages.map((s) => s.stage)} today={d.today ?? istDate()} onAdded={load} />}
 
-            <section className="card">
+            <Card>
               <details open={moved !== null || changeError !== null}>
                 <summary><b>Change the ex-factory date</b></summary>
                 <form onSubmit={change} noValidate className="change">
-                  <label className="field"><span>New ex-factory date</span>
-                    <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /><DateWords iso={date} /></label>
-                  <label className="field"><span>Reason (kept in the history)</span>
-                    <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></label>
-                  {changeError && <p className="error" role="alert">{changeError}</p>}
-                  <button className="btn" disabled={busy}>{busy ? 'Changing…' : 'Change date'}</button>
+                  <Field label="New ex-factory date">
+                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /><DateWords iso={date} /></Field>
+                  <Field label="Reason (kept in the history)">
+                    <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} /></Field>
+                  {changeError && <ErrorText>{changeError}</ErrorText>}
+                  <Button disabled={busy}>{busy ? 'Changing…' : 'Change date'}</Button>
                 </form>
               </details>
               {moved && <p className="notice-box" role="status">{moved}</p>}
-            </section>
+            </Card>
                 </>
               }
               log={
@@ -212,7 +216,6 @@ export default function OrderDetail() {
             />
           </>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

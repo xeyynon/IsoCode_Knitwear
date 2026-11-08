@@ -3,7 +3,7 @@
 // is taken again the set being replaced is first kept in uiux/2.0/previous/<date-time>/.
 // Run again whenever the interface changes:
 //
-//   npm run dev:api                    (terminal 1)
+//   DEMO_DATA=fixture npm run dev:api                    (terminal 1)
 //   npm run dev -w @isocode/web        (terminal 2)
 //   npm run snapshots                  (terminal 3)
 //
@@ -19,7 +19,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright-core'
 import { changesMarkdown, diffSets } from './pngDiff'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const OUT = path.join(ROOT, 'uiux', '2.0')   // 1.0 is the frozen record of build 1006: this script never writes there
+const OUT = process.env.SNAP_OUT ? path.resolve(process.env.SNAP_OUT) : path.join(ROOT, 'uiux', '2.0')   // SNAP_OUT: take a set somewhere else (a refactor check); 1.0 is the frozen record of build 1006 and is never written
 const WEB = process.env.WEB ?? 'http://localhost:5173'
 const MERCH = { email: 'm@example.test', password: 'correct horse battery' }
 const SUP = { phone: '98765 43210', pin: '4321' }
@@ -29,7 +29,7 @@ const shots: Shot[] = []
 
 async function up(): Promise<void> {
   try { if ((await fetch(`${WEB}/api/health`)).ok) return } catch { /* handled below */ }
-  console.error(`The app is not running at ${WEB}. Start it first:\n  npm run dev:api\n  npm run dev -w @isocode/web`)
+  console.error(`The app is not running at ${WEB}. Start it first:\n  DEMO_DATA=fixture npm run dev:api\n  npm run dev -w @isocode/web`)
   process.exit(1)
 }
 
@@ -382,7 +382,7 @@ let md = `# Interface snapshots
 Pictures of every screen as it looks now, taken from the running app on demo data (not real orders). Regenerate them any time the interface changes:
 
 \`\`\`bash
-npm run dev:api                  # terminal 1
+DEMO_DATA=fixture npm run dev:api                  # terminal 1
 npm run dev -w @isocode/web      # terminal 2
 npm run snapshots                # terminal 3: writes this folder; the previous set is kept in previous/
 \`\`\`
