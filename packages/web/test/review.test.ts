@@ -68,12 +68,12 @@ describe('focus after a review action', () => {
   // of the section the button was in, not always the first one at the top of a long page.
   const src = readFileSync(new URL('../src/pages/Review.tsx', import.meta.url), 'utf8')
   const sections = src.split('<h2').slice(1).map((s) => '<h2' + s)
-  const acting = sections.filter((s) => /void (decide|reviewNote|decidePhoto)\(/.test(s))
+  const acting = sections.filter((s) => /void (decide|reviewNote|decidePhoto|undoHide)\(/.test(s))
   it('finds every section with an action', () => expect(acting.length).toBe(5))
   it.each(acting.map((s) => [s.slice(0, s.indexOf('</h2>') + 5), s]))('%s focuses its own heading', (_h, s) => {
     const ref = /^<h2 id=\{sectionAnchor\('\w+'\)\} tabIndex=\{-1\} ref=\{(\w+)\}>/.exec(s)?.[1]
     expect(ref).toBeTruthy()
-    const calls = [...s.matchAll(/void (?:decide|reviewNote|decidePhoto)\(([^)]*)\)/g)].map((m) => m[1] ?? '')
+    const calls = [...s.matchAll(/void (?:decide|reviewNote|decidePhoto|undoHide)\(([^)]*)\)/g)].map((m) => m[1] ?? '')
     for (const args of calls) expect(args.trim().endsWith(`, ${ref}`)).toBe(true)
   })
   it('handlers focus the heading they are given', () => {

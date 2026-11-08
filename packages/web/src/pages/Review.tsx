@@ -6,7 +6,7 @@ import { istDate } from '../dates'
 import { exportFileName } from '../review/exportLogic'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { oneAtATime } from '../queue/oneAtATime'
-import { activeLinkCount, afterRevoke, buyerLinkUrl, emptyLine, linkStatus, offersNoReason, parseDays, reviewSummary, sectionAnchor, sectionTitle, type ReviewSectionId } from '../review/reviewLogic'
+import { activeLinkCount, afterRevoke, buyerLinkUrl, emptyLine, linkStatus, offersNoReason, parseDays, reviewSummary, sectionAnchor, sectionTitle, splitLinks, type ReviewSectionId } from '../review/reviewLogic'
 import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
@@ -20,6 +20,8 @@ import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input, Select, Textarea } from '../ui/atoms/Input'
 import { Field } from '../ui/molecules/Field'
+import { InlineUndo } from '../ui/molecules/InlineUndo'
+import { afterHide, afterUndo, offersUndo, undoOutcome, type HiddenFrom, type HiddenItem } from '../review/undoLogic'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
 interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null }
@@ -41,6 +43,9 @@ export default function Review() {
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [announce, setAnnounce] = useState('')
+  // Warnings hidden from the waiting list during this visit, each with an Undo line where its card was (slice 4.1). Local to the page: a reload ends them.
+  const [hidden, setHidden] = useState<HiddenItem[]>([])
+  const [undoFailed, setUndoFailed] = useState<Record<string, { text: string; final: boolean }>>({})
   const pendingHeading = useRef<HTMLHeadingElement>(null)
   const notesHeading = useRef<HTMLHeadingElement>(null)
   const photosHeading = useRef<HTMLHeadingElement>(null)
@@ -54,6 +59,7 @@ export default function Review() {
   const [made, setMade] = useState<{ id: string; url: string; copied: boolean } | null>(null)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [showPast, setShowPast] = useState(false)   // the cancelled and expired links are folded until asked for
   const making = useRef(false)
 
   const load = useCallback(async () => {
@@ -71,19 +77,49 @@ export default function Review() {
     apiFetch<Options>('/api/orders/options').then((o) => setBuyers(o.buyers)).catch(() => undefined)
   }, [load])
 
-  async function decide(item: Item, action: 'confirm' | 'dismiss', heading: React.RefObject<HTMLHeadingElement | null>) {
+  // 'dismiss-waiting' is "Don't show" on a warning still waiting for review; 'dismiss' is "Hide from buyer" on one that was confirmed. Both call the same
+  // route, but only the first can be undone: a confirmed warning may already have been seen by a buyer (rule 18).
+  async function decide(item: Item, action: 'confirm' | 'dismiss-waiting' | 'dismiss', heading: React.RefObject<HTMLHeadingElement | null>) {
     setBusy(item.id); setActionError(null)
     try {
       const text = edits[item.id]
       // Say what was on screen, so a warning a refresh has changed since is not confirmed unseen.
       const body = action === 'confirm' ? { ...(text !== undefined ? { text } : {}), seenStatus: item.status, seenText: item.buyerText } : {}
-      await apiFetch(`/api/warnings/${item.id}/${action}`, { method: 'POST', body: JSON.stringify(body) })
-      setAnnounce(action === 'confirm' ? `Confirmed. ${item.po} ${item.stage} is now visible to ${item.buyerName}.` : `Dismissed. ${item.buyerName} will not see it.`)
+      await apiFetch(`/api/warnings/${item.id}/${action === 'confirm' ? 'confirm' : 'dismiss'}`, { method: 'POST', body: JSON.stringify(body) })
+      const from: HiddenFrom = action === 'dismiss-waiting' ? 'waiting' : 'confirmed'
+      const undoable = action !== 'confirm' && offersUndo(from)
+      if (undoable) {
+        setHidden((h) => afterHide(h, { id: item.id, po: item.po, stage: item.stage, buyerName: item.buyerName }))
+        setUndoFailed(({ [item.id]: _gone, ...rest }) => rest)
+      }
+      setAnnounce(action === 'confirm' ? `Confirmed. ${item.po} ${item.stage} is now visible to ${item.buyerName}.` : `Dismissed. ${item.buyerName} will not see it.${undoable ? ' You can undo this below the section heading.' : ''}`)
       await load()
       heading.current?.focus()      // the card that had focus is gone: back to the heading of its own section
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.')
       if (e instanceof ApiError && e.code === 'changed') await load()      // show the new colour and wording
+    }
+    setBusy(null)
+  }
+
+  // Bring a hidden warning back to "waiting for review" (the server refreshes its wording and figures in the same step). A refusal or a failure is said
+  // in words on the same line and changes nothing else on the page.
+  async function undoHide(h: HiddenItem, heading: React.RefObject<HTMLHeadingElement | null>) {
+    const key = `undo:${h.id}`
+    setBusy(key); setUndoFailed(({ [h.id]: _gone, ...rest }) => rest)
+    try {
+      await apiFetch(`/api/warnings/${h.id}/undo-dismiss`, { method: 'POST', body: '{}' })
+      setHidden((list) => afterUndo(list, h.id))
+      setAnnounce(`Back in the list: ${h.po} ${cap(h.stage)}. ${h.buyerName} still cannot see it until you confirm it.`)
+      await load(); heading.current?.focus()      // the Undo button is gone with its line: back to the heading of its own section
+    } catch (e) {
+      const o = undoOutcome(e)
+      if (o.back) {
+        setHidden((list) => afterUndo(list, h.id)); setAnnounce(o.text)
+        await load(); heading.current?.focus()
+      } else {
+        setUndoFailed((f) => ({ ...f, [h.id]: { text: o.text, final: o.final } }))
+      }
     }
     setBusy(null)
   }
@@ -167,6 +203,8 @@ export default function Review() {
   }
 
   const active = activeLinkCount(links)
+  const { working, past } = splitLinks(links)
+  const shownLinks = showPast ? [...working, ...past] : working
   // A section with nothing in it keeps its heading and shrinks to one calm line.
   const sec = (count: number) => (count === 0 ? 'rvsec rvsec--empty' : 'rvsec')
 
@@ -193,7 +231,15 @@ export default function Review() {
 
             <section className={sec(data.needsReview.length)} aria-labelledby={sectionAnchor('warnings')}>
               <h2 id={sectionAnchor('warnings')} tabIndex={-1} ref={pendingHeading}>{sectionTitle('Waiting for your review', data.needsReview.length)}</h2>
-              {data.needsReview.length === 0 ? <p className="sub">{emptyLine('warnings')}</p> : (
+              {hidden.length > 0 && (
+                <ul className="plain stagelist" aria-label="Hidden from buyers, can be undone">
+                  {hidden.map((h) => (
+                    <InlineUndo key={h.id} label={`${h.po} · ${cap(h.stage)} is hidden. ${h.buyerName} will not see it.`} name={`${h.po} ${cap(h.stage)}`}
+                      busy={busy === `undo:${h.id}`} error={undoFailed[h.id]?.text} final={undoFailed[h.id]?.final} onUndo={() => void undoHide(h, pendingHeading)} />
+                  ))}
+                </ul>
+              )}
+              {data.needsReview.length === 0 ?<p className="sub">{emptyLine('warnings')}</p> : (
                 <>
                   <p className="sub">Nothing here is visible to a buyer until you confirm it. You can change the wording first. The figures below the wording are for you only.</p>
                   <ul className="plain stagelist">
@@ -206,7 +252,7 @@ export default function Review() {
                             onChange={(e) => setEdits({ ...edits, [w.id]: e.target.value })} /></Field>
                         <div className="actions">
                           <Button variant="primary" disabled={busy === w.id || !(edits[w.id] ?? w.buyerText).trim()} onClick={() => void decide(w, 'confirm', pendingHeading)}>Confirm for buyer</Button>
-                          <Button disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', pendingHeading)}>Don't show</Button>
+                          <Button disabled={busy === w.id} onClick={() => void decide(w, 'dismiss-waiting', pendingHeading)}>Don't show</Button>
                         </div>
                       </li>
                     ))}
@@ -322,21 +368,30 @@ export default function Review() {
 
               {exportError && <ErrorText>{exportError}</ErrorText>}
               {links.length === 0 ? <p className="sub">{emptyLine('links')}</p> : (
-                <table className="plan links">
-                  <thead><tr><th scope="col">Buyer</th><th scope="col">For</th><th scope="col">State</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
-                  <tbody>{links.map((l) => {
-                    const s = linkStatus(l)
-                    return (
-                      <tr key={l.id}>
-                        <td data-label="Buyer">{l.buyerName}</td><td data-label="For">{l.label ?? '-'}</td><td data-label="State">{s.text}</td>
-                        <td className="links__actions">
-                          <Button size="small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</Button>
-                          {s.active && <Button size="small" onClick={() => void revoke(l.id)}>Cancel link</Button>}
-                        </td>
-                      </tr>
-                    )
-                  })}</tbody>
-                </table>
+                <>
+                  {/* Working links first; cancelled and expired ones sit behind a button with their number (AUDIT-03 finding 15). */}
+                  {working.length === 0 && <p className="sub">No link works right now.</p>}
+                  {shownLinks.length > 0 && (
+                    <table className="plan links">
+                      <thead><tr><th scope="col">Buyer</th><th scope="col">For</th><th scope="col">State</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
+                      <tbody>{shownLinks.map((l) => {
+                        const s = linkStatus(l)
+                        return (
+                          <tr key={l.id}>
+                            <td data-label="Buyer">{l.buyerName}</td><td data-label="For">{l.label ?? '-'}</td><td data-label="State">{s.text}</td>
+                            <td className="links__actions">
+                              <Button size="small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</Button>
+                              {s.active && <Button size="small" onClick={() => void revoke(l.id)}>Cancel link</Button>}
+                            </td>
+                          </tr>
+                        )
+                      })}</tbody>
+                    </table>
+                  )}
+                  {past.length > 0 && (
+                    <p><Button size="small" aria-expanded={showPast} onClick={() => setShowPast(!showPast)}>{showPast ? 'Hide' : 'Show'} cancelled and expired links ({past.length})</Button></p>
+                  )}
+                </>
               )}
             </section>
           </>
