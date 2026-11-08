@@ -4,6 +4,11 @@ import { getClaims, signIn, snapshot, subscribe } from '../api/session'
 import { homeFor, signInMessage, type SignInFailure } from '../api/sessionRules'
 import { setLang, useLang } from '../i18n'
 import { autofocusFirstField, initialLoginMode, readLastRole, rememberRole, type LoginMode } from '../loginRules'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input } from '../ui/atoms/Input'
+import { Field } from '../ui/molecules/Field'
 
 type Mode = LoginMode
 
@@ -47,7 +52,7 @@ export default function Login() {
 
   return (
     <main className="login">
-      <form className="card login__card" onSubmit={submit} noValidate>
+      <Card as="form" className="login__card" onSubmit={submit} noValidate>
         <h1>{t('login.title')}</h1>
         <div className="seg" role="group" aria-label={t('login.who')}>
           {(['merchandiser', 'supervisor'] as const).map((m) => (
@@ -58,30 +63,28 @@ export default function Login() {
           ))}
         </div>
 
-        <label className="field">
-          <span>{supervisor ? t('login.phone') : 'Email'}</span>
-          <input ref={first} className={`input${supervisor ? ' input--tall' : ''}`} autoFocus={!a && autofocusFirstField({ coarsePointer: coarse.current, roleKnown: lastRole.current !== null })} value={a} disabled={busy}
+        <Field label={supervisor ? t('login.phone') : 'Email'}>
+          <Input ref={first} tall={supervisor} autoFocus={!a && autofocusFirstField({ coarsePointer: coarse.current, roleKnown: lastRole.current !== null })} value={a} disabled={busy}
             type={supervisor ? 'tel' : 'email'} inputMode={supervisor ? 'numeric' : 'email'}
             autoComplete={supervisor ? 'tel' : 'username'} onChange={(e) => setA(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>{supervisor ? t('login.pin') : 'Password'}</span>
-          <input ref={second} className={`input${supervisor ? ' input--tall' : ''}`} value={b} disabled={busy}
+        </Field>
+        <Field label={supervisor ? t('login.pin') : 'Password'}>
+          <Input ref={second} tall={supervisor} value={b} disabled={busy}
             type="password" inputMode={supervisor ? 'numeric' : 'text'} maxLength={supervisor ? 4 : undefined}
             autoComplete={supervisor ? 'one-time-code' : 'current-password'} onChange={(e) => setB(e.target.value)} />
-        </label>
+        </Field>
 
-        {error && <p className="error" role="alert">{lang === 'en' ? error.message : signInMessage(error.kind, error.message, lang)}</p>}
-        <button className="btn btn--primary btn--block" disabled={busy || !a.trim() || !b}>
+        {error && <ErrorText>{lang === 'en' ? error.message : signInMessage(error.kind, error.message, lang)}</ErrorText>}
+        <Button variant="primary" block disabled={busy || !a.trim() || !b}>
           {busy ? t('login.signingIn') : t('login.title')}
-        </button>
+        </Button>
         {/* Before sign-in there is no menu: a supervisor chooses the language here. Both are shown at once, each in its own script
             (the names are the same in both languages), so nobody has to find a small link first. */}
         <div className="seg seg--lang" role="group" aria-label="தமிழ் / English">
           <button type="button" className="seg__btn" lang="ta" aria-pressed={lang === 'ta'} onClick={() => setLang('ta')}>{t('nav.toTamil')}</button>
           <button type="button" className="seg__btn" lang="en" aria-pressed={lang === 'en'} onClick={() => setLang('en')}>{t('nav.toEnglish')}</button>
         </div>
-      </form>
+      </Card>
     </main>
   )
 }

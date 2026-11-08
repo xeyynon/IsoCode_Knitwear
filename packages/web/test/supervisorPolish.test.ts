@@ -69,7 +69,9 @@ describe('1.6 the number field takes the cursor once it exists', () => {
 describe('1.7 sign-in fields and the note box on a phone', () => {
   it('the supervisor sign-in fields are 56 px, set by a rule with two classes (so a later rule cannot lower them)', () => {
     expect(rule('.input.input--tall')).toContain('var(--tap-primary)')
-    expect((login.match(/input--tall/g) ?? []).length).toBeGreaterThanOrEqual(2)   // the phone and the PIN field
+    // Same promise through the atom (slice 2.1): both fields (the phone and the PIN) are drawn with `tall`, and `tall` is what adds the class.
+    expect((login.match(/<Input[^>]*\btall=\{supervisor\}/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(readFileSync(new URL('../src/ui/atoms/Input.tsx', import.meta.url), 'utf8')).toContain("tall && 'input--tall'")
   })
   it('the note box has no resize grip on a touch screen', () => {
     expect(css).toMatch(/@media \(pointer: coarse\)\s*\{(?:[^{}]|\{[^{}]*\})*\.textarea\s*\{[^}]*resize:\s*none/)
