@@ -1,0 +1,5 @@
+/* SyncChip (ui/SyncChip.tsx): the base rules are in styles.css; this is only the very narrow case (about 195 px, AUDIT-03 finding 1): a long Tamil "all sent" was wider than the screen. */
+@media (max-width: 260px) {
+  .sync { white-space: normal; overflow-wrap: anywhere; min-height: 36px; height: auto; padding: var(--space-1) var(--space-2); }
+  .syncbar { flex-wrap: wrap; }
+}

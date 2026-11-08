@@ -1,0 +1,6 @@
+/* AppBar (ui/AppBar.tsx): the base rules are in styles.css; this is only the very narrow case (about 195 px: a 390 px phone at 200% zoom or the largest font, AUDIT-03 finding 1). */
+@media (max-width: 260px) {
+  .appbar { flex-wrap: wrap; gap: var(--space-2); padding-inline: var(--space-3); }
+  .appbar__brand { display: none; }   /* the page title stays; the brand line is decoration */
+  .appbar .appbar__title { min-width: 0; overflow-wrap: anywhere; font-size: 16px; }
+}

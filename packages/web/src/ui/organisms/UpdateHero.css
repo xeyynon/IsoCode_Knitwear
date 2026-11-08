@@ -12,3 +12,14 @@
 .updatehero__nums > div { padding-top: var(--space-2); border-top: 1px solid var(--border-soft); }
 .updatehero__nums dt { font-size: 0.9375rem; }
 .updatehero__nums dd { margin: 0; font-size: 1.875rem; font-weight: 700; line-height: 1.1; }
+
+/* Very narrow (about 195 px: a 390 px phone at 200% zoom or the largest font, AUDIT-03 finding 1): the ring sits above the order number, the two figures stack, the order number shrinks to fit, and a button label wraps. The 56 px number field is not touched. */
+@media (max-width: 260px) {
+  .updatehero__top { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+  .updatehero .updatehero__who h1 { font-size: clamp(1.125rem, 9vw, 1.75rem); }
+  .updatehero__meta { overflow-wrap: anywhere; }
+  .updatehero__nums { grid-template-columns: 1fr; gap: var(--space-2); }
+  .update .btn { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+  .update .reasons { min-width: 0; }   /* a fieldset is as wide as its widest content unless told otherwise */
+  .update .reason__pill { white-space: normal; overflow-wrap: anywhere; }
+}
