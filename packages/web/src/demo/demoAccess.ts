@@ -23,5 +23,5 @@ export const DEMO_BUYER_LINKS = [
 
 export const demoAccessOn = (flag: string | undefined): boolean => flag === '1' || flag === 'true'
 
-/** A secret as dots, the same length, so the box does not jump when it is shown. */
-export const masked = (secret: string): string => '•'.repeat(secret.length)
+/** A secret as dots: at most ten, so a long password still fits one line on a phone and its length is not given away. */
+export const masked = (secret: string): string => '•'.repeat(Math.min(secret.length, 10))
