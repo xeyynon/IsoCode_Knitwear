@@ -14,6 +14,7 @@
     "verify": "npm run check && npm run typecheck && npm test",
     "dev:api": "tsx packages/server/src/dev.ts",
     "migrate": "tsx packages/server/src/migrate.ts",
+    "seed:demo": "tsx packages/server/src/seedDemoCli.ts",
     "start:api": "tsx packages/server/src/server.ts",
     "build": "npm run build -w @isocode/web",
     "e2e": "tsx scripts/e2e_offline.ts",
