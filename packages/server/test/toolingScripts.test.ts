@@ -529,7 +529,7 @@ describe('BE-053: an InBul id is used once', { timeout: SLOW }, () => {
       e('d77dc1f' + '0'.repeat(33), 'InBul17: a'), e('d85a545' + '0'.repeat(33), 'InBul17: b'),
       e('3f085a7' + '0'.repeat(33), 'InBul18: c'), e('4d7999a' + '0'.repeat(33), 'InBul18: d'),
     ]
-    expect(Object.keys(LEGACY_DUPLICATES).sort()).toEqual(['InBul17', 'InBul18', 'InBul21'])
+    expect(Object.keys(LEGACY_DUPLICATES).sort()).toEqual(['InBul17', 'InBul18', 'InBul21', 'InBul25', 'InBul26', 'InBul27', 'InBul28', 'InBul29'])
     expect(findDuplicateInbuls(legacy)).toEqual([])
     expect(findDuplicateInbuls([...legacy, e('abc1234' + '0'.repeat(33), 'InBul17: a third')])).toMatchObject([{ id: 'InBul17' }])
     expect(findDuplicateInbuls([e('1'.repeat(40), 'InBul09: x'), e('2'.repeat(40), 'InBul09: y')])).toMatchObject([{ id: 'InBul09' }])
