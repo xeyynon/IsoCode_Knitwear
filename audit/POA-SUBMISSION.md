@@ -13,3 +13,11 @@ From the audit against the brief. Work runs top to bottom; each step is its own 
 Also: weekly buyer export as Excel (`.xlsx`) next to the CSV if time allows (brief says PDF or Excel).
 
 Needs from the owner: a Neon (or other) Postgres added to the Vercel project, and an `ANTHROPIC_API_KEY` set in Vercel. Neither is ever written into the repository.
+
+## Status (8 Nov 2026, evening)
+
+All four steps done. Live at https://isocode-knitwear.vercel.app (Vercel Hobby, Neon Free, Groq free plan: ₹0).
+Found and fixed on the way: a later stage waiting its turn greyed the whole order (engine); the demo clock shifted token
+expiry so the browser refused the sign-in (only the factory's day moves now); the page grid stopped at a short page's end.
+The AI runs on Groq (free); Claude and Gemini are built in behind AI_PROVIDER. TDD (PDF) and deployment.md are zipped
+outside the repository. Left: push this branch and merge it into main, so GitHub shows the work and main redeploys itself.
