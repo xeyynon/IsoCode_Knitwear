@@ -71,7 +71,8 @@ describe('what the tabs replace', () => {
     expect(board).not.toMatch(/to="\/setup"/)
     expect(board).not.toMatch(/to="\/review"/)
     expect(board).not.toContain('/api/review')
-    expect(board).toMatch(/btn btn--primary btn--small" to="\/orders\/new"/)   // New order stays, as the one primary action
+    // New order stays, as the one primary action (through the atom: `variant="primary" size="small"` draws `btn btn--primary btn--small`, atoms.test.tsx)
+    expect(board).toMatch(/<ButtonLink variant="primary" size="small" to="\/orders\/new"/)
   })
   it('Review and Setup have no "back to the board" link of their own: the Board tab is always there', () => {
     expect(review).not.toMatch(/Back to board|← Order board/)

@@ -5,7 +5,7 @@
   position: relative; box-sizing: border-box; justify-content: center; gap: var(--space-1);
   min-width: 79px; min-height: 24px; padding: 0 var(--space-2);
   background: transparent; border: 1.5px solid currentColor; border-radius: 3px;
-  font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+  font-size: 12px; font-weight: 700; line-height: 1; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
 }
 /* the inner rule */
 .badge--stamp::after { content: ''; position: absolute; inset: 2px; border: 1px solid currentColor; border-radius: 1px; opacity: 0.5; pointer-events: none; }

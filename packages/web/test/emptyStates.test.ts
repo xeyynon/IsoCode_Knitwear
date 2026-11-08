@@ -26,6 +26,6 @@ describe('Today with nothing to update', () => {
 
 describe('Board with no orders', () => {
   it('offers the way to make the first one, not only a sentence', () => {
-    expect(board).toMatch(/No orders yet\.[\s\S]{0,200}<Link[^>]*to="\/orders\/new"/)
+    expect(board).toMatch(/No orders yet\.[\s\S]{0,200}<(Button)?Link[^>]*to="\/orders\/new"/)
   })
 })

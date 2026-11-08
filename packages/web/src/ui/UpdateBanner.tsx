@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useLang } from '../i18n'
 import { useQueue } from '../queue/instance'
+import { Button } from './atoms/Button'
 import { getBottomSlot, subscribeBottomSlot } from './bottomSlot'
 import { applyUpdate, dismissUpdate, subscribeUpdate, updateDismissed, updateWaiting } from './swUpdateStore'
 import { queueAtRisk, showUpdateBanner } from './swUpdate'
@@ -33,8 +34,8 @@ function Ready() {
     <div className="updatebar" role="status">
       <p className="updatebar__text">{t('app.updateReady')}</p>
       <div className="updatebar__actions">
-        <button type="button" className="btn btn--primary" onClick={applyUpdate}>{t('app.updateReload')}</button>
-        <button type="button" className="btn" onClick={dismissUpdate}>{t('app.updateLater')}</button>
+        <Button type="button" variant="primary" onClick={applyUpdate}>{t('app.updateReload')}</Button>
+        <Button type="button" onClick={dismissUpdate}>{t('app.updateLater')}</Button>
       </div>
     </div>
   )

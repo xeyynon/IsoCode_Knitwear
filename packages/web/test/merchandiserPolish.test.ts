@@ -36,7 +36,8 @@ describe('3.8 the status page', () => {
   })
   it('has a way back to the app, so it is not a dead end', () => {
     // A button, not a bare text link: a 22 px line of text is under the tap size (npm run ux caught the first version).
-    expect(status).toMatch(/<Link className="btn" to="\/">/)
+    // (through the atom: ButtonLink draws `btn`, atoms.test.tsx)
+    expect(status).toMatch(/<ButtonLink to="\/">/)
   })
   it('uses the same sentence for the time on the page', () => {
     expect(status).toContain('checkedText(body.checkedAt)')

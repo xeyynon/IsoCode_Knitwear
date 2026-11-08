@@ -1,5 +1,10 @@
 import { useId, useState } from 'react'
 import { EMPTY_PERSON, personProblem, type PersonFields, type PersonRole } from '../../setup/addPerson'
+import { Button } from '../atoms/Button'
+import { Card } from '../atoms/Card'
+import { ErrorText } from '../atoms/ErrorText'
+import { Input, Select } from '../atoms/Input'
+import { Field } from '../molecules/Field'
 import './AddPersonForm.css'
 
 const ROLES: { id: PersonRole; label: string; sub: string }[] = [
@@ -36,7 +41,7 @@ export function AddPersonForm({ units, onAdd }: { units: { id: string; name: str
   return (
     <>
       <h2 id="add-person">Add a person</h2>
-      <form className="card addperson" onSubmit={submit} noValidate aria-labelledby="add-person">
+      <Card as="form" className="addperson" onSubmit={submit} noValidate aria-labelledby="add-person">
         <fieldset className="addperson__roles">
           <legend>Who is this?</legend>
           {ROLES.map((r) => (
@@ -48,27 +53,27 @@ export function AddPersonForm({ units, onAdd }: { units: { id: string; name: str
           ))}
         </fieldset>
         <div className="grid2">
-          <label className="field"><span>Name</span><input className="input" value={f.label} maxLength={80} autoComplete="off" onChange={(e) => set({ label: e.target.value })} /></label>
+          <Field label="Name"><Input value={f.label} maxLength={80} autoComplete="off" onChange={(e) => set({ label: e.target.value })} /></Field>
           {role === 'supervisor' ? (
             <>
-              <label className="field"><span>Phone number</span><input className="input mono" inputMode="tel" autoComplete="off" value={f.phone} onChange={(e) => set({ phone: e.target.value })} /></label>
-              <label className="field"><span>4-digit PIN</span><input className="input mono" inputMode="numeric" maxLength={4} autoComplete="off" value={f.pin} onChange={(e) => set({ pin: e.target.value.replace(/\D/g, '') })} /></label>
-              <label className="field"><span>Unit</span>
-                <select className="input" value={f.unitId} onChange={(e) => set({ unitId: e.target.value })}>
+              <Field label="Phone number"><Input mono inputMode="tel" autoComplete="off" value={f.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
+              <Field label="4-digit PIN"><Input mono inputMode="numeric" maxLength={4} autoComplete="off" value={f.pin} onChange={(e) => set({ pin: e.target.value.replace(/\D/g, '') })} /></Field>
+              <Field label="Unit">
+                <Select value={f.unitId} onChange={(e) => set({ unitId: e.target.value })}>
                   <option value="">Choose a unit</option>{units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select></label>
+                </Select></Field>
             </>
           ) : (
-            <label className="field"><span>Email</span><input className="input" type="email" autoComplete="off" value={f.email} onChange={(e) => set({ email: e.target.value })} /></label>
+            <Field label="Email"><Input type="email" autoComplete="off" value={f.email} onChange={(e) => set({ email: e.target.value })} /></Field>
           )}
         </div>
         {role === 'merchandiser' && (
-          <label className="field"><span>Password (at least 10 characters)</span><input className="input" type="password" autoComplete="new-password" value={f.password} onChange={(e) => set({ password: e.target.value })} /></label>
+          <Field label="Password (at least 10 characters)"><Input type="password" autoComplete="new-password" value={f.password} onChange={(e) => set({ password: e.target.value })} /></Field>
         )}
-        {problem && <p className="error" role="alert">{problem}</p>}
+        {problem && <ErrorText>{problem}</ErrorText>}
         {role === 'supervisor' && <p className="sub">Avoid easy PINs such as 1234 or 1111: they are refused. A PIN is locked for 15 minutes after 5 wrong tries.</p>}
-        <button className="btn btn--primary" disabled={busy}>{busy ? 'Adding…' : `Add ${label}`}</button>
-      </form>
+        <Button variant="primary" disabled={busy}>{busy ? 'Adding…' : `Add ${label}`}</Button>
+      </Card>
     </>
   )
 }

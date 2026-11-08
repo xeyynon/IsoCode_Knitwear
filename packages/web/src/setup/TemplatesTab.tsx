@@ -3,6 +3,12 @@ import { ApiError, apiFetch } from '../api/session'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { useLang } from '../i18n'
 import { useConfirm } from '../ui/ConfirmDialog'
+import { Banner } from '../ui/atoms/Banner'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input, Select } from '../ui/atoms/Input'
+import { Field } from '../ui/molecules/Field'
 import { LoadFailed } from '../ui/LoadFailed'
 import { moveRow, templateProblem, type StageRow } from './setupLogic'
 
@@ -64,20 +70,20 @@ export function TemplatesTab() {
       {dialog}
       <h2>TNA templates</h2>
       <p className="sub">A template lists the stages of a product in the order they happen. For each stage, say how many working days before ex-factory it must finish, and which unit does it. Order setup works the dates out backwards from the ex-factory date.</p>
-      {error && <p className="banner" role="alert">{error}</p>}
+      {error && <Banner>{error}</Banner>}
       {notice && <p className="notice-box" role="status">{notice}</p>}
       {loadFail && <LoadFailed unreachable={loadFail.unreachable} message={loadFail.message} onRetry={() => void load()} />}
 
       {!editing && (
         <>
-          <button className="btn btn--primary" onClick={() => open(null)} disabled={!units.length}>New template</button>
+          <Button variant="primary" onClick={() => open(null)} disabled={!units.length}>New template</Button>
           {!units.length && <p className="sub">Add a unit first (People, then Add a unit).</p>}
           <ul className="plain stagelist" style={{ marginTop: 12 }}>
             {list?.map((t) => (
               <li key={t.id} className="stagecard">
                 <div className="stagecard__top"><b>{t.name}</b><span className="sub">{t.stages.length} stage{t.stages.length === 1 ? '' : 's'}</span></div>
                 <p className="sub">{t.stages.map((s) => `${s.stage} (${s.workingDaysBefore}, ${s.unitName})`).join('  →  ')}</p>
-                <div className="actions"><button className="btn btn--small" onClick={() => open(t)}>Edit</button><button className="btn btn--small" onClick={() => void remove(t)}>Delete</button></div>
+                <div className="actions"><Button size="small" onClick={() => open(t)}>Edit</Button><Button size="small" onClick={() => void remove(t)}>Delete</Button></div>
               </li>
             ))}
           </ul>
@@ -85,31 +91,31 @@ export function TemplatesTab() {
       )}
 
       {editing && (
-        <form className="card change" onSubmit={save} noValidate>
-          <label className="field"><span>Template name</span><input className="input" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></label>
+        <Card as="form" className="change" onSubmit={save} noValidate>
+          <Field label="Template name"><Input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></Field>
           <p className="sub">Stages, in the order they happen. Use the biggest number first: a stage listed later is due later.</p>
           <div className="tplrows">
             {rows.map((r, i) => (
               <div className="tplrow" key={r.id}>
-                <input className="input" aria-label={`Stage ${i + 1} name`} placeholder="Stage (e.g. sewing)" value={r.stage} maxLength={40} onChange={(e) => upd(r.id, { stage: e.target.value })} />
-                <input className="input mono" aria-label={`Stage ${i + 1} working days before ex-factory`} placeholder="Days before" inputMode="numeric" value={r.days} onChange={(e) => upd(r.id, { days: e.target.value })} />
-                <select className="input" aria-label={`Stage ${i + 1} unit`} value={r.unitId} onChange={(e) => upd(r.id, { unitId: e.target.value })}>
-                  {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+                <Input aria-label={`Stage ${i + 1} name`} placeholder="Stage (e.g. sewing)" value={r.stage} maxLength={40} onChange={(e) => upd(r.id, { stage: e.target.value })} />
+                <Input mono aria-label={`Stage ${i + 1} working days before ex-factory`} placeholder="Days before" inputMode="numeric" value={r.days} onChange={(e) => upd(r.id, { days: e.target.value })} />
+                <Select aria-label={`Stage ${i + 1} unit`} value={r.unitId} onChange={(e) => upd(r.id, { unitId: e.target.value })}>
+                  {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select>
                 <span className="tplrow__btns">
-                  <button type="button" className="btn btn--small" aria-label={`Move stage ${i + 1} up`} disabled={i === 0} onClick={() => setRows(moveRow(rows, i, -1))}>↑</button>
-                  <button type="button" className="btn btn--small" aria-label={`Move stage ${i + 1} down`} disabled={i === rows.length - 1} onClick={() => setRows(moveRow(rows, i, 1))}>↓</button>
-                  <button type="button" className="btn btn--small" aria-label={`Remove stage ${i + 1}`} onClick={() => setRows(rows.filter((x) => x.id !== r.id))}>Remove</button>
+                  <Button type="button" size="small" aria-label={`Move stage ${i + 1} up`} disabled={i === 0} onClick={() => setRows(moveRow(rows, i, -1))}>↑</Button>
+                  <Button type="button" size="small" aria-label={`Move stage ${i + 1} down`} disabled={i === rows.length - 1} onClick={() => setRows(moveRow(rows, i, 1))}>↓</Button>
+                  <Button type="button" size="small" aria-label={`Remove stage ${i + 1}`} onClick={() => setRows(rows.filter((x) => x.id !== r.id))}>Remove</Button>
                 </span>
               </div>
             ))}
           </div>
-          <button type="button" className="btn btn--small" onClick={() => setRows([...rows, blank(firstUnit)])}>Add a stage</button>
-          {problem && <p className="error" role="status">{problem}</p>}
+          <Button type="button" size="small" onClick={() => setRows([...rows, blank(firstUnit)])}>Add a stage</Button>
+          {problem && <ErrorText role="status">{problem}</ErrorText>}
           <div className="actions">
-            <button className="btn btn--primary" disabled={busy || !!problem}>{busy ? 'Saving…' : 'Save template'}</button>
-            <button type="button" className="btn" onClick={() => { setEditing(null); setError(null) }}>Cancel</button>
+            <Button variant="primary" disabled={busy || !!problem}>{busy ? 'Saving…' : 'Save template'}</Button>
+            <Button type="button" onClick={() => { setEditing(null); setError(null) }}>Cancel</Button>
           </div>
-        </form>
+        </Card>
       )}
     </>
   )

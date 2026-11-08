@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getClaims, snapshot, subscribe } from '../api/session'
 import { useLang } from '../i18n'
+import { Button } from './atoms/Button'
 import { keepFocusInside } from './ConfirmDialog'
 import { IDLE, isTypingTarget, routeFor, shortcutsOn, stepShortcut, type SequenceState } from './shortcutKeys'
 
@@ -112,7 +113,7 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
         </ul>
         <p className="sub shortcuts__note">{t('shortcuts.note')}</p>
         <div className="confirm__actions">
-          <button type="button" ref={closeButton} className="btn btn--primary" onClick={() => ref.current?.close()}>{t('shortcuts.close')}</button>
+          <Button type="button" ref={closeButton} variant="primary" onClick={() => ref.current?.close()}>{t('shortcuts.close')}</Button>
         </div>
       </div>
     </dialog>

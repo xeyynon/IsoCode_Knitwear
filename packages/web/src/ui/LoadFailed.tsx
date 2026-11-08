@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom'
 import { useLang } from '../i18n'
+import { Button } from './atoms/Button'
+import { Card } from './atoms/Card'
+import { TextLink } from './atoms/TextLink'
 
 interface Props {
   /** The cause is the connection (see isUnreachable): show the one calm "cannot reach the server" card. */
@@ -17,13 +19,13 @@ interface Props {
 export function LoadFailed({ unreachable, message, onRetry, workSafe = false, statusLink = true }: Props) {
   const { t } = useLang()
   return (
-    <div className={`card loadfailed${unreachable ? ' loadfailed--offline' : ''}`} role="alert">
+    <Card as="div" className={`loadfailed${unreachable ? ' loadfailed--offline' : ''}`} role="alert">
       <p className="loadfailed__text">{unreachable ? t('err.cantReach') : message}</p>
       {unreachable && workSafe && <p className="loadfailed__safe">{t('err.workSafe')}</p>}
       <div className="loadfailed__actions">
-        <button type="button" className="btn" onClick={onRetry}>{t('err.retry')}</button>
-        {unreachable && statusLink && <Link className="link" to="/status">{t('err.checkStatus')}</Link>}
+        <Button type="button" onClick={onRetry}>{t('err.retry')}</Button>
+        {unreachable && statusLink && <TextLink to="/status">{t('err.checkStatus')}</TextLink>}
       </div>
-    </div>
+    </Card>
   )
 }

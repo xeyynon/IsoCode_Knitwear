@@ -19,7 +19,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright-core'
 import { changesMarkdown, diffSets } from './pngDiff'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const OUT = path.join(ROOT, 'uiux', '2.0')   // 1.0 is the frozen record of build 1006: this script never writes there
+const OUT = process.env.SNAP_OUT ? path.resolve(process.env.SNAP_OUT) : path.join(ROOT, 'uiux', '2.0')   // SNAP_OUT: take a set somewhere else (a refactor check); 1.0 is the frozen record of build 1006 and is never written
 const WEB = process.env.WEB ?? 'http://localhost:5173'
 const MERCH = { email: 'm@example.test', password: 'correct horse battery' }
 const SUP = { phone: '98765 43210', pin: '4321' }
