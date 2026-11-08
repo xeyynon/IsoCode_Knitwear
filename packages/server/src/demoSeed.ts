@@ -107,7 +107,7 @@ const ORDERS: DemoOrder[] = [
     buyer: B.companyC, po: 'C-PO-0502', style: "Kids crew neck tee", colour: 'Sky blue', sizes: split(7000, KIDS), exFactory: '2026-11-24', template: T.unit2, illustrative: true,
     history: [
       { stage: 'Cutting', done: 7000, rate: 1000, lastDay: '2026-10-30' },
-      { stage: 'Stitching', done: 2400, rate: 800, lastDay: '2026-10-31', note: { text: 'இன்று வேலை கொஞ்சம் மெதுவா போச்சு.', daysAgo: 6 } },
+      { stage: 'Stitching', done: 2400, rate: 800, lastDay: '2026-10-31', note: { text: 'இன்று வேலை கொஞ்சம் மெதுவா போச்சு.', daysAgo: 1 } },
     ],
   },
   {
@@ -178,12 +178,13 @@ export async function seedDemo(tx: Tx, today: IsoDate = DEMO_TODAY): Promise<{ o
       const days = dailyHistory(h.done, h.rate, h.lastDay ?? yesterday, cal)
       for (const [i, day] of days.entries()) {
         let noteId: string | null = null
-        if (h.note && i === (h.note.daysAgo ?? 1) - 1) {
+        // The note goes on the day it names, or on the stage's earliest day if its history is shorter than that.
+        if (h.note && i === Math.min((h.note.daysAgo ?? 1) - 1, days.length - 1)) {
           noteId = uuidFrom(`note:${o.po}:${h.stage}`)
           const ta = /[஀-௿]/.test(h.note.text)
           await tx.query(
-            `insert into note (id, order_id, buyer_id, stage, unit_id, taken_on, language, text_ta, text_en) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [noteId, made.orderId, o.buyer, h.stage, unit, day.date, ta ? 'ta' : 'en', ta ? h.note.text : null, ta ? null : h.note.text])
+            `insert into note (id, order_id, buyer_id, stage, unit_id, taken_on, language, text_ta, text_en, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [noteId, made.orderId, o.buyer, h.stage, unit, day.date, ta ? 'ta' : 'en', ta ? h.note.text : null, ta ? null : h.note.text, `${day.date}T12:30:00Z`])
           notes++
         }
         await tx.query(

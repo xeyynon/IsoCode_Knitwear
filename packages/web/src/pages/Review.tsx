@@ -12,6 +12,7 @@ import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
 import { reasonById, type Reason } from '../notes/reasons'
+import { aiLine, defaultMeaning, defaultReason, disagreement, reasonSource, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
 import { Banner } from '../ui/atoms/Banner'
@@ -24,7 +25,7 @@ import { InlineUndo } from '../ui/molecules/InlineUndo'
 import { afterHide, afterUndo, offersUndo, undoOutcome, type HiddenFrom, type HiddenItem } from '../review/undoLogic'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
-interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null }
+interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null; ai: NoteSuggestion | null }
 interface VisiblePhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string }
 interface PendingPhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string; bytes: number }
 interface LinkRow { id: string; buyerId: string; buyerName: string; label: string | null; expiresAt: string; revoked: boolean; expired: boolean }
@@ -33,7 +34,7 @@ interface Options { buyers: { id: string; name: string }[] }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function Review() {
-  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[] } | null>(null)
+  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[]; aiEnabled?: boolean } | null>(null)
   const [meaning, setMeaning] = useState<Record<string, string>>({})
   const [noteReason, setNoteReason] = useState<Record<string, string>>({})
   const [links, setLinks] = useState<LinkRow[]>([])
@@ -65,7 +66,7 @@ export default function Review() {
   const load = useCallback(async () => {
     try {
       const [r, l] = await Promise.all([
-        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[] }>('/api/review'),
+        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[]; aiEnabled?: boolean }>('/api/review'),
         apiFetch<{ links: LinkRow[] }>('/api/buyer-links'),
       ])
       setData(r); setLinks(l.links); setError(null)
@@ -76,6 +77,30 @@ export default function Review() {
     void load()
     apiFetch<Options>('/api/orders/options').then((o) => setBuyers(o.buyers)).catch(() => undefined)
   }, [load])
+
+  // AI suggestions for notes still waiting for one: a few per call, again while any are left, at most a handful of rounds per
+  // visit (a failure is shown on the note and can be asked again by hand). Nothing here moves focus or blocks the page.
+  const aiRounds = useRef(0)
+  const [aiBusy, setAiBusy] = useState<string | null>(null)
+  useEffect(() => {
+    if (!data?.aiEnabled || aiBusy || aiRounds.current >= 6 || !data.notes.some(waitingForAi)) return
+    aiRounds.current++
+    setAiBusy('all')
+    apiFetch('/api/notes/suggest', { method: 'POST', body: '{}' })
+      .then(() => load())
+      .catch(() => { aiRounds.current = 6 })   // the service is down or AI was switched off: stop asking on this visit
+      .finally(() => setAiBusy(null))
+  }, [data, aiBusy, load])
+
+  async function askAgain(n: PendingNote) {
+    setAiBusy(n.id); setActionError(null)
+    try {
+      await apiFetch(`/api/notes/${n.id}/suggest`, { method: 'POST', body: '{}' })
+      setAnnounce(`Asked the AI again about the note on ${n.po}.`)
+      await load()
+    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    setAiBusy(null)
+  }
 
   // 'dismiss-waiting' is "Don't show" on a warning still waiting for review; 'dismiss' is "Hide from buyer" on one that was confirmed. Both call the same
   // route, but only the first can be undone: a confirmed warning may already have been seen by a buyer (rule 18).
@@ -129,7 +154,12 @@ export default function Review() {
     try {
       await apiFetch(`/api/notes/${n.id}/confirm`, {
         method: 'POST',
-        body: JSON.stringify({ ...(n.language === 'ta' && meaning[n.id]?.trim() ? { textEn: meaning[n.id] } : {}), ...(noteReason[n.id] ? { category: noteReason[n.id] } : {}) }),
+        // What is on screen is what is saved: the English box (an AI draft the person may have edited) and the reason in the picker.
+        body: JSON.stringify((() => {
+          const textEn = defaultMeaning(n, meaning[n.id]).trim()
+          const category = defaultReason(n, noteReason[n.id])
+          return { ...(n.language === 'ta' && textEn ? { textEn } : {}), ...(category ? { category } : {}) }
+        })()),
       })
       setAnnounce(`Reviewed the note on ${n.po}.`)
       await load(); heading.current?.focus()
@@ -265,19 +295,32 @@ export default function Review() {
               <h2 id={sectionAnchor('notes')} tabIndex={-1} ref={notesHeading}>{sectionTitle('Notes from the floor', data.notes.length)}</h2>
               {data.notes.length === 0 ? <p className="sub">{emptyLine('notes')}</p> : (
                 <>
-                  <p className="sub">What supervisors wrote about why a stage is slow. These are only for you: buyers never see notes. Add the English meaning of a Tamil note and check the reason.</p>
+                  <p className="sub">What supervisors wrote about why a stage is slow. These are only for you: buyers never see notes. {data.aiEnabled ? 'AI drafts the English and suggests a reason; check both against the original, then mark it reviewed.' : 'Add the English meaning of a Tamil note and check the reason.'}</p>
                   <ul className="plain stagelist">
                     {data.notes.map((n) => {
-                      const chosen = noteReason[n.id] ?? n.category ?? ''
+                      const chosen = defaultReason(n, noteReason[n.id])
+                      const line = aiLine(n, data.reasons, !!data.aiEnabled)
+                      const clash = disagreement(n, data.reasons)
                       return (
                         <li key={n.id} className="stagecard">
                           <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {n.takenOn}</span></div>
                           {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
-                          {n.language === 'ta' && (
-                            <Field label="What it means, in English">
-                              <Textarea rows={2} maxLength={500} value={meaning[n.id] ?? ''} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></Field>
+                          {line && (
+                            <div className={`ai-box ai-box--${line.kind}`} role="status" aria-live="polite">
+                              <span className="lang-tag">AI</span>{' '}
+                              <span>{line.text}</span>
+                              {'detail' in line && line.detail && <p className="sub ai-box__why">Why: {line.detail}</p>}
+                              {clash && <p className="ai-box__clash">{clash}</p>}
+                              {data.aiEnabled && n.ai && (
+                                <Button size="small" disabled={aiBusy !== null} onClick={() => void askAgain(n)}>{aiBusy === n.id ? 'Asking…' : 'Ask AI again'}</Button>
+                              )}
+                            </div>
                           )}
-                          <Field label={<>Reason{n.category && !noteReason[n.id] ? ' (chosen by the supervisor)' : ''}</>}>
+                          {n.language === 'ta' && (
+                            <Field label={<>What it means, in English{n.ai?.textEn && meaning[n.id] === undefined ? ' (AI draft, check it against the Tamil)' : ''}</>}>
+                              <Textarea rows={2} maxLength={500} value={defaultMeaning(n, meaning[n.id])} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></Field>
+                          )}
+                          <Field label={<>Reason{reasonSource(n, noteReason[n.id])}</>}>
                             <Select value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
                               {offersNoReason(n.category) && <option value="">No reason chosen</option>}
                               {data.reasons.map((r) => <option key={r.id} value={r.id}>{r.en}</option>)}

@@ -11,9 +11,12 @@
 //   DB_POOL_MAX      database connections, 1 to 50. Default 5 (each is a Postgres process; the work is CPU-bound)
 //   DB_STATEMENT_TIMEOUT_MS   the database ends any statement that runs longer than this. Default 30000; 0 = no limit
 //   PORT             default 8787 (empty counts as unset); a value that is not a whole number from 1 to 65535 stops the server
+//   ANTHROPIC_API_KEY  turns on AI suggestions for notes from the floor (English meaning + reason). Unset: AI is off, a person does it
+//   AI_MODEL         optional; the Claude model for those suggestions (default claude-opus-5-5)
 //   ALLOW_UNSAFE_DB_ROLE   1 = start even if DATABASE_URL is a superuser / BYPASSRLS / table-owner login. LOCAL DEVELOPMENT ONLY; unset in every real deployment
 import pg from 'pg'
 import { buildApp } from './app.js'
+import { classifierFromEnv } from './noteAi.js'
 import { parseOrigins } from './cors.js'
 import { MediaConfigError, mediaStoreFromEnv } from './mediaFromEnv.js'
 import { assertSafeDbRole, pgDb, unsafeRoleOverride } from './pgDb.js'
@@ -74,6 +77,7 @@ const app = buildApp({
   allowedOrigins: origins,
   trustProxy,
   ...(media ? { media } : {}),
+  noteAi: classifierFromEnv(process.env),
   logger: true,
   logLevel,
 })

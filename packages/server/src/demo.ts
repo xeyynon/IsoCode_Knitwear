@@ -5,6 +5,7 @@ import { buildApp } from './app.js'
 import { memoryMediaStore } from './mediaStore.js'
 import { migratedDb, pgliteDb, resetAndSeed, ID, TODAY } from '../test/helpers.js'
 import { DEMO_TODAY, seedDemo } from './demoSeed.js'
+import type { NoteClassifier } from './noteAi.js'
 
 export interface Demo { pg: PGlite; port: number; close: () => Promise<void> }
 
@@ -14,7 +15,7 @@ export interface Demo { pg: PGlite; port: number; close: () => Promise<void> }
  */
 export type DemoData = 'brief' | 'fixture'
 
-export async function startDemoApi(opts: { port?: number; origins?: string[]; data?: DemoData } = {}): Promise<Demo> {
+export async function startDemoApi(opts: { port?: number; origins?: string[]; data?: DemoData; noteAi?: NoteClassifier | null } = {}): Promise<Demo> {
   const pg = await migratedDb()
   const brief = opts.data === 'brief'
   if (brief) await pgliteDb(pg).tx({ role: 'system' }, (tx) => seedDemo(tx, DEMO_TODAY))
@@ -28,6 +29,7 @@ export async function startDemoApi(opts: { port?: number; origins?: string[]; da
     clock: () => new Date(`${today}T04:30:00Z`),   // fixed so the seeded figures line up
     logger: false,
     media: memoryMediaStore(),   // photos live in memory in the demo and vanish with it
+    noteAi: opts.noteAi ?? null,
   })
   const port = opts.port ?? 8787
   await app.listen({ port, host: '127.0.0.1' })
