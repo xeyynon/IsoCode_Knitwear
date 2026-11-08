@@ -2,10 +2,10 @@
 import { PGlite } from '@electric-sql/pglite'
 import { describe, expect, it, vi } from 'vitest'
 import { errorReason } from '../src/db.js'
-import { run } from '../src/migrate.js'
+import { readMigrations, run } from '../src/migrate.js'
 import { assertSafeDbRole, DB_ROLE_CHECK_SQL, unsafeRoleOverride, type RoleFacts } from '../src/pgDb.js'
 import { parsePort, parseTrustProxy, StartupConfigError } from '../src/startup.js'
-import { migratedDb } from './helpers.js'
+import { runSql, sqlFile } from './helpers.js'
 
 describe('BE-042: PORT', () => {
   it.each([[undefined, 8787], ['', 8787], ['   ', 8787], ['8787', 8787], [' 3000 ', 3000], ['1', 1], ['65535', 65535]])(
@@ -85,7 +85,10 @@ describe('BE-035: the database role is checked at start-up', () => {
 
   // The query itself, on a database that has the real migrations.
   async function factsAs(setup: string): Promise<RoleFacts> {
-    const pg = await migratedDb()
+    // PGlite on purpose, never the real server of TEST_DATABASE_URL: roles are cluster-wide there, so creating `boss` four times
+    // fails ("role boss already exists") and would leave roles behind. Each PGlite instance has roles of its own.
+    const pg = new PGlite()
+    for (const m of readMigrations()) await runSql(pg, sqlFile('migrations', m.file))
     try {
       await pg.exec(`create role boss nosuperuser createrole login; create role boss_rls nosuperuser bypassrls login; ${setup}`)
       return (await pg.query<RoleFacts>(DB_ROLE_CHECK_SQL)).rows[0]!

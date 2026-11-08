@@ -21,6 +21,7 @@
     "scripts/a11y.ts",
     "scripts/check_contrast.mjs",
     "scripts/e2e_offline.ts",
+    "scripts/load_metrics.ts",
     "scripts/phone_keyboard.ts",
     "scripts/pngDiff.ts",
     "scripts/snapshot_diff.ts",
