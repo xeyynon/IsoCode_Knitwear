@@ -17,6 +17,11 @@ export const LEGACY_DUPLICATES = {
   InBul17: ['d77dc1f', 'd85a545'],
   InBul18: ['3f085a7', '4d7999a'],
   InBul21: ['f40c758', 'aee6d6e'],   // the UI session's and the README pull request's, numbered at the same time
+  InBul25: ['12862b1', '7cde604'],   // 25 to 29: numbered at the same time by two sessions (the UI work and the hosting work) and merged together
+  InBul26: ['2145032', '70c9cab'],
+  InBul27: ['03d5564', '67b35ff'],
+  InBul28: ['6e75892', 'c358f96'],
+  InBul29: ['ce3b89a', 'a1b596a'],
 }
 
 /**

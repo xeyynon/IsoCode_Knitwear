@@ -281,6 +281,13 @@ Every change is either a **build** or an **InBul** (internal build):
 
 The tag is the source of truth for the number; commit titles never carry it. Builds are batched (about ten fixes each) so the list stays meaningful.
 
+**Fewer, bigger commits.** One day of work once produced 94 commits on `main` (about 65 of them real changes, the rest merges), most of them one fix each. That buries what matters. The rule from now on:
+
+- **One pull request, one commit on `main`.** Commit as often as you like on your branch, but merge with `gh pr merge --squash` (or the Squash button; the repository allows nothing else), so `main` gets one commit per pull request, titled for the whole change. The pull request title becomes the commit title, so an internal change is titled `InBulNN: ...` with the id from `node scripts/changelog.mjs --next-internal`.
+- **One InBul per pull request, not per fix.** Related internal work (a bug round, a tooling clean-up, a docs pass) is one pull request and one InBul id. A follow-up that only fixes the same pull request's own test or typo goes into that pull request, not into a new InBul.
+- **Bundle what a user would notice into a build.** A build is a release record, so group a day's or a theme's changes into one (for example one build for the backend bug and speed work, one for a UI round) rather than one per fix. Its report lists the pull requests and InBul ids it covers under "What changed".
+- **Dependabot already groups** its weekly updates; major versions are upgraded by hand, one pull request each.
+
 ```bash
 # a build
 git add <files>
