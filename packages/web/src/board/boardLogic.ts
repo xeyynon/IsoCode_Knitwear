@@ -23,6 +23,11 @@ export interface BoardRow {
   stagesDone?: number
   stagesTotal?: number
   currentStage?: string | null
+  /** The current stage's pieces (null when there is no current stage; absent from a server older than slice 3.4): what the bar is made from. */
+  currentStageQty?: number | null
+  currentStageProduced?: number | null
+  /** The rate behind the stage rests on fewer than 3 days of updates. */
+  currentStageMadeIsEstimate?: boolean | null
   /** Unfinished stages whose recent updates a merchandiser entered on a visit. */
   lowConfidenceStages?: string[]
 }
