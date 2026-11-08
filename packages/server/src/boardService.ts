@@ -31,6 +31,14 @@ export interface BoardRow {
   stagesDone: number
   stagesTotal: number
   currentStage: string | null
+  /**
+   * The pieces of the current stage, read from the same engine result the order page's stage detail shows, so a board row and
+   * its order page cannot disagree. All null when there is no current stage. Merchandiser board only: a buyer never gets these.
+   */
+  currentStageQty: number | null
+  currentStageProduced: number | null
+  /** The rate behind the stage rests on fewer than 3 days of updates (the order page's `madeIsEstimate`). */
+  currentStageMadeIsEstimate: boolean | null
   /** Unfinished stages whose recent updates a merchandiser entered on a visit: low confidence. Internal: never sent to a buyer. */
   lowConfidenceStages: string[]
 }
@@ -61,6 +69,7 @@ export async function getBoard(tx: Tx, ctx: Ctx, today: string): Promise<BoardRo
     const milestone = stages.find((s) => s.stage === setting?.stage)?.milestone
     // The engine returns stages in sequence order, so the first one not complete is where the order is now.
     const unitIds = [...new Set(stages.map((s) => s.unitId))]
+    const current = result.stages.find((s) => !s.complete)
     return {
       orderId: o.id, po: o.po, buyerId: o.buyerId, buyerName: o.buyerName, style: o.style, colour: o.colour,
       exFactory: o.exFactory,
@@ -75,7 +84,10 @@ export async function getBoard(tx: Tx, ctx: Ctx, today: string): Promise<BoardRo
       units: unitIds.map((id) => ({ id, name: unitNames.get(id) ?? '' })).sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
       stagesDone: result.stages.filter((s) => s.complete).length,
       stagesTotal: result.stages.length,
-      currentStage: result.stages.find((s) => !s.complete)?.stage ?? null,
+      currentStage: current?.stage ?? null,
+      currentStageQty: current?.qty ?? null,
+      currentStageProduced: current?.produced ?? null,
+      currentStageMadeIsEstimate: current?.madeIsEstimate ?? null,
       lowConfidenceStages: result.stages.filter((s) => !s.complete && flagged.has(s.stage)).map((s) => s.stage),
     }
   })

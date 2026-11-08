@@ -105,7 +105,7 @@ describe('a saved template is never refused at order setup for calendar reasons'
       }
     }
     expect(accepted).toBeGreaterThan(10)
-  })
+  }, 120_000)   // about 26 s alone: well over half the default 30 s, so it failed on a busy machine
 
   it('a template whose OFFSETS are wrong is still refused at Setup and at order setup, with the same words', async () => {
     const bad = [{ stage: 'a', workingDaysBefore: 2, unitId: ID.unit1 }, { stage: 'b', workingDaysBefore: 8, unitId: ID.unit1 }]

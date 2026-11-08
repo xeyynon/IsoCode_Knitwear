@@ -68,7 +68,7 @@ export async function refreshWarnings(tx: Tx, ctx: Ctx, today: string): Promise<
       } else if (have.status !== status) {
         // The colour changed: new wording, and a human must look at it again. A dismissal does not carry over.
         await tx.query(
-          `update warning set status = $2, maths = $3::jsonb, buyer_text = $4, confirmed_by = null, confirmed_at = null, dismissed_at = null where id = $1`,
+          `update warning set status = $2, maths = $3::jsonb, buyer_text = $4, confirmed_by = null, confirmed_at = null, dismissed_at = null, dismissed_was_confirmed = null where id = $1`,
           [have.id, status, maths, text])
         out.updated++
         if (status === 'red') await alertRed(tx, o.id, o.po, r.stage, formatMaths(r, st.milestone))
@@ -168,9 +168,36 @@ export async function dismissWarning(tx: Tx, ctx: Ctx, id: string): Promise<void
   if (!isStaff(ctx)) throw forbidden()
   if (!UUID.test(String(id))) throw badRequest('Invalid request')
   const done = await tx.query(
-    `update warning set dismissed_at = now(), confirmed_by = null, confirmed_at = null where id = $1 and resolved_at is null and dismissed_at is null returning id`, [id])
+    `update warning set dismissed_at = now(), dismissed_was_confirmed = (confirmed_by is not null), confirmed_by = null, confirmed_at = null
+      where id = $1 and resolved_at is null and dismissed_at is null returning id`, [id])
   if (!done.length) {
     const exists = await tx.query('select 1 from warning where id = $1', [id])
     throw exists.length ? new AppError(409, 'not_open', 'This warning is no longer open') : notFound('No such warning')
+  }
+}
+
+/**
+ * Undo "Don't show", but only for a warning that was still waiting for review when it was hidden: it goes back to waiting,
+ * nothing reaches a buyer. One that had been confirmed (a buyer may have seen it) has no undo; showing it again needs a
+ * fresh confirmation. In the same transaction the warnings are brought up to date, so what comes back is what the order
+ * says now: if the stage has recovered the warning is resolved and the undo is refused (409 'not_open', nothing changes).
+ */
+export async function undoDismissWarning(tx: Tx, ctx: Ctx, id: string, today: string): Promise<void> {
+  if (!isStaff(ctx)) throw forbidden()
+  if (!UUID.test(String(id))) throw badRequest('Invalid request')
+  const done = await tx.query(
+    `update warning set dismissed_at = null, dismissed_was_confirmed = null
+      where id = $1 and resolved_at is null and dismissed_at is not null and dismissed_was_confirmed = false returning id`, [id])
+  if (!done.length) {
+    const w = (await tx.query<{ resolved: boolean; dismissed: boolean }>(
+      'select resolved_at is not null as resolved, dismissed_at is not null as dismissed from warning where id = $1', [id]))[0]
+    if (!w) throw notFound('No such warning')
+    if (w.resolved) throw new AppError(409, 'not_open', 'This warning is no longer open')
+    if (!w.dismissed) throw new AppError(409, 'not_dismissed', 'This warning is not hidden')
+    throw new AppError(409, 'needs_confirmation', 'This warning had been confirmed, so it cannot be brought back with undo. Confirm it again to show it to the buyer.')
+  }
+  await refreshWarnings(tx, ctx, today)
+  if (!(await tx.query('select 1 from warning where id = $1 and resolved_at is null', [id])).length) {
+    throw new AppError(409, 'not_open', 'This warning no longer applies')
   }
 }

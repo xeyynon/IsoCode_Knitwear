@@ -162,7 +162,7 @@ describe('the real migrations', () => {
     const r = await runMigrations(pgliteSession(pg))
     const files = readMigrations()
     expect(r.applied).toEqual(files.map((f) => f.file))
-    expect(files.at(-1)!.file).toBe('014_unique_names.sql')
+    expect(files.at(-1)!.file).toBe('015_warning_undo.sql')
     expect(await versions()).toEqual(files.map((f) => f.version))
 
     const shape = async (db: PGlite): Promise<string[]> => (await db.query<{ s: string }>(
@@ -201,7 +201,7 @@ describe('014: unique names, on a database that already has duplicates', () => {
       insert into orders (id, buyer_id, po, style, colour, qty, ex_factory) values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'P', 's', 'c', 1, '2026-12-01');
       insert into milestone (order_id, buyer_id, stage, unit_id, planned_end, sequence, qty) values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 'sewing', '${U3}', '2026-11-30', 1, 1);`)
     const r = await runMigrations(pgliteSession(pg))                      // the real directory: only 014 is new
-    expect(r.applied).toEqual(['014_unique_names.sql'])
+    expect(r.applied).toEqual(readMigrations().map((f) => f.file).filter((f) => f >= '014'))   // 014 and everything after it
     expect((await pg.query<{ id: string; name: string }>('select id::text id, name from unit order by id')).rows).toEqual([
       { id: U1, name: 'Unit 1' }, { id: U2, name: 'unit 1 (a2000000)' }, { id: U3, name: 'UNIT 1 (a3000000)' }])
     expect((await pg.query<{ id: string; name: string }>('select id::text id, name from tna_template order by id')).rows).toEqual([
