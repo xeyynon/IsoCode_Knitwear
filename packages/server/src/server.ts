@@ -4,7 +4,7 @@
 //   ALLOWED_ORIGINS  comma-separated browser origins, e.g. https://app.example.com
 //   TRUST_PROXY      how many reverse proxies are in front: 1 (the usual), 2-10, or a list of proxy addresses; 0 or unset: none. Anything else stops the server
 //   MEDIA_DIR        folder for uploaded photos (leave unset to switch photos off)
-//   MEDIA_STORE      disk | memory | s3   (unset: disk when MEDIA_DIR is set, otherwise photos are off)
+//   MEDIA_STORE      disk | memory | s3 | db   (unset: disk when MEDIA_DIR is set, otherwise photos are off; db = bytes in Postgres)
 //   S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY   required when MEDIA_STORE=s3
 //   S3_ENDPOINT, S3_FORCE_PATH_STYLE, S3_PREFIX, S3_SSE            optional (R2, MinIO, Backblaze, a folder, no-SSE services)
 //   LOG_LEVEL        fatal | error | warn | info | debug | trace | silent. Default info. One short line per request at info
@@ -19,6 +19,7 @@ import { buildApp } from './app.js'
 import { classifierFromEnv } from './noteAi.js'
 import { parseOrigins } from './cors.js'
 import { MediaConfigError, mediaStoreFromEnv } from './mediaFromEnv.js'
+import type { Db } from './db.js'
 import { assertSafeDbRole, pgDb, unsafeRoleOverride } from './pgDb.js'
 import { createShutdown, installProcessHandlers, parseLogLevel, parsePort, parseTrustProxy, poolSettings } from './startup.js'
 
@@ -32,6 +33,8 @@ const need = (name: string): string => {
 let media: ReturnType<typeof mediaStoreFromEnv>
 try {
   media = mediaStoreFromEnv(process.env, {
+    // MEDIA_STORE=db: the pool is made below, before any photo can be read or written; this only defers the lookup.
+    db: { tx: (ctx, fn) => appDb.tx(ctx, fn) },
     warn: (m) => console.warn(m),
     // The operator log of a storage failure carries the error name and HTTP status only: no bucket, key or message.
     onError: (op, info) => console.error(`media store ${op} failed: ${info.name}${info.status ? ` (HTTP ${info.status})` : ''}`),
@@ -70,9 +73,10 @@ try {
   process.exit(1)
 }
 
+// The callback runs only later, on a dropped idle connection, so `app` exists by then.
+const appDb: Db = pgDb(pool, (err) => app.log.error({ err }, 'idle db client error'))
 const app = buildApp({
-  // The callback runs only later, on a dropped idle connection, so `app` exists by then.
-  db: pgDb(pool, (err) => app.log.error({ err }, 'idle db client error')),
+  db: appDb,
   tokenSecret: need('TOKEN_SECRET'),
   allowedOrigins: origins,
   trustProxy,
