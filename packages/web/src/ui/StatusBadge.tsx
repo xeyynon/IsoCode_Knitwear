@@ -1,5 +1,6 @@
 import type { Status } from '../board/boardLogic'
 import { useLang } from '../i18n'
+import './StatusStamp.css'
 
 /**
  * One component for status, everywhere. The mark, the word and the colour always travel
@@ -41,10 +42,11 @@ export function StatusIcon({ status }: { status: Status }) {
   }
 }
 
+/** The one way a status is drawn: icon, word and colour in a ruled stamp (ui/StatusStamp.css), level, in capitals, at least 79 x 24 px. */
 export function StatusBadge({ status }: { status: Status }) {
   const { t } = useLang()
   return (
-    <span className={`badge badge--${status}`}>
+    <span className={`badge badge--${status} badge--stamp`}>
       <StatusIcon status={status} />
       <span>{t(`status.${status}`)}</span>
     </span>
