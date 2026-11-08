@@ -110,7 +110,7 @@ describe('O-2: a scoped refresh touches only its scope', () => {
   it('an order scope recomputes that order and leaves a stale warning on another order alone', async () => {
     await db.tx(SYS, (tx) => refreshWarnings(tx, SYS, TODAY))
     const rows = (await pg.query<{ order_id: string; stage: string; unit_id: string }>(
-      `select w.order_id::text as order_id, w.stage, m.unit_id::text as unit_id from warning w join milestone m on m.order_id = w.order_id and m.stage = w.stage where w.resolved_at is null order by w.id limit 2`)).rows
+      `select w.order_id::text as order_id, w.stage, m.unit_id::text as unit_id from warning w join milestone m on m.order_id = w.order_id and m.stage = w.stage where w.resolved_at is null order by w.id`)).rows.filter((r, i, all) => all.findIndex((x) => x.order_id === r.order_id) === i).slice(0, 2)   // two warnings on TWO orders: a random id order once picked two stages of one order, and the test failed one run in a few
     const [a, b] = rows as [typeof rows[0], typeof rows[0]]
     await addEvent(pg, a.order_id, a.stage, a.unit_id, 100000, 1)   // both stages complete
     await addEvent(pg, b.order_id, b.stage, b.unit_id, 100000, 2)
