@@ -33,6 +33,8 @@ describe('Button and ButtonLink', () => {
     expect(html(<Button size="big">Big</Button>)).toBe('<button class="btn btn--big">Big</button>')
     expect(html(<Button strong>Strong</Button>)).toBe('<button class="btn btn--strong">Strong</button>')
     expect(html(<Button variant="primary" size="small">Go</Button>)).toBe('<button class="btn btn--primary btn--small">Go</button>')
+    expect(html(<Button size="icon" aria-label="Menu">x</Button>)).toBe('<button class="btn btn--icon" aria-label="Menu">x</button>')
+    expect(html(<Button type="button" strong>Delete</Button>)).toBe('<button class="btn btn--strong" type="button">Delete</button>')
   })
   it('keeps a page\'s own class after its own, and adds no type (a button in a form still submits)', () => {
     expect(html(<Button className="stage__go">Go</Button>)).toBe('<button class="btn stage__go">Go</button>')

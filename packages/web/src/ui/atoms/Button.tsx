@@ -12,13 +12,14 @@ import { cx } from './cx'
  * button, and `strong` (a heavier ink border). Sizes: default, `small`, `big`. `block` is full width. No `type` is added: a button inside a form
  * still submits it, as before.
  */
-interface Look { variant?: 'primary' | 'default'; size?: 'default' | 'small' | 'big'; block?: boolean; strong?: boolean }
+interface Look { variant?: 'primary' | 'default'; size?: 'default' | 'small' | 'big' | 'icon'; block?: boolean; strong?: boolean }
 
 const look = ({ variant, size, block, strong }: Look) => [
   'btn',
   variant === 'primary' && 'btn--primary',
   size === 'small' && 'btn--small',
   size === 'big' && 'btn--big',
+  size === 'icon' && 'btn--icon',
   block && 'btn--block',
   strong && 'btn--strong',
 ]
