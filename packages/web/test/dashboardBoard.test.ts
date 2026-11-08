@@ -50,9 +50,13 @@ describe('Board.tsx on a wide screen', () => {
     expect(board).toContain('<StatusTiles')
     expect(board).toMatch(/narrow \? \([\s\S]*?\{chips\}[\s\S]*?\) : \(/)
   })
-  it('gives the tiles the same numbers the chips had (the counts), and the buyer choice sits above them with the tools, since it changes their numbers', () => {
+  // Changed with the AUDIT-03 fix "one toolbar": the buyer choice used to sit above the tiles because it changes their numbers, but search, unit
+  // and ship week change those numbers too (counts() works on the searched and scoped rows), so it was never special. Same promise, one place:
+  // the tiles keep the counts, and every filter that changes them, the buyer included, is in the table's one toolbar.
+  it('gives the tiles the same numbers the chips had (the counts), and every filter that changes them is in the one toolbar, the buyer included', () => {
     expect(board).toMatch(/count:\s*c\[s\]/)
-    expect(board).toMatch(/<div className="strip boardhead"[^>]*>\s*\{buyerSelect\}\{tools\}/)
+    expect(board).toMatch(/<form className="strip strip--find strip--attached"[^\n]*pushQuery\(text\) \}\}>\s*\{buyerSelect\}\{searchBox\}\{sortSelect\}\{unitSelect\}\{weekSelect\}/)
+    expect(board).toMatch(/<div className="strip boardhead">\{tools\}<\/div>/)
   })
   it('attaches the search and filters to the table as its toolbar, on a wide screen only', () => {
     expect(board).toMatch(/<form className="strip strip--find strip--attached"/)

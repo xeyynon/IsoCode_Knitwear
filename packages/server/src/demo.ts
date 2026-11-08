@@ -4,13 +4,43 @@ import type { PGlite } from '@electric-sql/pglite'
 import { buildApp } from './app.js'
 import { memoryMediaStore } from './mediaStore.js'
 import { migratedDb, pgliteDb, resetAndSeed, ID, TODAY } from '../test/helpers.js'
+import { DEMO_TODAY, seedDemo } from './demoSeed.js'
+import { demoClock } from './demoClock.js'
+import type { NoteClassifier } from './noteAi.js'
 
 export interface Demo { pg: PGlite; port: number; close: () => Promise<void> }
 
-export async function startDemoApi(opts: { port?: number; origins?: string[] } = {}): Promise<Demo> {
-  const pg = await migratedDb()
-  await resetAndSeed(pg)
+/**
+ * 'brief' = the brief's sample POs and the demo accounts in demoSeed.ts (what `npm run dev:api` shows).
+ * 'fixture' (the default here) = the small test fixture the browser scripts (e2e_offline, load_metrics, a11y, snapshots) check against.
+ */
+export type DemoData = 'brief' | 'fixture'
 
+export async function startDemoApi(opts: { port?: number; origins?: string[]; data?: DemoData; noteAi?: NoteClassifier | null } = {}): Promise<Demo> {
+  const pg = await migratedDb()
+  const brief = opts.data === 'brief'
+  if (brief) await pgliteDb(pg).tx({ role: 'system' }, (tx) => seedDemo(tx, DEMO_TODAY))
+  else await seedFixture(pg)
+  const today = brief ? DEMO_TODAY : TODAY
+
+  const app = buildApp({
+    db: pgliteDb(pg),
+    tokenSecret: 'dev-only-secret-dev-only-secret-dev-only',
+    allowedOrigins: opts.origins ?? ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    // The factory's day is fixed so the seeded figures line up; real time runs for sign-in tokens and locks, which the browser checks
+    // against its own clock. The browser scripts still pin both to the fixture's day (they drive a browser whose clock they set).
+    ...(brief ? { dayClock: demoClock(DEMO_TODAY)! } : { clock: () => new Date(`${today}T04:30:00Z`) }),
+    logger: false,
+    media: memoryMediaStore(),   // photos live in memory in the demo and vanish with it
+    noteAi: opts.noteAi ?? null,
+  })
+  const port = opts.port ?? 8787
+  await app.listen({ port, host: '127.0.0.1' })
+  return { pg, port, close: async () => { await app.close(); await pg.close() } }
+}
+
+async function seedFixture(pg: PGlite): Promise<void> {
+  await resetAndSeed(pg)
   // More orders so the board shows every colour. Illustrative figures, not client data.
   const extra = async (po: string, buyer: string, unit: string, qty: number, rate: number, days: string[]) => {
     const o = await pg.query<{ id: string }>(
@@ -25,16 +55,4 @@ export async function startDemoApi(opts: { port?: number; origins?: string[] } =
   await extra('B-PO-88290', ID.buyerB, ID.unit1, 4950, 430, week)                                      // amber
   await extra('C-PO-0511', ID.buyerC, ID.unit2, 4000, 800, ['2026-10-27', '2026-10-28', '2026-10-29']) // good rate, gone quiet: grey
   await extra('C-PO-0520', ID.buyerC, ID.unit2, 5300, 500, week)                                       // green
-
-  const app = buildApp({
-    db: pgliteDb(pg),
-    tokenSecret: 'dev-only-secret-dev-only-secret-dev-only',
-    allowedOrigins: opts.origins ?? ['http://localhost:5173', 'http://127.0.0.1:5173'],
-    clock: () => new Date(`${TODAY}T04:30:00Z`),   // fixed so the seeded figures line up
-    logger: false,
-    media: memoryMediaStore(),   // photos live in memory in the demo and vanish with it
-  })
-  const port = opts.port ?? 8787
-  await app.listen({ port, host: '127.0.0.1' })
-  return { pg, port, close: async () => { await app.close(); await pg.close() } }
 }

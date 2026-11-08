@@ -1,0 +1,8 @@
+/* SkipLink (ui/atoms/SkipLink.tsx). Hidden by clipping to 1 px (not display:none or visibility:hidden, which would take it out of the tab order, and not
+   moved off screen, where it would still count as a small control), then drawn at the top left on top of everything once it has the keyboard. Tokens only. */
+.skiplink { position: absolute; top: var(--space-2); left: var(--space-3); width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skiplink:focus, .skiplink:focus-visible {
+  z-index: 100; width: auto; height: auto; overflow: visible; clip: auto; display: inline-flex; align-items: center;
+  min-height: var(--tap-min); padding: 0 var(--space-4); background: var(--surface); color: var(--ink);
+  border: 2px solid var(--accent); border-radius: var(--radius-m); font-weight: 600; text-decoration: none; box-shadow: var(--shadow-menu);
+}

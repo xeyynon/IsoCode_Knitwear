@@ -225,7 +225,15 @@ export function projectOrder(
     const hasData = r.produced > 0 || r.made !== null
     // A passed milestone with pieces left is late with or without data (DEC-018: a new order set
     // up with stages already due shows late), so only a stage still in time can be "no update yet".
-    if (!hasData && r.needed !== null) { r.status = 'grey'; r.reasons.push('no update yet'); return }
+    if (!hasData && r.needed !== null) {
+      r.status = 'grey'
+      // A stage that has not started while the stage before it is still running is simply waiting its turn (Stitching while
+      // Cutting runs). It is shown as waiting and does not set the order's colour; otherwise every order with stages still
+      // ahead would read grey and the board could never show green. Once the previous stage is complete, silence here is
+      // "no update yet" again, and a passed milestone is still red (above).
+      r.reasons.push(i > 0 && !results[i - 1]!.complete ? WAITING : 'no update yet')
+      return
+    }
 
     const red: string[] = []
     // No working days left also covers the milestone day itself, which is still being worked:
@@ -257,7 +265,9 @@ export function projectOrder(
     else r.status = 'green'
   })
 
-  const status = results.reduce<Status>((acc, r) => worst(acc, r.status), 'green')
+  // Waiting stages do not count, unless nothing else is left to judge (never true in practice: the first unfinished stage is never waiting).
+  const counted = results.filter((r) => !isWaiting(r))
+  const status = (counted.length ? counted : results).reduce<Status>((acc, r) => worst(acc, r.status), 'green')
 
   let warning: Warning | null = null
   if (status === 'amber' || status === 'red') {
@@ -271,6 +281,10 @@ export function projectOrder(
 }
 
 const MILESTONE_TODAY = 'milestone is today with pieces remaining'
+/** The reason on a stage that has not started because the stage before it is still running. */
+export const WAITING = 'waiting for the previous stage'
+/** A stage that is waiting its turn: shown, but it never sets the order's colour. */
+export const isWaiting = (r: Pick<StageResult, 'reasons'>): boolean => r.reasons.includes(WAITING)
 const PAST_EX_SELF = 'this stage is projected past ex-factory'
 const PAST_EX_LATER = 'a later stage is pushed past ex-factory'
 

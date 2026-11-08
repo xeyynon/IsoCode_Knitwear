@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useLang } from '../i18n'
+import { Button } from './atoms/Button'
 import { keepFocusInside } from './ConfirmDialog'
 
 /**
@@ -40,7 +41,7 @@ export function PhotoViewer({ src, alt, onClose }: { src: string; alt: string; o
     >
       <div className="viewer__bar">
         <span className="sub viewer__hint">{t('viewer.hint')}</span>
-        <button type="button" ref={closeRef} className="btn" onClick={() => ref.current?.close()}>{t('viewer.close')}</button>
+        <Button type="button" ref={closeRef} onClick={() => ref.current?.close()}>{t('viewer.close')}</Button>
       </div>
       <div className="viewer__scroll" tabIndex={0}>
         <img className="viewer__img" src={src} alt={alt} />

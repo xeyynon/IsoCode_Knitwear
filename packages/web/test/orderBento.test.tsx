@@ -54,7 +54,8 @@ describe('the phone page keeps what phase 3 measured', () => {
 describe('OrderDetail.tsx', () => {
   it('is laid out by OrderBento, and the cards keep their headings inside the area they belong to', () => {
     expect(detail).toContain('<OrderBento')
-    expect(detail).toContain('page--bento')
+    // Same promise through the template: the page asks MerchandiserShell for the `bento` frame (templates.test.tsx: `bento` draws `page--bento`).
+    expect(detail).toMatch(/<MerchandiserShell [^>]*\bbento\b/)
   })
   it('adds a projected-finish tile only from a real projected date', () => {
     expect(detail).toMatch(/label: 'Projected finish'/)

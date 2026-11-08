@@ -1,5 +1,7 @@
 import { Component, type ReactNode } from 'react'
 import { useLang } from '../i18n'
+import { Button } from './atoms/Button'
+import { Card } from './atoms/Card'
 import { isChunkError, shouldReload } from './chunkReload'
 
 const KEY = 'orders.chunkReloadAt'
@@ -35,10 +37,10 @@ export class ChunkErrorBoundary extends Component<{ children: ReactNode }, { fai
 function FailedCard() {
   const { t } = useLang()
   return (
-    <div className="card" role="alert">
+    <Card as="div" role="alert">
       <h1>{t('chunk.title')}</h1>
       <p>{t('chunk.body')}</p>
-      <button className="btn btn--primary" onClick={() => window.location.reload()}>{t('chunk.reload')}</button>
-    </div>
+      <Button variant="primary" onClick={() => window.location.reload()}>{t('chunk.reload')}</Button>
+    </Card>
   )
 }

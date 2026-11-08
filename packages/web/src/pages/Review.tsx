@@ -6,17 +6,26 @@ import { istDate } from '../dates'
 import { exportFileName } from '../review/exportLogic'
 import { describeFailure, type LoadFailure } from '../api/sessionRules'
 import { oneAtATime } from '../queue/oneAtATime'
-import { activeLinkCount, afterRevoke, buyerLinkUrl, emptyLine, linkStatus, offersNoReason, parseDays, reviewSummary, sectionAnchor, sectionTitle, type ReviewSectionId } from '../review/reviewLogic'
-import { AppBar } from '../ui/AppBar'
+import { activeLinkCount, afterRevoke, buyerLinkUrl, emptyLine, linkStatus, offersNoReason, parseDays, reviewSummary, sectionAnchor, sectionTitle, splitLinks, type ReviewSectionId } from '../review/reviewLogic'
+import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
 import { reasonById, type Reason } from '../notes/reasons'
+import { aiLine, defaultMeaning, defaultReason, disagreement, reasonSource, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
+import { Banner } from '../ui/atoms/Banner'
+import { Button } from '../ui/atoms/Button'
+import { Card } from '../ui/atoms/Card'
+import { ErrorText } from '../ui/atoms/ErrorText'
+import { Input, Select, Textarea } from '../ui/atoms/Input'
+import { Field } from '../ui/molecules/Field'
+import { InlineUndo } from '../ui/molecules/InlineUndo'
+import { afterHide, afterUndo, offersUndo, undoOutcome, type HiddenFrom, type HiddenItem } from '../review/undoLogic'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
-interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null }
+interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null; ai: NoteSuggestion | null }
 interface VisiblePhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string }
 interface PendingPhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string; bytes: number }
 interface LinkRow { id: string; buyerId: string; buyerName: string; label: string | null; expiresAt: string; revoked: boolean; expired: boolean }
@@ -25,7 +34,7 @@ interface Options { buyers: { id: string; name: string }[] }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function Review() {
-  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[] } | null>(null)
+  const [data, setData] = useState<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[]; aiEnabled?: boolean } | null>(null)
   const [meaning, setMeaning] = useState<Record<string, string>>({})
   const [noteReason, setNoteReason] = useState<Record<string, string>>({})
   const [links, setLinks] = useState<LinkRow[]>([])
@@ -35,6 +44,9 @@ export default function Review() {
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [announce, setAnnounce] = useState('')
+  // Warnings hidden from the waiting list during this visit, each with an Undo line where its card was (slice 4.1). Local to the page: a reload ends them.
+  const [hidden, setHidden] = useState<HiddenItem[]>([])
+  const [undoFailed, setUndoFailed] = useState<Record<string, { text: string; final: boolean }>>({})
   const pendingHeading = useRef<HTMLHeadingElement>(null)
   const notesHeading = useRef<HTMLHeadingElement>(null)
   const photosHeading = useRef<HTMLHeadingElement>(null)
@@ -48,12 +60,13 @@ export default function Review() {
   const [made, setMade] = useState<{ id: string; url: string; copied: boolean } | null>(null)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [showPast, setShowPast] = useState(false)   // the cancelled and expired links are folded until asked for
   const making = useRef(false)
 
   const load = useCallback(async () => {
     try {
       const [r, l] = await Promise.all([
-        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[] }>('/api/review'),
+        apiFetch<{ needsReview: Item[]; confirmed: Item[]; photos: PendingPhoto[]; approvedPhotos: VisiblePhoto[]; notes: PendingNote[]; reasons: Reason[]; aiEnabled?: boolean }>('/api/review'),
         apiFetch<{ links: LinkRow[] }>('/api/buyer-links'),
       ])
       setData(r); setLinks(l.links); setError(null)
@@ -65,14 +78,46 @@ export default function Review() {
     apiFetch<Options>('/api/orders/options').then((o) => setBuyers(o.buyers)).catch(() => undefined)
   }, [load])
 
-  async function decide(item: Item, action: 'confirm' | 'dismiss', heading: React.RefObject<HTMLHeadingElement | null>) {
+  // AI suggestions for notes still waiting for one: a few per call, again while any are left, at most a handful of rounds per
+  // visit (a failure is shown on the note and can be asked again by hand). Nothing here moves focus or blocks the page.
+  const aiRounds = useRef(0)
+  const [aiBusy, setAiBusy] = useState<string | null>(null)
+  useEffect(() => {
+    if (!data?.aiEnabled || aiBusy || aiRounds.current >= 6 || !data.notes.some(waitingForAi)) return
+    aiRounds.current++
+    setAiBusy('all')
+    apiFetch('/api/notes/suggest', { method: 'POST', body: '{}' })
+      .then(() => load())
+      .catch(() => { aiRounds.current = 6 })   // the service is down or AI was switched off: stop asking on this visit
+      .finally(() => setAiBusy(null))
+  }, [data, aiBusy, load])
+
+  async function askAgain(n: PendingNote) {
+    setAiBusy(n.id); setActionError(null)
+    try {
+      await apiFetch(`/api/notes/${n.id}/suggest`, { method: 'POST', body: '{}' })
+      setAnnounce(`Asked the AI again about the note on ${n.po}.`)
+      await load()
+    } catch (e) { setActionError(e instanceof ApiError ? e.message : 'That did not work. Please try again.') }
+    setAiBusy(null)
+  }
+
+  // 'dismiss-waiting' is "Don't show" on a warning still waiting for review; 'dismiss' is "Hide from buyer" on one that was confirmed. Both call the same
+  // route, but only the first can be undone: a confirmed warning may already have been seen by a buyer (rule 18).
+  async function decide(item: Item, action: 'confirm' | 'dismiss-waiting' | 'dismiss', heading: React.RefObject<HTMLHeadingElement | null>) {
     setBusy(item.id); setActionError(null)
     try {
       const text = edits[item.id]
       // Say what was on screen, so a warning a refresh has changed since is not confirmed unseen.
       const body = action === 'confirm' ? { ...(text !== undefined ? { text } : {}), seenStatus: item.status, seenText: item.buyerText } : {}
-      await apiFetch(`/api/warnings/${item.id}/${action}`, { method: 'POST', body: JSON.stringify(body) })
-      setAnnounce(action === 'confirm' ? `Confirmed. ${item.po} ${item.stage} is now visible to ${item.buyerName}.` : `Dismissed. ${item.buyerName} will not see it.`)
+      await apiFetch(`/api/warnings/${item.id}/${action === 'confirm' ? 'confirm' : 'dismiss'}`, { method: 'POST', body: JSON.stringify(body) })
+      const from: HiddenFrom = action === 'dismiss-waiting' ? 'waiting' : 'confirmed'
+      const undoable = action !== 'confirm' && offersUndo(from)
+      if (undoable) {
+        setHidden((h) => afterHide(h, { id: item.id, po: item.po, stage: item.stage, buyerName: item.buyerName }))
+        setUndoFailed(({ [item.id]: _gone, ...rest }) => rest)
+      }
+      setAnnounce(action === 'confirm' ? `Confirmed. ${item.po} ${item.stage} is now visible to ${item.buyerName}.` : `Dismissed. ${item.buyerName} will not see it.${undoable ? ' You can undo this below the section heading.' : ''}`)
       await load()
       heading.current?.focus()      // the card that had focus is gone: back to the heading of its own section
     } catch (e) {
@@ -82,12 +127,39 @@ export default function Review() {
     setBusy(null)
   }
 
+  // Bring a hidden warning back to "waiting for review" (the server refreshes its wording and figures in the same step). A refusal or a failure is said
+  // in words on the same line and changes nothing else on the page.
+  async function undoHide(h: HiddenItem, heading: React.RefObject<HTMLHeadingElement | null>) {
+    const key = `undo:${h.id}`
+    setBusy(key); setUndoFailed(({ [h.id]: _gone, ...rest }) => rest)
+    try {
+      await apiFetch(`/api/warnings/${h.id}/undo-dismiss`, { method: 'POST', body: '{}' })
+      setHidden((list) => afterUndo(list, h.id))
+      setAnnounce(`Back in the list: ${h.po} ${cap(h.stage)}. ${h.buyerName} still cannot see it until you confirm it.`)
+      await load(); heading.current?.focus()      // the Undo button is gone with its line: back to the heading of its own section
+    } catch (e) {
+      const o = undoOutcome(e)
+      if (o.back) {
+        setHidden((list) => afterUndo(list, h.id)); setAnnounce(o.text)
+        await load(); heading.current?.focus()
+      } else {
+        setUndoFailed((f) => ({ ...f, [h.id]: { text: o.text, final: o.final } }))
+      }
+    }
+    setBusy(null)
+  }
+
   async function reviewNote(n: PendingNote, heading: React.RefObject<HTMLHeadingElement | null>) {
     setBusy(n.id); setActionError(null)
     try {
       await apiFetch(`/api/notes/${n.id}/confirm`, {
         method: 'POST',
-        body: JSON.stringify({ ...(n.language === 'ta' && meaning[n.id]?.trim() ? { textEn: meaning[n.id] } : {}), ...(noteReason[n.id] ? { category: noteReason[n.id] } : {}) }),
+        // What is on screen is what is saved: the English box (an AI draft the person may have edited) and the reason in the picker.
+        body: JSON.stringify((() => {
+          const textEn = defaultMeaning(n, meaning[n.id]).trim()
+          const category = defaultReason(n, noteReason[n.id])
+          return { ...(n.language === 'ta' && textEn ? { textEn } : {}), ...(category ? { category } : {}) }
+        })()),
       })
       setAnnounce(`Reviewed the note on ${n.po}.`)
       await load(); heading.current?.focus()
@@ -161,17 +233,17 @@ export default function Review() {
   }
 
   const active = activeLinkCount(links)
+  const { working, past } = splitLinks(links)
+  const shownLinks = showPast ? [...working, ...past] : working
   // A section with nothing in it keeps its heading and shrinks to one calm line.
   const sec = (count: number) => (count === 0 ? 'rvsec rvsec--empty' : 'rvsec')
 
   return (
-    <>
-      <AppBar title="Review" />
-      <main className="page page--form">
+    <MerchandiserShell title="Review" form>
         <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
         {!data && !error && <Loading label="Loading" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
-        {actionError && <p className="banner" role="alert">{actionError}</p>}
+        {actionError && <Banner>{actionError}</Banner>}
 
         {data && (
           <>
@@ -189,7 +261,15 @@ export default function Review() {
 
             <section className={sec(data.needsReview.length)} aria-labelledby={sectionAnchor('warnings')}>
               <h2 id={sectionAnchor('warnings')} tabIndex={-1} ref={pendingHeading}>{sectionTitle('Waiting for your review', data.needsReview.length)}</h2>
-              {data.needsReview.length === 0 ? <p className="sub">{emptyLine('warnings')}</p> : (
+              {hidden.length > 0 && (
+                <ul className="plain stagelist" aria-label="Hidden from buyers, can be undone">
+                  {hidden.map((h) => (
+                    <InlineUndo key={h.id} label={`${h.po} · ${cap(h.stage)} is hidden. ${h.buyerName} will not see it.`} name={`${h.po} ${cap(h.stage)}`}
+                      busy={busy === `undo:${h.id}`} error={undoFailed[h.id]?.text} final={undoFailed[h.id]?.final} onUndo={() => void undoHide(h, pendingHeading)} />
+                  ))}
+                </ul>
+              )}
+              {data.needsReview.length === 0 ?<p className="sub">{emptyLine('warnings')}</p> : (
                 <>
                   <p className="sub">Nothing here is visible to a buyer until you confirm it. You can change the wording first. The figures below the wording are for you only.</p>
                   <ul className="plain stagelist">
@@ -197,12 +277,12 @@ export default function Review() {
                       <li key={w.id} className="stagecard">
                         <div className="stagecard__top"><b className="mono">{w.po}</b><span className="sub">{w.buyerName} · {cap(w.stage)}</span><StatusBadge status={w.status} /></div>
                         <p className="sub internal">Only you see this: {w.maths}</p>
-                        <label className="field"><span>What {w.buyerName} would read</span>
-                          <textarea className="input textarea" rows={2} maxLength={300} value={edits[w.id] ?? w.buyerText}
-                            onChange={(e) => setEdits({ ...edits, [w.id]: e.target.value })} /></label>
+                        <Field label={<>What {w.buyerName} would read</>}>
+                          <Textarea rows={2} maxLength={300} value={edits[w.id] ?? w.buyerText}
+                            onChange={(e) => setEdits({ ...edits, [w.id]: e.target.value })} /></Field>
                         <div className="actions">
-                          <button className="btn btn--primary" disabled={busy === w.id || !(edits[w.id] ?? w.buyerText).trim()} onClick={() => void decide(w, 'confirm', pendingHeading)}>Confirm for buyer</button>
-                          <button className="btn" disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', pendingHeading)}>Don't show</button>
+                          <Button variant="primary" disabled={busy === w.id || !(edits[w.id] ?? w.buyerText).trim()} onClick={() => void decide(w, 'confirm', pendingHeading)}>Confirm for buyer</Button>
+                          <Button disabled={busy === w.id} onClick={() => void decide(w, 'dismiss-waiting', pendingHeading)}>Don't show</Button>
                         </div>
                       </li>
                     ))}
@@ -215,25 +295,38 @@ export default function Review() {
               <h2 id={sectionAnchor('notes')} tabIndex={-1} ref={notesHeading}>{sectionTitle('Notes from the floor', data.notes.length)}</h2>
               {data.notes.length === 0 ? <p className="sub">{emptyLine('notes')}</p> : (
                 <>
-                  <p className="sub">What supervisors wrote about why a stage is slow. These are only for you: buyers never see notes. Add the English meaning of a Tamil note and check the reason.</p>
+                  <p className="sub">What supervisors wrote about why a stage is slow. These are only for you: buyers never see notes. {data.aiEnabled ? 'AI drafts the English and suggests a reason; check both against the original, then mark it reviewed.' : 'Add the English meaning of a Tamil note and check the reason.'}</p>
                   <ul className="plain stagelist">
                     {data.notes.map((n) => {
-                      const chosen = noteReason[n.id] ?? n.category ?? ''
+                      const chosen = defaultReason(n, noteReason[n.id])
+                      const line = aiLine(n, data.reasons, !!data.aiEnabled)
+                      const clash = disagreement(n, data.reasons)
                       return (
                         <li key={n.id} className="stagecard">
                           <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {n.takenOn}</span></div>
                           {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
-                          {n.language === 'ta' && (
-                            <label className="field"><span>What it means, in English</span>
-                              <textarea className="input textarea" rows={2} maxLength={500} value={meaning[n.id] ?? ''} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></label>
+                          {line && (
+                            <div className={`ai-box ai-box--${line.kind}`} role="status" aria-live="polite">
+                              <span className="lang-tag">AI</span>{' '}
+                              <span>{line.text}</span>
+                              {'detail' in line && line.detail && <p className="sub ai-box__why">Why: {line.detail}</p>}
+                              {clash && <p className="ai-box__clash">{clash}</p>}
+                              {data.aiEnabled && n.ai && (
+                                <Button size="small" disabled={aiBusy !== null} onClick={() => void askAgain(n)}>{aiBusy === n.id ? 'Asking…' : 'Ask AI again'}</Button>
+                              )}
+                            </div>
                           )}
-                          <label className="field"><span>Reason{n.category && !noteReason[n.id] ? ' (chosen by the supervisor)' : ''}</span>
-                            <select className="input" value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
+                          {n.language === 'ta' && (
+                            <Field label={<>What it means, in English{n.ai?.textEn && meaning[n.id] === undefined ? ' (AI draft, check it against the Tamil)' : ''}</>}>
+                              <Textarea rows={2} maxLength={500} value={defaultMeaning(n, meaning[n.id])} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></Field>
+                          )}
+                          <Field label={<>Reason{reasonSource(n, noteReason[n.id])}</>}>
+                            <Select value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
                               {offersNoReason(n.category) && <option value="">No reason chosen</option>}
                               {data.reasons.map((r) => <option key={r.id} value={r.id}>{r.en}</option>)}
                               {n.category && !data.reasons.some((r) => r.id === n.category) && <option value={n.category}>{reasonById(data.reasons, n.category)?.en}</option>}
-                            </select></label>
-                          <div className="actions"><button className="btn btn--primary" disabled={busy === n.id} onClick={() => void reviewNote(n, notesHeading)}>Mark as reviewed</button></div>
+                            </Select></Field>
+                          <div className="actions"><Button variant="primary" disabled={busy === n.id} onClick={() => void reviewNote(n, notesHeading)}>Mark as reviewed</Button></div>
                         </li>
                       )
                     })}
@@ -251,8 +344,8 @@ export default function Review() {
                       <AuthImage zoomable path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
                       <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
                       <div className="actions">
-                        <button className="btn btn--primary btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve', photosHeading)}>Approve for buyer</button>
-                        <button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', photosHeading)}>Reject</button>
+                        <Button variant="primary" size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'approve', photosHeading)}>Approve for buyer</Button>
+                        <Button size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', photosHeading)}>Reject</Button>
                       </div>
                     </li>
                   ))}
@@ -268,7 +361,7 @@ export default function Review() {
                     <li key={p.id} className="stagecard">
                       <AuthImage zoomable path={`/api/photos/${p.id}/file`} alt={`${cap(p.stage)} photo for ${p.po}`} />
                       <p className="sub"><b className="mono">{p.po}</b> · {p.buyerName} · {cap(p.stage)} · {p.takenOn}</p>
-                      <div className="actions"><button className="btn btn--small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', approvedHeading)}>Withdraw from buyer</button></div>
+                      <div className="actions"><Button size="small" disabled={busy === p.id} onClick={() => void decidePhoto(p, 'reject', approvedHeading)}>Withdraw from buyer</Button></div>
                     </li>
                   ))}
                 </ul>
@@ -283,7 +376,7 @@ export default function Review() {
                     <li key={w.id} className="stagecard">
                       <div className="stagecard__top"><b className="mono">{w.po}</b><span className="sub">{w.buyerName} · {cap(w.stage)}</span><StatusBadge status={w.status} /></div>
                       <p className="why">{w.buyerText}</p>
-                      <div className="actions"><button className="btn btn--small" disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', confirmedHeading)}>Hide from buyer</button></div>
+                      <div className="actions"><Button size="small" disabled={busy === w.id} onClick={() => void decide(w, 'dismiss', confirmedHeading)}>Hide from buyer</Button></div>
                     </li>
                   ))}
                 </ul>
@@ -292,52 +385,60 @@ export default function Review() {
 
             <section className="rvsec" aria-labelledby={sectionAnchor('links')}>
               <h2 id={sectionAnchor('links')} tabIndex={-1} ref={linksHeading}>{sectionTitle('Buyer links', active, 'working')}</h2>
-              <form className="card change" onSubmit={makeLink} noValidate>
+              <Card as="form" className="change" onSubmit={makeLink} noValidate>
                 <p className="sub">A link lets one buyer contact see only that buyer's orders, read-only. Share it by email or message. Anyone who has it can open it, so cancel it if it goes to the wrong person.</p>
                 <div className="grid2">
-                  <label className="field"><span>Buyer</span>
-                    <select className="input" value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
+                  <Field label="Buyer">
+                    <Select value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
                       <option value="">Choose a buyer</option>{buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select></label>
-                  <label className="field"><span>Works for (days)</span>
-                    <input className="input mono" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></label>
+                    </Select></Field>
+                  <Field label="Works for (days)">
+                    <Input mono inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
                 </div>
-                <label className="field"><span>Who it is for (optional)</span>
-                  <input className="input" value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} /></label>
-                {linkError && <p className="error" role="alert">{linkError}</p>}
-                <button className="btn btn--primary" disabled={busy === 'link'}>Make link</button>
-              </form>
+                <Field label="Who it is for (optional)">
+                  <Input value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} /></Field>
+                {linkError && <ErrorText>{linkError}</ErrorText>}
+                <Button variant="primary" disabled={busy === 'link'}>Make link</Button>
+              </Card>
 
               {made && (
                 <div className="notice-box" role="status">
                   <b>Copy this link now. For safety it is shown only once.</b>
-                  <input id="link-url" className="input mono" readOnly value={made.url} onFocus={(e) => e.currentTarget.select()} aria-label="Buyer link" />
-                  <button className="btn btn--small" onClick={() => void copy()}>{made.copied ? 'Copied' : 'Copy link'}</button>
+                  <Input id="link-url" mono readOnly value={made.url} onFocus={(e) => e.currentTarget.select()} aria-label="Buyer link" />
+                  <Button size="small" onClick={() => void copy()}>{made.copied ? 'Copied' : 'Copy link'}</Button>
                 </div>
               )}
 
-              {exportError && <p className="error" role="alert">{exportError}</p>}
+              {exportError && <ErrorText>{exportError}</ErrorText>}
               {links.length === 0 ? <p className="sub">{emptyLine('links')}</p> : (
-                <table className="plan links">
-                  <thead><tr><th scope="col">Buyer</th><th scope="col">For</th><th scope="col">State</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
-                  <tbody>{links.map((l) => {
-                    const s = linkStatus(l)
-                    return (
-                      <tr key={l.id}>
-                        <td data-label="Buyer">{l.buyerName}</td><td data-label="For">{l.label ?? '-'}</td><td data-label="State">{s.text}</td>
-                        <td className="links__actions">
-                          <button className="btn btn--small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</button>
-                          {s.active && <button className="btn btn--small" onClick={() => void revoke(l.id)}>Cancel link</button>}
-                        </td>
-                      </tr>
-                    )
-                  })}</tbody>
-                </table>
+                <>
+                  {/* Working links first; cancelled and expired ones sit behind a button with their number (AUDIT-03 finding 15). */}
+                  {working.length === 0 && <p className="sub">No link works right now.</p>}
+                  {shownLinks.length > 0 && (
+                    <table className="plan links">
+                      <thead><tr><th scope="col">Buyer</th><th scope="col">For</th><th scope="col">State</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
+                      <tbody>{shownLinks.map((l) => {
+                        const s = linkStatus(l)
+                        return (
+                          <tr key={l.id}>
+                            <td data-label="Buyer">{l.buyerName}</td><td data-label="For">{l.label ?? '-'}</td><td data-label="State">{s.text}</td>
+                            <td className="links__actions">
+                              <Button size="small" disabled={busy === `export:${l.id}`} onClick={() => void exportBuyer(l)}>Download (Excel)</Button>
+                              {s.active && <Button size="small" onClick={() => void revoke(l.id)}>Cancel link</Button>}
+                            </td>
+                          </tr>
+                        )
+                      })}</tbody>
+                    </table>
+                  )}
+                  {past.length > 0 && (
+                    <p><Button size="small" aria-expanded={showPast} onClick={() => setShowPast(!showPast)}>{showPast ? 'Hide' : 'Show'} cancelled and expired links ({past.length})</Button></p>
+                  )}
+                </>
               )}
             </section>
           </>
         )}
-      </main>
-    </>
+    </MerchandiserShell>
   )
 }

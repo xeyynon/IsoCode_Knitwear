@@ -9,9 +9,12 @@ export default defineConfig(({ mode, command }) => {
   // VITE_* values are baked into the bundle at build time. A missing one silently points a
   // production build at the wrong place, so refuse to build instead.
   if (command === 'build' && mode === 'production' && !env.VITE_API_BASE) {
-    throw new Error('VITE_API_BASE is not set. Set it to the API address (for example https://api.example.com) and build again.')
+    throw new Error('VITE_API_BASE is not set. Set it to the API address (for example https://api.example.com), or to same-origin when the API is served from the same address as the app, and build again.')
   }
+  // "same-origin" is said out loud rather than left empty, so an empty value is still a mistake: the app then calls /api/... on its own address.
+  const sameOrigin = env.VITE_API_BASE === 'same-origin'
   return {
+    ...(sameOrigin ? { define: { 'import.meta.env.VITE_API_BASE': JSON.stringify('') } } : {}),
     plugins: [
       react(),
       {

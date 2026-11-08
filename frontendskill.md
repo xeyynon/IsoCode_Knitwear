@@ -38,9 +38,9 @@ These came from real incidents or from the product's purpose. A UI change that b
 8. **A failure must be visible.** The sync chip says "could not send"; background polls that fail must not look like success.
 
 **Colour and accessibility**
-9. **Never colour alone.** Every status = icon + word + colour. Red, amber and green have almost the same lightness (about 1.0 to 1.3:1 apart); in greyscale only the icon and word carry meaning.
-10. **Red, amber and green mean order status only.** Indigo is the only action colour. The sync chip and the reason picker use neutral colours on purpose.
-11. **Tokens only.** No hard-coded colours in components; add or reuse a token in `packages/design/tokens.css`. After any token change run `node scripts/check_contrast.mjs`.
+9. **Never colour alone.** Every status = icon + word + colour, drawn as the ruled stamp (rule 26). Red, amber and green have almost the same lightness (about 1.0 to 1.3:1 apart); in greyscale only the icon and word carry meaning.
+10. **Red, amber and green mean order status only.** Pantone Violet (`--accent`, `#6E5BB1`) is the only action colour (it was indigo `#3346A8` until 8 Nov 2026). The sync chip, the reason picker and a form error use neutral colours on purpose: a form error is ink with a drawn "!" mark, never red (rule 29).
+11. **Tokens only.** No hard-coded colours in components; add or reuse a token in `packages/design/tokens.css`. After any token change run `node scripts/check_contrast.mjs`. The one place a colour is written out is the first-paint shell in `index.html` (no stylesheet has loaded yet); `test/bootShell.test.ts` keeps those values equal to the tokens.
 12. **Amber needs two colours**: a mark colour (`--status-amber`, icon and border only, 3.8:1) and a text colour (`--status-amber-text`). Never use the mark colour for text.
 13. **Touch targets:** 56 px for Send and number fields on supervisor screens; at least 44 px on a coarse pointer for everything; never `user-scalable=no`.
 14. **Tamil:** never truncate. Buttons grow to two lines. Tamil body text is 18 px with line height 1.6 (set via `html[lang='ta']`). Untranslated text falls back to English; **never guess Tamil**. The Tamil that exists is unreviewed and marked as such. **A supervisor with no stored language gets Tamil at sign-in** (`langRules.ts`, applied in `signIn` and when the app opens already signed in); a merchandiser stays English; a pick from the language switch is stored as a choice and always wins. Any script or test that reads English words after a supervisor signs in must set `localStorage['orders.lang'] = 'en'` first (`addInitScript`), as `e2e_offline.ts`, `snapshots.ts` and `a11y.ts` do.
@@ -60,16 +60,28 @@ These came from real incidents or from the product's purpose. A UI change that b
 24. **Browser checks record where an action landed** (what is on screen), not only that a click happened.
 25. **Stage by file name when committing, never `git add -A`**: another session works in this checkout (`md/poa_backend.md`).
 
+**Look (UI/UX 2.0, added 8 Nov 2026 after the first round of feedback: "I don't see a major shift", then "this colourful design feels so much of AI generation", then "use minimal soft colour with the theme")**
+26. **A status is drawn only as the ruled stamp.** `StatusBadge` is the one place; it takes no look option. The stamp is a level (never tilted) double-ruled rectangle: a 1.5 px rule plus an inner 1 px rule at half strength, at least 79 x 24 px (`min-width`/`min-height` in `ui/StatusStamp.css`), in capitals with letter spacing, no fill, the icon and the word inside. Why: a status badge in the shape of a rubber stamp was the user's own reference; it needs no tint, so it reads the same in greyscale. `test/statusStamp.test.tsx` keeps the size, the capitals, the double rule, no tilt, no fill and no pill rules in `styles.css`.
+27. **Status colour appears only on the icon, the word and the stamp's rule and text** (and the status tiles' own icon and word on the wide board). Never as a card, tile, row or header background, a border, an edge stripe or a text colour elsewhere. `test/noStatusTints.test.ts` reads every stylesheet under `src` and fails on a status colour or tint used anywhere else.
+28. **No tinted cards, tiles or rows.** Surfaces are white (`--surface`) or the page colour with a neutral border. Why: red-tinted stage cards, red or amber tiles with coloured borders and a near-black hero card each looked generated or clashed with the theme when tried (see `md/tried_and_failed.md`).
+29. **A form error is ink with a drawn "!" mark in a ring (`.error::before`), and an invalid field has a heavy ink border; `role="alert"` stays.** Why: red means order status only (rule 10), and the red errors clashed with the Violet theme. It still reads in greyscale.
+30. **The soft wash (`--accent-soft`, `#EEEBF7`) is the theme's own tint**: hero cards (Today, Update) and selected surfaces. It is never used for a status. Selected chips, review counts, reason pills and every progress fill use `--accent`. `check_contrast.mjs` has pairs for accent, ink and muted on the wash.
+31. **Waiting is shown only where it was measured.** A skeleton (`ui/atoms/Skeleton`) is used only where a wait was measured over 1 second on an emulated slow connection (`npm run load`; today only Today's list after sign-in). The first-paint shell in `index.html` (a ring, `#boot`, no words so nothing to translate) fills the blank wait before the app starts, and the app clears it on mount. The skeleton is held back 180 ms so a fast load never flashes it, and the skeleton and the ring both stand still under `prefers-reduced-motion`; do not add a skeleton to a screen that was not measured.
+32. **One bottom region per screen.** The supervisor's primary action, the "saved" line, the question and the "new version ready" bar share the ActionBar's slot (`ui/molecules/ActionBar`, `ui/bottomSlot.ts`); nothing else is pinned over it. With `interactive-widget=resizes-content` in the viewport meta, Send stays above the keyboard on Android Chrome.
+33. **Numbers and dates are written one way.** Piece counts go through `pieces()` in `src/numberFormat.ts` (Indian grouping from four digits: `1,750`, `1,25,000`; a dash for a value that is not a number, never "NaN"); no screen groups a number by itself (`test/numberFormat.test.ts`). A date field reads its date back in words under it (`ui/atoms/DateWords`, "Thursday, 12 Nov 2026"; nothing for a half-typed or impossible date).
+
 ## 3. Run it, verify it, look at it
 
 ```bash
 npm install                      # Node 20.19+ (22 recommended); no Docker needed
-npm run verify                   # repo checks + markdown links + colour contrast + typecheck + all tests (about 500)
+npm run verify                   # repo checks + markdown links + colour contrast + typecheck + all tests (about 1,600 on 8 Nov 2026)
 npm run dev:api                  # terminal 1: real API on an in-memory Postgres, demo data, http://127.0.0.1:8787
 npm run dev -w @isocode/web      # terminal 2: the app, http://localhost:5173 (proxies /api)
 npm run snapshots                # terminal 3: writes uiux/2.0 and keeps the earlier 2.0 set in uiux/2.0/previous/ (needs both servers; uiux/1.0 is frozen)
 npm run ux                       # measures the UI/UX 2.0 plan's numbers with touch emulation, and audits every screen at 320/360/390/768/1280 for overflow and controls under the tap size
 npm run diff                     # compares uiux/2.0 with the set kept before it, picture by picture (npm run snapshots also writes uiux/2.0/CHANGES.md); a refactor that changes nothing visible must report no change
+npm run load                     # load times on an emulated Slow 3G and Fast 3G with a 4x slower processor: builds the app, starts its own demo API and preview, needs only Edge (8.7)
+npm run phone                    # the keyboard check on a real Android phone over USB: needs adb, the phone signed in, and a dev server reachable from it (8.7)
 npm run a11y                     # axe-core on every screen, 390 touch and 1280, needs both servers (8.5)
 npm run e2e                      # builds the app, runs the offline browser test in Edge (stop dev:api first: same port)
 VITE_API_BASE=http://127.0.0.1:8787 npm run build   # production build; refuses to run without VITE_API_BASE
@@ -81,7 +93,7 @@ VITE_API_BASE=http://127.0.0.1:8787 npm run build   # production build; refuses 
 
 The demo data resets whenever the API restarts. **The demo API's clock is fixed to 4 Nov 2026 and a merchandiser's sign-in lasts 12 hours, so on any later real date a merchandiser cannot sign in from a normal browser** ("This device's date or time looks wrong"; a supervisor's 30-day sign-in is unaffected). Browser scripts therefore start their own clock at the API's "now" (`ctx.clock.install({ time: new Date(checkedAt) })`, with `checkedAt` from `GET /api/status`): see `scripts/a11y.ts` and `scripts/snapshots.ts`. In a hand-driven Playwright session do the same before signing in; in a plain browser set the computer's date to 4 Nov 2026. The service worker only runs in a production build, so "reload with no signal" works in `npm run e2e`, not in the dev server. Offline *queueing* works in the dev server (Network tab, Offline).
 
-**Looking at it.** `uiux/1.0` holds the 31 screenshots of the app as it was at build 1006 (frozen, never regenerated), each with a caption (desktop and a 390 px phone); `uiux/2.0` is the set taken during the UI/UX 2.0 work. Nothing in `uiux/` is ever deleted. Read `uiux/README.md` first. Playwright is installed (`playwright-core`) and drives Microsoft Edge (`E2E_BROWSER=chrome` elsewhere). Read `scripts/snapshots.ts` and `scripts/e2e_offline.ts` for working examples of signing in, filling forms, going offline (`context.setOffline(true)`) and intercepting requests (`page.route`).
+**Looking at it.** `uiux/1.0` holds the 31 screenshots of the app as it was at build 1006 (frozen, never regenerated), each with a caption (desktop and a 390 px phone); `uiux/2.0` is the set taken during the UI/UX 2.0 work, **last written in phase 0 (InBul11) and not yet retaken**: it does not show the Violet theme, the stamp, the hero cards, the tiles or the bento (those are photographed in `audit/redesign-supervisor/`, `audit/redesign-merchandiser/`, `audit/theme-sweep/` and `audit/setup-phase5/`). Nothing in `uiux/` is ever deleted. Read `uiux/README.md` first. Playwright is installed (`playwright-core`) and drives Microsoft Edge (`E2E_BROWSER=chrome` elsewhere). Read `scripts/snapshots.ts` and `scripts/e2e_offline.ts` for working examples of signing in, filling forms, going offline (`context.setOffline(true)`) and intercepting requests (`page.route`).
 
 ## 4. Map of the frontend
 
@@ -95,15 +107,16 @@ packages/web/
   vite.config.ts                refuses production build without VITE_API_BASE; emits precache.json and sw.js with a per-build cache name
   src/
     main.tsx App.tsx            router, one lazy chunk per screen, role guards, chunk-error reload
-    styles.css                  ALL component styles (about 260 lines); imports the tokens
+    styles.css                  the base and the older component styles (about 480 lines); imports the tokens. New atoms, molecules and organisms carry a stylesheet beside them
     i18n.ts                     English and Tamil strings (small: see 8.6), language switch
     langRules.ts                pure: which language a role starts in (supervisor with no choice: Tamil); `orders.lang` holds it, `orders.lang.src = default` marks a default that is not a choice
     api/session.ts              the only place that knows the API address, token, 401 handling
     api/sessionRules.ts         pure: read claims, store kind, plain error messages
     queue/*                     the offline queue: types, sync, controller, IndexedDB store, storage warnings
     stages/useStages.ts         supervisor's stages (live or saved copy) and the reason list
-    pages/                      Login Board OrderSetup OrderDetail Review Setup Buyer Status Today Update
-    setup/                      PeopleTab DaysTab TemplatesTab + setupLogic (pure)
+    pages/                      Login Board (+Board.css) OrderSetup OrderDetail Review Setup Buyer Status Today Update
+    numberFormat.ts dateWords.ts  pure: pieces() (one way to write a piece count), dateInWords() (a date in words)
+    setup/                      PeopleTab DaysTab TemplatesTab AlertsTab + setupLogic, setupChecklist, addPerson, activityLogic (pure) and useSetupChecklist
     board/boardLogic.ts         pure: filters in the URL, counts, 50-row preview, date formatting
     orders/orderForm.ts         pure: size rows, form validation, slip text
     review/reviewLogic.ts       pure: buyer link URL, link status, severity words
@@ -111,7 +124,7 @@ packages/web/
     photo/resize.ts             shrink a camera photo on the phone, upright
     photo/orientation.ts        pure: read the camera's EXIF "turn it" tag, the canvas matrix for it
     release/                    buildInfo (build-info.json in the bundle) + releaseInfo (pure: label, date, last three builds); shown in the menu, the What's new dialog and /status
-    ui/                         AppBar(+menu) StatusBadge SyncChip Loading AuthImage PhotoViewer ChunkErrorBoundary ConfirmDialog(+confirmAsker) WhatsNewDialog; new components go in `ui/atoms`, `ui/molecules` (ActionBar), `ui/organisms`, `ui/templates` with their own stylesheet (rules in `ui/README.md`); `ui/bottomSlot.ts` lets the update bar share the ActionBar
+    ui/                         AppBar(+menu) StatusBadge SyncChip Loading AuthImage PhotoViewer ChunkErrorBoundary ConfirmDialog(+confirmAsker) WhatsNewDialog; new components go in `ui/atoms` (DateWords, PieceBar, ProgressRing, Skeleton), `ui/molecules` (ActionBar, NavTabs), `ui/organisms` (AccountActivity, AddPersonForm, KeyFacts, OrderBento, SetupChecklist, StageCard, StatusTiles, TodayHero, UpdateHero) with their own stylesheet (rules and a line per component in `ui/README.md`); `ui/StatusStamp.css` is the stamp look of `StatusBadge`; `ui/bottomSlot.ts` lets the update bar share the ActionBar
   test/                         Vitest: pure logic and the queue (no DOM harness; see 8.9)
 ```
 
@@ -132,35 +145,37 @@ packages/web/
 | Token | Value | Use |
 | --- | --- | --- |
 | `--ink` | `#1F2328` | text (15.8:1) |
-| `--muted` | `#57606A` | labels, secondary text (6.4:1) |
-| `--border` | `#8C959F` | input borders that must be seen (3.0:1) |
-| `--page` / `--surface` | `#F7F7F5` / `#FFFFFF` | background / cards |
-| `--accent` | `#3346A8` | the only action colour (8.1:1) |
-| `--status-red` / `-tint` / `-text` | `#C24400` / `#FBEBE3` / `#A23F00` | late risk: icon / row tint / text |
-| `--status-amber` / `-tint` / `-text` | `#B07800` / `#FDF3DC` / `#8A5A00` | at risk: icon and border only / tint / text |
-| `--status-green` | `#1B7F5F` | on-track icon |
-| `--status-grey` | `#636975` | no update, and the italic flag that can sit on the red tint (5.5:1; 4.75:1 on the red tint) |
+| `--muted` | `#5A5670` | labels, secondary text (violet-grey; 5.95:1 on the soft wash, 6.45:1 on the page) |
+| `--border` | `#8A85A0` | input borders that must be seen (3.5:1 on white) |
+| `--border-soft` | `rgb(138 133 160 / .35)` | row dividers, an empty bar, a card edge |
+| `--page` / `--surface` | `#F6F5F9` / `#FFFFFF` | background (a faint lavender) / cards |
+| `--accent` | `#6E5BB1` | the only action colour: Pantone Violet, sampled from pantone-colours.com (5.53:1 against white) |
+| `--accent-soft` | `#EEEBF7` | a soft wash of the accent: hero cards and selected surfaces; never a status (rule 30) |
+| `--status-red` / `-tint` / `-text` | `#C24400` / `#FBEBE3` / `#A23F00` | late risk: icon / (tint: used by no component now, kept in the file and the contrast check) / text |
+| `--status-amber` / `-tint` / `-text` | `#B07800` / `#FDF3DC` / `#8A5A00` | at risk: icon / (tint: used by no component now) / text |
+| `--status-green` | `#1B7F5F` | on-track icon and word |
+| `--status-grey` | `#636975` | no update, and the italic flag (5.5:1 on white) |
 | `--tap-min` / `--tap-primary` | `44px` / `56px` | touch targets |
 
-One light theme only (floor screens are read in bright light). The token names are structured so a second theme could be added by redefining them.
+One light theme only (floor screens are read in bright light). The token names are structured so a second theme could be added by redefining them. The header comment of `tokens.css` still says "Indigo is the only action colour": it predates the Violet change and is out of date (the values below it are right).
 
 **Status** (always an icon, a word and a colour; `ui/StatusBadge.tsx` is the only place that draws it):
 
 | Status | Icon | English | Tamil (unreviewed) | On the board |
 | --- | --- | --- | --- | --- |
-| red | filled triangle with ! | Late risk | தாமத அபாயம் | tinted row, sorted to the top, shortfall shown |
-| amber | outlined clock | At risk | கவனம் | badge only |
-| green | hollow check | On track | சரியான நேரம் | small check |
-| grey | dashed circle | No update | இன்று பதிவு இல்லை | muted badge |
+| red | filled triangle with ! | Late risk | தாமத அபாயம் | a stamp, sorted to the top, shortfall shown (no row tint) |
+| amber | outlined clock | At risk | கவனம் | a stamp |
+| green | hollow check | On track | சரியான நேரம் | a stamp |
+| grey | dashed circle | No update | இன்று பதிவு இல்லை | a stamp in the grey |
 
 **Type:** `--font-latin` is Noto Sans and `--font-tamil` Noto Sans Tamil, falling back to the system font. **They are self-hosted** (see 8.6): `src/fonts.ts` imports the 400/600/700 subsets; add a line there if the CSS starts using another weight. Tabular numerals on every quantity (`.mono`). Scale 14/16/20/24 px on desktop, 18 px body and 28 px quantity field on the supervisor phone.
 
 **CSS vocabulary** (all in `styles.css`; learn these before adding classes):
-`.card` `.btn` (`--primary` `--small` `--big` `--block` `--icon`) `.link` `.input` `.field` `.chip` (status filters) `.seg` (segmented control) `.banner` (bordered attention box) `.notice-box` (calm information) `.error` `.sub` (muted line) `.mono` `.visually-hidden` `.plain` (list reset) `.appbar` `.menu` `.badge--red/amber/green/grey` `.board` (table to cards under 720 px) `.plan` (small tables) `.stagecard` `.stage` (supervisor card) `.syncbar` `.sync` `.photobox` `.reasons` `.reason` `.lang-tag`. Breakpoint for stacking is 720 px; `@media (pointer: coarse)` raises targets to 44 px.
+`.card` `.btn` (`--primary` `--small` `--big` `--block` `--icon`) `.link` `.input` `.field` `.chip` (status filters) `.seg` (segmented control) `.banner` (bordered attention box) `.notice-box` (calm information) `.error` `.sub` (muted line) `.mono` `.visually-hidden` `.plain` (list reset) `.appbar` `.menu` `.badge` `.badge--red/amber/green/grey/neutral` (the colour only; the shape is `.badge--stamp` in `ui/StatusStamp.css`) `.board` (table to cards under 720 px) `.plan` (small tables) `.stagecard` `.stage` (supervisor card) `.syncbar` `.sync` `.photobox` `.reasons` `.reason` `.lang-tag`. Breakpoint for stacking is 720 px; `@media (pointer: coarse)` raises targets to 48 px (`--tap-min`).
 
 ## 6. UX principles that shaped the screens
 
-1. **Colour for exceptions only.** On-track orders stay quiet so red ones stand out. Only red rows are tinted.
+1. **Colour for exceptions only.** On-track orders stay quiet so red ones stand out. Nothing is tinted: a status colour sits on the small icon, word and stamp rule only, so a page of cards stays calm and the stamps are what the eye finds.
 2. **Numbers first on the supervisor screen.** Big number field, big Send, icons and short words. Studies of semi-literate users suggest numbers, icons and audio help; text hinders.
 3. **One tap for the usual cause.** The "Why is it slow?" reasons are a short fixed list of big buttons; the note is optional.
 4. **Save first, send after.** Everything a supervisor enters is written to the phone before any network call. The chip shows `Offline · 3 waiting`, `Sending…`, `could not send`, `Not accepted · 1` (the server refused an update; it is listed on My orders today, but only to the person who entered it: another sign-in's refused updates show only as "N from another sign-in not accepted") and `All sent` (only when nothing waits and nothing was refused).
@@ -188,6 +203,10 @@ Learn from these; they were real. Each is covered by a test or a check, but simi
 - **Two things pinned to the bottom of the screen cover each other.** The "new version is ready" bar appears exactly when a send clears the form, which is when a bottom Send bar shows "Saved ... Sent.". One bottom region: the update bar draws itself into the ActionBar's slot (`ui/bottomSlot.ts`).
 - **A literal colour is a bug waiting for a theme or a token change.** Ten had crept into `styles.css` and one into `StatusBadge.tsx`; `designGuards.test.ts` now fails on any hex or functional colour outside `tokens.css`, in any `.css` or `.tsx`.
 - **The demo API's fixed clock locks merchandisers out of a normal browser** (section 3): scripts must start the browser's clock at the API's "now".
+- **Tinted status fills read as "generated"** (UI/UX 2.0, 8 Nov 2026). Red-tinted stage cards, red or amber tiles with coloured borders and a tinted late-risk row were each pointed out by the user as looking machine-made. Status now sits on the icon, word and stamp rule only (rules 26 to 28), and `noStatusTints.test.ts` fails if a fill comes back. **If a colour carries no extra meaning beyond the icon and word, leave it off the surface.**
+- **A near-black hero card and a round "back" button did not match the theme** (8 Nov 2026). The supervisor hero first used `--ink`; the user said the colour theme did not match, and heroes became the soft `--accent-soft` wash. The Update screen's back button was a round ghost button with a typed arrow beside a square menu button; it is now the same shape as the menu button with a drawn arrow. **Match shape and colour to the neighbouring control, and draw icons rather than typing a glyph.**
+- **`npm run ux` caught two new controls under the tap size** (8 Nov 2026): the status page's "Back to the app" link (22 px, now a button) and the Setup role radios (20 px, now the whole choice box is the hit area). **Run `npm run ux` after any new control, not only after layout work.**
+- **Focus lost to a late route update** (8 Nov 2026): after clicking "Add closed days" keyboard focus ended on the page body because the router's update arrives after the click. The focus request now waits for its section; a test fails if the old pattern returns.
 - **A script that deletes its own old output is a trap.** `snapshots.ts` removed every picture before writing the new set; it now keeps the old set (`uiux/2.0/previous/`) and never touches `uiux/1.0`.
 
 ## 8. Audit method
@@ -209,7 +228,7 @@ Run an audit as a loop, not a list: **look, measure, find the class of mistake, 
 - **Console and network**: no errors, no failed requests, no duplicate fetches.
 
 ### 8.3 Checklist: every screen
-- [ ] One clear purpose; the primary action is obvious and the only filled indigo button.
+- [ ] One clear purpose; the primary action is obvious and the only filled action-colour (violet) button.
 - [ ] Loading, empty, error and success states all exist and say something specific.
 - [ ] No state is shown by colour alone. Status has icon, word, colour.
 - [ ] Headings form an outline with **one `h1`** (see 8.4: several pages currently have two).
@@ -267,7 +286,8 @@ Still to verify by hand:
 - Right-to-left is not needed. Pluralisation is hand-written in places ("1 need attention"); check it in Tamil.
 
 ### 8.7 Performance and reliability audit
-- Measure first load (shell 266 KB, 85 KB gzip) on throttled 3G and a real 2 GB phone; target under 5 s to a usable list. Check the lazy chunks do not waterfall.
+- Measure first load (shell 266 KB, 85 KB gzip) on throttled 3G and a real 2 GB phone; target under 5 s to a usable list. Check the lazy chunks do not waterfall. `npm run load` does the emulated half (next paragraph); the real-phone half is still open.
+- **What `npm run load` measures, and what it does not** (`scripts/load_metrics.ts`, 8 Nov 2026). It builds the app, starts its own demo API (port `LOAD_API_PORT`, default 8795) and the preview server, and drives Microsoft Edge at 390 px with touch emulation through two profiles: **Slow 3G** (500 kbit/s down, 400 kbit/s up, 400 ms latency) and **Fast 3G** (1.6 Mbit/s down, 750 kbit/s up, 150 ms), each with a 4x slower processor. It reports, per profile: (1) on a first visit (nothing stored) the first paint, the first content, when the sign-in button is usable and the kilobytes downloaded; (2) from the supervisor's sign-in tap to the list of stages; (3) a later visit with the app stored by the service worker. `SHELL_SHOT=<file>` and `LIST_SHOT=<file>` also save what the screen shows at 1.8 s on Slow 3G and while the list is held back. **It is emulation**: the throttle and the slower processor run on a normal computer, so it is not a 2 GB phone on a real network; the preview server sends no compression, so downloaded sizes are larger than a compressed host would send. Its first numbers (Slow 3G first visit: first paint 1.1 s, first content 3.3 s; sign-in tap to the list 2.0 s; Fast 3G 1.5 s and 0.9 s; a later visit about 1 s) are in `audit/PROGRESS.md` (4.2 and 4.5); they decided that a first-paint ring (rule 31) and a skeleton on Today were worth adding and that nothing else was. Re-run it after anything that changes the first load and quote it as emulation.
 - The service worker update path has a calm prompt (`ui/UpdateBanner.tsx`, rules in `ui/swUpdate.ts`, wiring in `ui/swUpdateStore.ts`): a new version waits (still no automatic `skipWaiting`), a bottom bar offers Reload, Reload posts `SKIP_WAITING`, and the page reloads once on `controllerchange` (only for our own request, with a loop guard). It stays away while Update holds unsaved input (`ui/unsentInput.ts`) or when the queue is memory-only with items waiting. Still to check on a real phone and in a production build: the full path from a second build (`npm run e2e` does not cover it), and whether other forms (order setup, setup sections) should report unsent input too. The bar cannot be seen in the dev server (no worker): in a browser script, `import()` the `?t=` URL of `swUpdateStore.ts` from the page's resource list and call `offerUpdate({ postMessage() {} })`.
 - Storage: warnings appear only when something is at risk; verify on a real phone (`navigator.storage.persist()` behaviour differs by browser).
 - Photos: resize quality and size (about 150 KB from a 780 KB shot), memory use with 10 queued photos, and behaviour when storage is full.

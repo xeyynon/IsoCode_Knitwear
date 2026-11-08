@@ -11,3 +11,12 @@
 .todayhero .syncbar { margin-bottom: 0; }
 /* the chip keeps its own white pill and dark text (it would inherit the hero's white text otherwise) */
 .todayhero .sync { color: var(--ink); }
+
+/* Very narrow (a 390 px phone at 200% zoom or the largest font is about 195 px: AUDIT-03 finding 1): the ring sits above the words, and the words may break anywhere. */
+@media (max-width: 260px) {
+  .todayhero__main { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+  .todayhero__text { overflow-wrap: anywhere; }
+}
+
+/* Tamil letters are taller than Latin ones, so the same 20 px headline took three lines at 390 px (AUDIT-03 finding 13); at 17 px it takes two, and the hero is as tall as the English one (measured: 178 px, first card at 275 px). */
+html[lang='ta'] .todayhero__headline { font-size: 1.0625rem; }

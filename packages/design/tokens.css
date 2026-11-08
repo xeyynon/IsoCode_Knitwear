@@ -6,6 +6,7 @@
   --muted: #5A5670;
   --border: #8A85A0;
   --page: #F6F5F9;
+  --grid-line: rgb(138 133 160 / .10);   /* the faint grid behind every page: --border at 10%, never read as content */
   --surface: #FFFFFF;
   --accent: #6E5BB1;        /* Pantone Violet (sampled from pantone-colours.com); the one action colour */
   --accent-soft: #EEEBF7;   /* a soft wash of it: hero cards and selected surfaces. Never a status colour */
