@@ -6,6 +6,7 @@ import {
   activeConstraints, applyFilters, applyScope, buyersOf, counts, isUnknownChoice, parseFilters, parseScope, parseView, preview, progressOf, searchRows, shipIn, shortByStatus, shortDate,
   SHIP_WEEKS, sortRows, SORTS, STATUSES, unitsOf, weekRange, withFilter, withQuery, withSort, type BoardRow, type ShipWeek, type Sort,
 } from '../board/boardLogic'
+import { piecesProgress } from '../board/progressText'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
 import { orderLink } from '../orders/orderDetailLogic'
@@ -40,8 +41,23 @@ const weekLabel = (w: ShipWeek, today: string): string => {
   return w === 'overdue' ? 'Overdue (earlier weeks)' : w === 'this' ? `This week${range(0)}` : w === 'next' ? `Next week${range(1)}` : 'Later'
 }
 
-/** Stages finished out of all, as a thin bar plus the current stage in words: the length is never the only signal, and it is not a status colour. */
+/**
+ * Progress as a thin bar plus words: the length is never the only signal, and it is not a status colour. It is made from the pieces of the
+ * order's current stage (slice 3.4); a row without them (an older server, or every stage done) falls back to the stage count.
+ */
 function Progress({ row }: { row: BoardRow }) {
+  const pp = piecesProgress(row)
+  if (pp) {
+    return (
+      <span className="prog" role="img" aria-label={pp.label} title={pp.label}>
+        <span className="prog__bar"><span className="prog__fill" style={{ width: `${Math.round(pp.fraction * 100)}%` }} /></span>
+        <span className="prog__text">
+          {pp.text}{pp.estimate && <span className="prog__flag"> · rate is an estimate</span>}
+          {pp.stagesNote && <span className="prog__n prog__n--line">{pp.stagesNote}</span>}
+        </span>
+      </span>
+    )
+  }
   const p = progressOf(row)
   if (!p) return null
   return (
@@ -246,11 +262,11 @@ export default function Board() {
                 </>
               ) : (
                 <>
-                  <div className="strip boardhead">{buyerSelect}{tools}</div>
+                  <div className="strip boardhead">{tools}</div>
                   <StatusTiles label="Filter by status" tiles={tiles} />
                   {rows.length > 0 && (
                     <form className="strip strip--find strip--attached" role="search" onSubmit={(e) => { e.preventDefault(); pushQuery(text) }}>
-                      {searchBox}{sortSelect}{unitSelect}{weekSelect}
+                      {buyerSelect}{searchBox}{sortSelect}{unitSelect}{weekSelect}
                     </form>
                   )}
                 </>
@@ -296,7 +312,7 @@ export default function Board() {
                         <Progress row={r} />
                         </div>
                       </td>
-                      <td role="cell" data-label="Buyer">{r.buyerName}</td>
+                      <td role="cell" data-label="Buyer"><span className="board__buyer" title={r.buyerName}>{r.buyerName}</span></td>
                       <td role="cell" data-label="Ship" className="mono">{shortDate(r.exFactory)}{!narrow && today && shipIn(r.exFactory, today) ? <span className="sub ship__in">{shipIn(r.exFactory, today)}</span> : null}</td>
                       <td role="cell" data-label="Gap" className="mono">{r.shortBy && r.shortBy > 0 ? `${pieces(r.shortBy)} ${t('board.shortBy')}` : '–'}</td>
                     </tr>
