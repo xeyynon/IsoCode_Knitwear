@@ -39,10 +39,13 @@ describe('SetupChecklist: its states', () => {
     expect(container.querySelector('.setupcheck__line')?.textContent).toMatch(/nothing is set up yet/i)
     expect([...container.querySelectorAll('.setupcheck__go')].map((a) => a.textContent)).toEqual(['Add a unit', 'Add closed days', 'Add a template', 'Add a person'])
   })
-  it('partly: the list is open and the line names what is left', () => {
+  it('partly: the steps are shown and the line names what is left', () => {
     const { container } = show({ result: partly })
     expect(container.querySelector('.setupcheck__line')?.textContent).toBe('1 of 4 done. Left: Closed days, Templates, People.')
-    expect((container.querySelector('details') as HTMLDetailsElement).open).toBe(true)
+    // On a wide screen the steps are simply shown: no toggle that is always open (AUDIT-03 finding 18).
+    expect(container.querySelector('details')).toBeNull()
+    expect(container.querySelector('.setupcheck__list')).not.toBeNull()
+    expect(container.textContent).not.toContain('The steps')
   })
   it('partly, on a phone: the list is folded behind "Show the steps", so the page below is not pushed down', () => {
     const original = window.matchMedia

@@ -161,6 +161,16 @@ async function measure(page: Page, screen: string, width: number, touch: boolean
   const r = await audit(page, min)
   found.push({ screen, width, min, ...r })
 }
+// The buyer's page needs a real link: make one through the API for the audit and cancel it at the end (AUDIT-03 reported its Download button
+// as 40 px on a phone; that was a run without touch emulation: with touch it is 48 px, and this keeps it measured that way).
+let buyerLink: { id: string; token: string; authz: Record<string, string> } | null = null
+try {
+  const login = (await (await fetch(`${WEB}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: MERCH.email, password: MERCH.password }) })).json()) as { token: string }
+  const authz = { authorization: `Bearer ${login.token}`, 'content-type': 'application/json' }
+  const board = (await (await fetch(`${WEB}/api/board`, { headers: authz })).json()) as { rows: { buyerId: string }[] }
+  const made = (await (await fetch(`${WEB}/api/buyer-links`, { method: 'POST', headers: authz, body: JSON.stringify({ buyerId: board.rows[0]!.buyerId, days: 1, label: 'ux audit' }) })).json()) as { id: string; token: string }
+  buyerLink = { id: made.id, token: made.token, authz }
+} catch { rows.push(['Buyer page', 'not measured (could not make a link through the API)']) }
 for (const { w, h, touch } of WIDTHS) {
   const options = touch ? { viewport: { width: w, height: h }, hasTouch: true, isMobile: true } : { viewport: { width: w, height: h } }
   // before anyone signs in
@@ -168,6 +178,7 @@ for (const { w, h, touch } of WIDTHS) {
     await page.goto(`${WEB}/login`); await page.waitForSelector('input[type=email]'); await measure(page, 'Sign in (merchandiser)', w, touch)
     await page.click('.seg button >> nth=1'); await measure(page, 'Sign in (supervisor)', w, touch)
     await page.goto(`${WEB}/status`); await page.waitForSelector('.checks'); await measure(page, 'Status', w, touch)
+    if (buyerLink) { await page.goto(`${WEB}/buyer#${buyerLink.token}`); await page.waitForSelector('button:has-text("Download")'); await measure(page, 'Buyer page', w, touch) }
     await ctx.close() }
   // a merchandiser
   { const ctx = await context(options); const page = await ctx.newPage(); await merchandiser(page)
@@ -184,6 +195,38 @@ for (const { w, h, touch } of WIDTHS) {
     await ctx.close() }
 }
 
+// 6. Content that runs past its own box (AUDIT-03, finding 1): at 195 px wide (a 390 px phone at 200% zoom, or the largest phone font) the
+// supervisor's Update hero pushed the order number and the "Left" figure out of the card, and the page did not scroll sideways, so section 5
+// could not see it. Here every element whose content is wider than the element itself is reported, unless the element scrolls on purpose
+// (overflow auto or scroll) or cuts text with an ellipsis. Today and Update, English and Tamil.
+interface Spill { screen: string; lang: string; where: string; by: number }
+const spills: Spill[] = []
+const spillOf = (page: Page) => page.evaluate(() => {
+  const out: { where: string; by: number }[] = []
+  for (const el of Array.from(document.querySelectorAll('main, main *, header, header *'))) {
+    const cs = getComputedStyle(el)
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.display === 'contents') continue
+    if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.textOverflow === 'ellipsis') continue
+    if (el.closest('.visually-hidden, .sr-only, svg')) continue
+    const by = el.scrollWidth - el.clientWidth
+    if (el.clientWidth > 2 && by > 1) out.push({ where: `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/)[0] : ''}`, by })
+  }
+  return out
+})
+for (const lang of ['en', 'ta'] as const) {
+  const ctx = await context({ viewport: { width: 195, height: 422 }, hasTouch: true, isMobile: true }, lang)
+  const page = await ctx.newPage()
+  await supervisor(page)
+  await page.waitForTimeout(350)
+  for (const s of await spillOf(page)) spills.push({ screen: 'Today', lang, where: s.where, by: s.by })
+  await page.locator('a.stage__go, a.stagetile__go, .stage a.btn').first().click()
+  await page.waitForSelector('input.input--big')
+  await page.waitForTimeout(350)
+  for (const s of await spillOf(page)) spills.push({ screen: 'Update', lang, where: s.where, by: s.by })
+  await ctx.close()
+}
+
+if (buyerLink) await fetch(`${WEB}/api/buyer-links/${buyerLink.id}/revoke`, { method: 'POST', headers: buyerLink.authz })   // cancel the audit's link
 await browser.close()
 const problems = found.filter((f) => f.overflow || f.small.length)
 const lines: string[] = []
@@ -195,6 +238,8 @@ rows.push(['Screens clean at five widths (no overflow, no control under the tap 
 rows.push(['Controls measured', `${found.reduce((n, f) => n + f.controls, 0)} across ${found.length} screen-widths`])
 rows.push(['Sideways overflow', `${found.filter((f) => f.overflow).length} screen-widths`])
 rows.push(['Controls under the tap size (48 px touch, 24 px mouse)', `${found.reduce((n, f) => n + f.small.length, 0)} in ${found.filter((f) => f.small.length).length} screen-widths`])
+rows.push(['Content past its own box at 195 px (Today and Update, English and Tamil)', spills.length === 0 ? 'none' : `${spills.length} element${spills.length === 1 ? '' : 's'}: ${spills.slice(0, 4).map((s) => `${s.screen} ${s.lang} ${s.where} by ${s.by} px`).join('; ')}${spills.length > 4 ? '; ...' : ''}`])
 console.log(`\nUI/UX metrics (${new Date().toISOString().slice(0, 10)}, demo data, touch emulation on phone runs)\n`)
 for (const [k, v] of rows) console.log(`- ${k}: ${v}`)
 if (lines.length) { console.log('\nScreens with a problem:\n'); for (const l of lines) console.log(`- ${l}`) }
+if (spills.length) { console.log('\nContent past its own box at 195 px:\n'); for (const s of spills) console.log(`- ${s.screen} (${s.lang}): ${s.where} by ${s.by} px`) }

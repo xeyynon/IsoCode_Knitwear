@@ -18,6 +18,7 @@ const Buyer = lazy(() => import('./pages/Buyer'))
 const Today = lazy(() => import('./pages/Today'))
 const Update = lazy(() => import('./pages/Update'))
 const Status = lazy(() => import('./pages/Status'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 /** The server is the security boundary; this only decides which screen a signed-in person sees. */
 function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
@@ -50,7 +51,7 @@ export default function App() {
           <Route path="/orders/:id" element={<RequireRole role="merchandiser"><OrderDetail /></RequireRole>} />
           <Route path="/today" element={<RequireRole role="supervisor"><Today /></RequireRole>} />
           <Route path="/today/:orderId/:stage" element={<RequireRole role="supervisor"><Update /></RequireRole>} />
-          <Route path="*" element={<Home />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
       <UpdateBanner />

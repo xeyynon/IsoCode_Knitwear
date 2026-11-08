@@ -26,6 +26,7 @@ const en = {
   'common.tryAgain': 'Try again',
   'common.ok': 'OK',
   'common.remove': 'Remove',
+  'common.skip': 'Skip to main content',
   // Confirmation dialogs on merchandiser screens (English only: no supervisor prefix)
   'confirm.cancel': 'Cancel',
   // The full-size photo view on merchandiser screens (English only: no supervisor prefix)
@@ -77,6 +78,9 @@ const en = {
   'err.workSafe': 'Your work saved on this phone is safe.',
   'err.retry': 'Retry',
   'err.checkStatus': 'Check server status',
+  'err.notFoundTitle': 'Page not found',
+  'err.notFound': 'That page does not exist.',
+  'err.notFoundBack': "Back to today's orders",
   // Merchandiser board (not translated: merchandisers read English)
   'board.title': 'Order board',
   'board.all': 'All',
@@ -202,6 +206,7 @@ const ta: Partial<Record<Key, string>> = {
   'common.tryAgain': 'மீண்டும் முயற்சி',
   'common.ok': 'சரி',
   'common.remove': 'நீக்கு',
+  'common.skip': 'முதன்மைப் பகுதிக்குச் செல்',   // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'chunk.title': 'இந்தத் திரை திறக்கவில்லை',
   'chunk.body': 'ஆப் புதுப்பிக்கப்பட்டிருக்கலாம். புதிய பதிப்பைப் பெற மீண்டும் ஏற்றவும்.',
   'chunk.reload': 'மீண்டும் ஏற்று',
@@ -222,6 +227,9 @@ const ta: Partial<Record<Key, string>> = {
   'err.workSafe': 'இந்த போனில் சேமித்த உங்கள் பணி பாதுகாப்பாக உள்ளது.',
   'err.retry': 'மீண்டும் முயற்சி',
   'err.checkStatus': 'சர்வர் நிலையைப் பார்',
+  'err.notFoundTitle': 'பக்கம் இல்லை',   // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'err.notFound': 'அந்தப் பக்கம் இல்லை.',   // DRAFT, unreviewed
+  'err.notFoundBack': 'இன்றைய ஆர்டர்களுக்குத் திரும்பு',   // DRAFT, unreviewed
   'sup.title': 'இன்றைய ஆர்டர்கள்',
   'sup.send': 'அனுப்பு',
   'sup.pieces': 'தயாரித்த எண்ணிக்கை',

@@ -46,11 +46,15 @@ describe('MerchandiserShell', () => {
 describe('AuthShell and PublicShell', () => {
   it('the sign-in frame: a centred main, no app bar', () => {
     const c = mount(<AuthShell>x</AuthShell>)
-    expect(c.innerHTML).toBe('<main class="login">x</main>')
+    // the skip link comes first (AUDIT-03 finding 17), then the same main as before (now the skip link's target)
+    expect(c.querySelector('header')).toBeNull()
+    expect(c.querySelector('a.skiplink')).not.toBeNull()
+    expect(c.querySelector('main')!.outerHTML).toBe('<main id="main" tabindex="-1" class="login">x</main>')
   })
   it('the public frame: no app bar, narrow or form width, with a page class beside it', () => {
-    expect(mount(<PublicShell narrow>x</PublicShell>).innerHTML).toBe('<main class="page page--narrow">x</main>')
-    expect(mount(<PublicShell className="buyer">x</PublicShell>).innerHTML).toBe('<main class="page page--form buyer">x</main>')
+    const mainOf = (el: ReactElement) => { const c = mount(el); expect(c.querySelector('header')).toBeNull(); return c.querySelector('main')!.outerHTML }
+    expect(mainOf(<PublicShell narrow>x</PublicShell>)).toBe('<main id="main" tabindex="-1" class="page page--narrow">x</main>')
+    expect(mainOf(<PublicShell className="buyer">x</PublicShell>)).toBe('<main id="main" tabindex="-1" class="page page--form buyer">x</main>')
   })
 })
 

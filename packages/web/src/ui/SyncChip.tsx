@@ -3,6 +3,7 @@ import { plural, useLang } from '../i18n'
 import type { QueueController, QueueState } from '../queue/controller'
 import { syncChipStatus } from './syncStatus'
 import { NOTICE_MS, noticeFor, type SyncTone } from './syncNotice'
+import './SyncChip.css'
 
 /**
  * "3 waiting" / "All sent": the supervisor's proof that their work is safe. It never says
