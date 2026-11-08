@@ -68,3 +68,23 @@ describe('the Vercel entry', () => {
     expect(vercelOrigins({})).toEqual([])
   })
 })
+
+// Found on the live demo: with the whole clock shifted to the demo day, a sign-in token expired two days "ago" by the phone's own
+// clock, so the app refused to keep the sign-in. Only the factory's day may move; tokens, locks and links keep real time.
+describe('a hosted demo moves only the factory day, never the time tokens are measured in', () => {
+  it('the token is valid in real time while the board, the phone and the maths read the demo day', async () => {
+    const { buildApp } = await import('../src/app')
+    const { seedDemo, DEMO_LOGINS, DEMO_TODAY } = await import('../src/demoSeed')
+    const pg = await migratedDb()
+    await pgliteDb(pg).tx({ role: 'system' }, (tx) => seedDemo(tx, DEMO_TODAY))
+    const realNow = new Date('2026-11-08T06:00:00Z')   // two days after the demo day
+    const app = buildApp({ db: pgliteDb(pg), tokenSecret: 'x'.repeat(40), logger: false, clock: () => realNow, dayClock: demoClock(DEMO_TODAY, () => realNow)! })
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: DEMO_LOGINS.merchandiser })
+    const token = login.json().token as string
+    const exp = JSON.parse(Buffer.from(token.split('.')[0]!, 'base64url').toString()).exp as number
+    expect(exp * 1000).toBeGreaterThan(realNow.getTime())   // still in the future by the phone's real clock
+    const board = await app.inject({ method: 'GET', url: '/api/board', headers: { authorization: `Bearer ${token}` } })
+    expect(board.json().today).toBe('2026-11-06')
+    await app.close(); await pg.close()
+  })
+})

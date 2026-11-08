@@ -36,7 +36,7 @@ async function init(env: NodeJS.ProcessEnv): Promise<FastifyInstance> {
     onError: (op, info) => console.error(`media store ${op} failed: ${info.name}${info.status ? ` (HTTP ${info.status})` : ''}`),
   })
   const { origins } = parseOrigins(env.ALLOWED_ORIGINS)
-  const clock = demoClock(env.DEMO_TODAY)
+  const dayClock = demoClock(env.DEMO_TODAY)   // only the factory's day; tokens and locks keep real time
   const app = buildApp({
     db,
     tokenSecret: need(env, 'TOKEN_SECRET'),
@@ -44,7 +44,7 @@ async function init(env: NodeJS.ProcessEnv): Promise<FastifyInstance> {
     trustProxy: parseTrustProxy(env.TRUST_PROXY ?? '1'),   // Vercel's edge is the one proxy in front
     ...(media ? { media } : {}),
     noteAi: classifierFromEnv(env),
-    ...(clock ? { clock } : {}),
+    ...(dayClock ? { dayClock } : {}),
     logger: true,
     logLevel: parseLogLevel(env.LOG_LEVEL),
     warningFullRefreshMs: 0,   // instances come and go: refresh on each change rather than trusting an in-memory timer

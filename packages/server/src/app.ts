@@ -41,6 +41,12 @@ export interface AppOptions {
   trustProxy?: boolean | number | string[]
   clock?: () => Date
   /**
+   * The clock the factory's day is read from (which day an update counts for, the run-rate maths, "today" on every screen).
+   * Default: `clock`. A hosted demo sets it to a fixed day (demoClock.ts) while `clock` stays real, because sign-in tokens, sign-in
+   * locks and link expiry are measured in real time and checked against the phone's own clock.
+   */
+  dayClock?: () => Date
+  /**
    * true = log to stdout. One short line per request (method, route pattern, status, milliseconds), no body, no header, no address,
    * nothing from the query string: the route pattern is used, never the address as written, so a link token can not reach a log.
    * An object picks the level and where the lines go (tests). The level otherwise comes from `logLevel`.
@@ -85,6 +91,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     throw new Error('TOKEN_SECRET must be set to at least 32 characters. Refusing to start without it.')
   }
   const clock = opts.clock ?? (() => new Date())
+  const dayClock = opts.dayClock ?? clock
   const origins = new Set(opts.allowedOrigins ?? [])
   // Fastify 5.12 treats a bare number as "trust nobody" (it cannot check the immediate peer), which put every visitor behind a proxy in one
   // sign-in bucket. So a hop count is turned into the function it stands for: the first `hops` addresses (the socket, then each proxy's
@@ -187,7 +194,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   // Anything that can change a colour or a planned date brings the warnings up to date at once, so a buyer
   // never reads one the engine no longer backs. As the system, and never allowed to fail the change itself.
   // Only what the change touched is recomputed (a scope); the first refresh, a new factory day and a failed one are full. Never throws.
-  const warnings = new WarningRefresher({ db: opts.db, clock, fullEveryMs: opts.warningFullRefreshMs, onError: (e) => app.log.error({ err: e }, 'warning refresh failed') })
+  const warnings = new WarningRefresher({ db: opts.db, clock: dayClock, fullEveryMs: opts.warningFullRefreshMs, onError: (e) => app.log.error({ err: e }, 'warning refresh failed') })
   const refreshAfter = (req: FastifyRequest, scope?: RefreshScope) => warnings.request(scope, (e) => req.log.error({ err: e }, 'warning refresh failed'))
 
   // ---- public
@@ -242,7 +249,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.get('/api/board', async (req, reply) => {
     const ctx = ctxOf(req)
-    const today = istDate(clock())   // one reading, so the rows and the "today" beside them can never name different days
+    const today = istDate(dayClock())   // one reading, so the rows and the "today" beside them can never name different days
     const rows = await opts.db.tx(ctx, (tx) => getBoard(tx, ctx, today))
     reply.header('Cache-Control', 'no-store')
     return { today, rows }
@@ -269,7 +276,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     // No transaction is open while the photo store works (savePhoto, BE-046).
     return savePhoto(opts.db, ctx, media, {
       clientUuid: String(h['x-client-uuid'] ?? ''), orderId: String(h['x-order-id'] ?? ''), stage, date: String(h['x-date'] ?? ''), bytes: req.body as Buffer,
-    }, istDate(clock()), (_key, err) => req.log.warn({ err }, 'photo upload: could not delete an object that has no row'))
+    }, istDate(dayClock()), (_key, err) => req.log.warn({ err }, 'photo upload: could not delete an object that has no row'))
   })
   app.get<{ Params: { id: string } }>('/api/photos/:id/file', async (req, reply) => {
     const ctx = ctxOf(req)
@@ -347,7 +354,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   // The same orders as a file for Excel. Built from the buyer view above, so it can show nothing the page does not.
   const sendCsv = (reply: import('fastify').FastifyReply, view: BuyerView) => reply
     .header('Content-Type', 'text/csv; charset=utf-8')
-    .header('Content-Disposition', `attachment; filename="${exportFileName(view.buyer.name, istDate(clock()))}"`)
+    .header('Content-Disposition', `attachment; filename="${exportFileName(view.buyer.name, istDate(dayClock()))}"`)
     .header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer').header('X-Content-Type-Options', 'nosniff')
     .send(buyerExportCsv(view))
   app.get('/api/buyer/export.csv', async (req, reply) => {
@@ -415,7 +422,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   // Undo "Don't show" for a warning that was still waiting for review. A confirmed one cannot be undone (409 needs_confirmation).
   app.post<{ Params: { id: string } }>('/api/warnings/:id/undo-dismiss', async (req) => {
     const ctx = ctxOf(req)
-    await opts.db.tx(ctx, (tx) => undoDismissWarning(tx, ctx, req.params.id, istDate(clock())))
+    await opts.db.tx(ctx, (tx) => undoDismissWarning(tx, ctx, req.params.id, istDate(dayClock())))
     return { ok: true }
   })
   // Mocked alerts (nothing is sent): the latest 50, newest first.
@@ -443,7 +450,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.get('/api/my/stages', async (req, reply) => {
     const ctx = ctxOf(req)
-    const today = istDate(clock())
+    const today = istDate(dayClock())
     const stages = await opts.db.tx(ctx, (tx) => getMyStages(tx, ctx, today))
     reply.header('Cache-Control', 'no-store')
     return { today, stages }
@@ -460,18 +467,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const ctx = ctxOf(req)
     const { templateId, exFactory, sizes } = (req.body ?? {}) as { templateId?: string; exFactory?: string; sizes?: unknown }
     reply.header('Cache-Control', 'no-store')
-    return opts.db.tx(ctx, (tx) => previewSchedule(tx, ctx, { templateId: templateId as string, exFactory: exFactory as string, sizes }, istDate(clock())))
+    return opts.db.tx(ctx, (tx) => previewSchedule(tx, ctx, { templateId: templateId as string, exFactory: exFactory as string, sizes }, istDate(dayClock())))
   })
 
   app.get<{ Params: { id: string } }>('/api/orders/:id', async (req, reply) => {
     const ctx = ctxOf(req)
     reply.header('Cache-Control', 'no-store')
-    return opts.db.tx(ctx, (tx) => getOrderDetail(tx, ctx, req.params.id, istDate(clock())))
+    return opts.db.tx(ctx, (tx) => getOrderDetail(tx, ctx, req.params.id, istDate(dayClock())))
   })
 
   app.post('/api/orders', async (req, reply) => {
     const ctx = ctxOf(req)
-    const created = await opts.db.tx(ctx, (tx) => createOrder(tx, ctx, req.body as NewOrder, istDate(clock())))
+    const created = await opts.db.tx(ctx, (tx) => createOrder(tx, ctx, req.body as NewOrder, istDate(dayClock())))
     await refreshAfter(req, { orderId: created.orderId })   // an order that starts late has its warning at once, not when someone next opens the review
     return reply.code(201).send(created)
   })
@@ -486,7 +493,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post('/api/events', async (req) => {
     const ctx = ctxOf(req)
-    const result = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, req.body as EventInput, istDate(clock()), req.claims!.sub))
+    const result = await opts.db.tx(ctx, (tx) => submitEvent(tx, ctx, req.body as EventInput, istDate(dayClock()), req.claims!.sub))
     await refreshAfter(req, { orderId: (req.body as EventInput).orderId })   // updates change colours, as in the batch route below
     return { ok: true, duplicate: result.duplicate }
   })
@@ -497,7 +504,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const ctx = ctxOf(req)
     const events = (req.body as { events?: unknown } | null)?.events
     if (!Array.isArray(events) || events.length === 0 || events.length > MAX_BATCH) throw badRequest(`events must be a list of 1 to ${MAX_BATCH}`)
-    const today = istDate(clock())
+    const today = istDate(dayClock())
     const results = []
     const touched = new Set<string>()   // the orders whose updates were stored (or were already), for the refresh below
     for (const raw of events as EventInput[]) {
