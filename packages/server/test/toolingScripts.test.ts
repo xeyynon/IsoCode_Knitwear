@@ -476,13 +476,15 @@ describe('BE-053: an InBul id is used once', { timeout: SLOW }, () => {
     expect(r.stderr).toMatch(/InBul02 is the title of 2 commits/)
   })
 
-  it('BE-053: a clash with a commit on another branch is found too', () => {
+  it('BE-053: a clash with a commit on another branch is not a repository failure (a squashed pull request leaves its own commits behind), but it is found once both are in this history', () => {
     const d = repo('dupes')
     write(d, 'a.txt', 'a'); commitAll(d, 'InBul02: first')
     git(d, 'checkout', '-q', '-b', 'other')
     write(d, 'b.txt', 'b'); commitAll(d, 'InBul05: on another branch')
     git(d, 'checkout', '-q', '-')
     write(d, 'c.txt', 'c'); commitAll(d, 'InBul05: the same id here')
+    expect(checkRepo(d).status, 'another branch alone is not counted').toBe(0)
+    git(d, 'merge', '-q', '--no-edit', 'other')            // both now in this history: that is the real clash
     const r = checkRepo(d)
     expect(r.status).toBe(1)
     expect(r.stderr).toContain('InBul05')
