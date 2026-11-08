@@ -8,6 +8,12 @@ updates:
     groups:
       dev-tooling:
         dependency-type: development
+    # Minor and patch updates arrive on their own. A major version (TypeScript 5 to 7, Vitest 2 to 5, @types/node 20 to 26) can change
+    # how tests and the build behave, so it is upgraded by hand, one at a time, with the whole suite run on it. A grouped pull request
+    # that bundled three majors failed in several places at once and said little about which one was to blame.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

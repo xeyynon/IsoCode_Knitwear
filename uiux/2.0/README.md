@@ -10,7 +10,7 @@ npm run snapshots                # terminal 3: writes this folder; the previous 
 
 This is the **2.0** set (the UI/UX 2.0 work, plan in `audit/POA-UIUX.md`). The frozen **1.0** set, from before that work, is in [../1.0/README.md](../1.0/README.md).
 
-Last taken: 2026-11-07. 31 pictures.
+Last taken: 2026-11-08. 31 pictures.
 
 ## Desktop
 

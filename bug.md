@@ -88,6 +88,8 @@ How this log works
 | BE-060 | S0 | `tsconfig.json` | `npm run typecheck` does not cover `scripts/` or the config files, and server code is compiled with browser types. | C-16 | fixed |
 | BE-061 | S0 | `packages/server/test/helpers.ts` | The test helper orders and picks migration files differently from the production runner, and the reset does not restore all settings. | C-17 | fixed |
 | BE-062 | S0 | `.github/workflows` | A second push to `main` cancels the first run; a release runs no checks; the banned-terms guard is silently off on fork and Dependabot pull requests. | C-18 | fixed |
+| BE-063 | S1 | `scripts/check_repo.mjs` | A `build-N` tag pushed from another branch (a release not merged here yet) has its report on that branch only, so it failed the repo check on `main` and on every other branch, including pull requests that had nothing to do with it. Found when the UI release tag reached `main` before its report did. | CI | fixed |
+| BE-064 | S1 | `packages/server/test/toolingScripts.test.ts`, `.github/dependabot.yml` | The BE-060 tests read the tsconfig files through TypeScript's JavaScript API, which TypeScript 7 does not have, so the weekly dependency pull request (TypeScript 5.9 to 7.0, Vitest 2 to 5, `@types/node` 20 to 26, all in one group) broke typecheck and the real-Postgres job. Major versions were also bundled together, so one failure hid which upgrade was to blame. | CI | fixed |
 ## Not confirmed (could not be reproduced; kept so they are not forgotten)
 
 - Two merchandisers moving the same ex-factory date at once, or approving and purging the same photo at once, may race (no row lock). Needs two real connections; to be tested on real Postgres.
@@ -108,8 +110,8 @@ How this log works
 - No `engines` field in `package.json`.
 - Look-alike Unicode in PO, style and colour; bidi-override characters kept in notes; phone numbers starting 0 to 5 accepted.
 
-## Counts (verified bugs, 62 rows, 3 finders' duplicates merged)
+## Counts (verified bugs, 64 rows, 3 finders' duplicates merged)
 
-S3: 1 · S2: 14 · S1: 26 · S0: 21 (one row, BE-038, is deferred).
+S3: 1 · S2: 14 · S1: 28 · S0: 21 (one row, BE-038, is deferred).
 
-Status: verified: 62; fixed 61; open 0; deferred 1.
+Status: verified: 64; fixed 63; open 0; deferred 1.
