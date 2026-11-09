@@ -9,7 +9,7 @@ Pictures of every screen on the small test fixture data (invented, not real orde
 
 ## Which pictures are current
 
-The 2.0 pictures are current: they were last taken on 2026-11-08, after the supervisor and merchandiser screens were reworked. They show the small test fixture data (a different set from the hosted demo), so figures and names differ from the live demo. The earlier 2.0 pictures are kept in `2.0/previous/`.
+The 2.0 pictures are current: they were retaken on 2026-11-10 at Build 1012 (34 pictures), after the three-shape top bar, several reasons for a slow day, the finished area and the dark theme. The set before them, from 2026-11-08, is in `2.0/previous/2026-11-09-2244/`; `2.0/CHANGES.md` says what differs. They show the small test fixture data (a different set from the hosted demo), so figures and names differ from the live demo. The earlier 2.0 pictures are kept in `2.0/previous/`.
 
 ## Commands
 

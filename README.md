@@ -13,7 +13,7 @@
 
 <img src="uiux/2.0/03-board-desktop.png" alt="The merchandiser order board: orders worst first, each with the sum behind its colour" width="900">
 
-<sub>The merchandiser's board, on the test fixture data (illustrative orders). Every colour comes with an icon, a word and the working behind it.</sub>
+<sub>The merchandiser's board, on the test fixture data (illustrative orders). The tiles count each colour and filter the list; every row shows its status as a stamp (an icon, a word and a colour), the working behind it, and progress in pieces.</sub>
 
 </div>
 
@@ -31,13 +31,13 @@ Supervisors on the floor send a daily count from a phone, in Tamil, even without
 | **Built for a bad signal** | The app opens with no signal, saves every update on the phone first, and sends when it can. A repeated send is never counted twice. |
 | **Tamil first for supervisors** | Every supervisor screen is in Tamil (the wording still needs reading by supervisors before the pilot). |
 | **Private by construction** | Row-level security is forced on every table, so a forgotten filter cannot leak another buyer's data. |
-| **AI reads the notes, a person decides** | A supervisor's Tamil note gets an English meaning and a suggested reason with its confidence, beside the original. Unsure or failed suggestions say so; the merchandiser always decides. |
+| **AI reads the notes, a person decides** | A supervisor's Tamil note gets an English meaning and a suggested reason with its confidence, beside the original. Unsure or failed suggestions say so; the merchandiser always decides. A note a supervisor wrote by tapping reasons needs no AI: it is already their own choice. |
 
 ## Three people, three screens
 
 <table>
 <tr>
-<td align="center" width="33%"><b>Supervisor, on a phone</b><br><sub>"My orders today": one big button per stage</sub><br><br><img src="uiux/2.0/11-today-list-phone.png" alt="The supervisor list: three stages, progress and an Update button each" width="230"></td>
+<td align="center" width="33%"><b>Supervisor, on a phone</b><br><sub>"My orders today": a ring for the day, one card per stage with the pieces made first, and one big button</sub><br><br><img src="uiux/2.0/11-today-list-phone.png" alt="The supervisor list: three stages, progress and an Update button each" width="230"></td>
 <td align="center" width="33%"><b>The same, in Tamil</b><br><sub>A supervisor who has not chosen a language sees Tamil straight away</sub><br><br><img src="uiux/2.0/12-today-list-tamil-phone.png" alt="The supervisor list in Tamil" width="230"></td>
 <td align="center" width="33%"><b>Buyer, with a private link</b><br><sub>Read-only. Their own orders and confirmed notices only</sub><br><br><img src="uiux/2.0/25-buyer-view-phone.png" alt="The buyer page: orders and planned finish dates" width="230"></td>
 </tr>
@@ -58,16 +58,34 @@ Supervisors on the floor send a daily count from a phone, in Tamil, even without
 </tr>
 </table>
 
+### The top bar, on every page
+
+<img src="uiux/2.0/34-top-bar-menu-open-desktop.png" alt="The top bar: the app's name on the left, Board, Review and Setup in a tab at the centre, and the menu open on the right" width="900">
+
+<sub>Three separate shapes instead of one strip: the app's name on the left, the views in a tab hanging from the top edge and centred on the screen whatever the sides hold (a supervisor sees the page title there), and one menu on the right. The menu holds the theme choice, what's new and sign out; the arrow keys move through it, Esc closes it and returns focus to the button. The bar is the same on every page and role, it slides in once when the app opens (not on every page, and not at all with reduced motion), and on a phone a merchandiser's views become a row that scrolls sideways under it.</sub>
+
 ### On the floor, with a poor signal
 
 <table>
 <tr>
 <td align="center" width="50%"><b>Saved on the phone, sent later</b><br><sub>"Offline, 1 waiting". The count is safe; Send works when there is signal</sub><br><br><img src="uiux/2.0/15-update-offline-saved.png" alt="An update saved on the phone while offline" width="260"></td>
-<td align="center" width="50%"><b>A reason in one tap, and a few words</b><br><sub>In Tamil. A merchandiser reviews notes before anyone else can read them</sub><br><br><img src="uiux/2.0/28-update-reason-note-tamil-phone.png" alt="The update screen in Tamil with a reason chosen and a note typed" width="260"></td>
+<td align="center" width="50%"><b>One tap per reason, and a few words</b><br><sub>In Tamil. A merchandiser reviews notes before anyone else can read them</sub><br><br><img src="uiux/2.0/28-update-reason-note-tamil-phone.png" alt="The update screen in Tamil with a reason chosen and a note typed" width="260"></td>
 </tr>
 </table>
 
-More pictures of every screen, in English and Tamil, wide and phone-sized, are in [`uiux/2.0`](uiux/2.0/README.md) (what changed since 1.0 is in [`uiux/2.0/CHANGES.md`](uiux/2.0/CHANGES.md)).
+### Several reasons for a slow day, and the work done up front
+
+<table>
+<tr>
+<td align="center" width="33%"><b>The finished area</b><br><sub>The pieces made lead; what was added today is one quiet line, and what is left is secondary</sub><br><br><img src="uiux/2.0/13-update-empty-phone.png" alt="The Update screen: 1,750 of 4,550 pieces done, nothing sent yet today, 2,800 to go" width="230"></td>
+<td align="center" width="33%"><b>Several reasons</b><br><sub>Tap every reason that applies; the note writes itself from the choices, in the supervisor's language</sub><br><br><img src="uiux/2.0/32-update-several-reasons-phone.png" alt="Three reasons chosen, a count of three, and the note written from them" width="230"></td>
+<td align="center" width="33%"><b>Edited by hand</b><br><sub>A hand edit is never overwritten; "Rewrite from my choices" brings the written note back on request</sub><br><br><img src="uiux/2.0/33-update-note-edited-rewrite-phone.png" alt="An edited note with the Rewrite from my choices link" width="230"></td>
+</tr>
+</table>
+
+The reasons are stored in the order they were tapped, the first being the main reason; the merchandiser's Review screen shows all of them, with the main one marked in words. After Send the saved line says what was added ("Saved: 120 pieces added to today, with a note").
+
+More pictures of every screen, in English and Tamil, wide and phone-sized, are in [`uiux/2.0`](uiux/2.0/README.md) (34 pictures, last taken at Build 1012; what changed since the set before it is in [`uiux/2.0/CHANGES.md`](uiux/2.0/CHANGES.md); the frozen 1.0 set is in [`uiux/1.0`](uiux/1.0/README.md)).
 
 ## How the colours are decided
 
@@ -86,6 +104,10 @@ The order's colour is its worst stage. Thresholds live in a settings table. Ever
 
 ## Themes: light by default, dark by choice
 The app is **light by default**: the floor reads these screens in bright daylight, and red, amber and green must look the same on every phone. **Dark is a choice a person makes** in the app menu ("Dark theme" / "Light theme"); the device keeps it (`localStorage` `orders.theme`) and it applies as `data-theme="dark"` on `<html>`. The device's own dark setting is deliberately never read, so a phone's "dark mode for websites" cannot recolour the status colours.
+
+<img src="uiux/2.0/07-board-dark-desktop.png" alt="The merchandiser's board in the dark theme" width="900">
+
+<sub>The same board in the dark theme. Status keeps its icon, its word and its colour.</sub>
 
 - **One token file, two sets:** `packages/design/tokens.css` holds the light set and, under `:root[data-theme='dark']`, a dark value for every colour token (a test enforces the parity). The dark violet is lightened to stand on dark; each status colour has a lighter variant that keeps 4.5:1 for text and 3:1 for marks on the dark page and cards. Grey stays a blue-grey and is never green, and status is still an icon, a word and a colour.
 - **No flash:** the Content-Security-Policy allows no inline script, so `public/theme-init.js` (a small classic script, kept by the service worker) applies the saved theme before the first paint, and `src/ui/theme.ts` keeps the page and the menu in step afterwards.

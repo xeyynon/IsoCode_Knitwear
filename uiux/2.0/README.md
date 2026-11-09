@@ -1,6 +1,6 @@
 # Interface snapshots
 
-Pictures of every screen as it looks now, taken from the running app on the small test fixture data (invented, not real orders, and not the hosted demo's seed data). Regenerate them any time the interface changes:
+Pictures of every screen as it looks now, taken from the running app on the test fixture data (not real orders). Regenerate them any time the interface changes:
 
 ```bash
 DEMO_DATA=fixture npm run dev:api                  # terminal 1
@@ -10,7 +10,7 @@ npm run snapshots                # terminal 3: writes this folder; the previous 
 
 This is the **2.0** set (the UI/UX 2.0 work, plan in `audit/POA-UIUX.md`). The frozen **1.0** set, from before that work, is in [../1.0/README.md](../1.0/README.md).
 
-Last taken: 2026-11-08. 31 pictures.
+Last taken: 2026-11-10, at Build 1012. 34 pictures.
 
 ## Desktop
 
@@ -25,7 +25,7 @@ A plain message. The password is cleared and the cursor goes back to it. The sam
 ![Sign in: wrong password](02-login-wrong-password.png)
 
 ### Order board
-Every order, worst first. The counts at the top are filters. Under each order is the working behind its colour. Only the red row is tinted; every status also has an icon and a word.
+Every order, worst first. The status tiles at the top count each colour and filter the list. Under each order is the working behind its colour and a progress bar in pieces. Every status is a stamp: an icon, a word and a colour, with no coloured fill.
 
 ![Order board](03-board-desktop.png)
 
@@ -35,7 +35,7 @@ The filter is kept in the web address, so a reload or a shared link keeps it.
 ![Order board: filtered to late risk](04-board-filtered-red.png)
 
 ### App menu
-Language and sign out live in one menu. Esc closes it and returns focus to the button.
+The three-shape top bar: the app's name on the left, the views in the centre, one menu on the right. The menu holds the theme choice, what's new and sign out; the arrow keys move through it and wrap, and Esc closes it and returns focus to the button.
 
 ![App menu](05-board-menu-open.png)
 
@@ -44,10 +44,10 @@ The check that status never depends on colour alone: the late-risk row still rea
 
 ![Order board in greyscale](06-board-greyscale.png)
 
-### Order board in Tamil
-The four status words in Tamil (taken from the design notes; not yet checked with supervisors). Anything not yet translated stays in English rather than guessing.
+### Order board in the dark theme
+Dark is a choice made from the menu; light stays the default, because the floor reads these screens in daylight. Status keeps its icon, word and colour, and the contrast of every colour pair is checked in both themes.
 
-![Order board in Tamil](07-board-tamil.png)
+![Order board in the dark theme](07-board-dark-desktop.png)
 
 ### System status
 Public page with no sign-in: plain Up or Down for the API and the database, nothing about how it is built.
@@ -84,6 +84,11 @@ Nothing reaches a buyer until a merchandiser confirms it. Each warning shows the
 
 ![Review queue](24-review-queue.png)
 
+### The top bar, menu open
+Three separate shapes on the page: the app's name on the left, the views in a tab hanging from the top edge and centred on the screen (Board, Review with its waiting count, Setup), and one menu on the right. It is the same on every page and role, and the entrance plays once when the app opens, not on every page.
+
+![The top bar, menu open](34-top-bar-menu-open-desktop.png)
+
 ### Setup: people
 Who can sign in, and what the merchandiser can do about it: reset a PIN, sign someone out on every phone (a lost phone), or stop an account (a leaver). Easy PINs such as 1234 and 1111 are refused. Phone numbers show only their last four digits.
 
@@ -112,17 +117,17 @@ Phone number and a 4-digit PIN. The supervisor stays signed in on their own phon
 ![Supervisor sign-in](10-login-supervisor-phone.png)
 
 ### My orders today
-Only this supervisor's own unit. Large buttons, numbers first, soonest due first. The chip at the top says All sent.
+Only this supervisor's own unit. A ring and 'N of M updated today', then one card per stage: the pieces made lead, today's contribution is one quiet line, what is left is secondary, and there is one big Update button. The chip at the top says All sent.
 
 ![My orders today](11-today-list-phone.png)
 
 ### My orders today in Tamil
-Only the title and the sync chip are in Tamil so far; stage names, labels and buttons are still English. Untranslated text is left in English rather than guessed. The Tamil that is here is unreviewed and must be corrected by supervisors, and the rest still has to be written, before the pilot.
+A supervisor who has not chosen a language sees Tamil straight away. The Tamil is a draft written by the front-end session and has not been reviewed by supervisors; it is listed in audit/TAMIL-REVIEW.md and must be corrected before the pilot. Order data such as the style and colour is shown as it was entered.
 
 ![My orders today in Tamil](12-today-list-tamil-phone.png)
 
 ### Daily update
-One number, one big button. "Today so far" and "Left" show the effect before anything is sent.
+One number, one big button. The pieces made lead, with what was added today and what is left beside them, so the effect shows before anything is sent. Several reasons can be tapped (see the next pictures).
 
 ![Daily update](13-update-empty-phone.png)
 
@@ -137,7 +142,7 @@ The number is saved on the phone first. The chip says Offline and how many are w
 ![Daily update with no signal](15-update-offline-saved.png)
 
 ### My orders today with an update waiting
-Today so far already includes the waiting 120 pieces, so the supervisor sees the effect straight away.
+The card already counts the waiting 120 pieces, so the supervisor sees the effect straight away.
 
 ![My orders today with an update waiting](16-today-offline-waiting-phone.png)
 
@@ -167,7 +172,17 @@ Tap Add a photo to use the camera. The photo is shrunk on the phone (a large cam
 ![Daily update with a photo](27-update-photo-ready-phone.png)
 
 ### Daily update: a reason and a note, in Tamil
-Why is it slow? is a short list of big buttons, so the usual cause is one tap. The note is optional free text typed in Tamil or English. The reason words come from a list the factory controls; the Tamil here is unreviewed and must be corrected by supervisors. Nothing has been sent.
+Why is it slow? is a list of big buttons; the supervisor taps the one that applies (several can be tapped, see the next pictures). The note is optional free text typed in Tamil or English. The reason words come from a list the factory controls; the Tamil here is a draft and must be corrected by supervisors. Nothing has been sent.
 
 ![Daily update: a reason and a note, in Tamil](28-update-reason-note-tamil-phone.png)
+
+### Daily update: several reasons, and a note that writes itself
+Tap every reason that applies; a quiet count says how many. The note below is written from the choices, in the supervisor's language, in the order they were tapped. It is editable, and a typed number is never lost.
+
+![Daily update: several reasons, and a note that writes itself](32-update-several-reasons-phone.png)
+
+### Daily update: an edited note stays the supervisor's own
+After a hand edit the note is never overwritten when the choices change. A small link, "Rewrite from my choices", brings the written note back, on request only. Nothing has been sent.
+
+![Daily update: an edited note stays the supervisor's own](33-update-note-edited-rewrite-phone.png)
 

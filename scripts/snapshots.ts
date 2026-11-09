@@ -82,25 +82,26 @@ async function snap(page: Page, n: number, slug: string, device: Shot['device'],
   await page.fill('input[type=password]', MERCH.password)
   await page.click('button:has-text("Sign in") >> nth=-1')
   await page.waitForSelector('table.board')
-  await snap(page, 3, 'board-desktop', 'desktop', 'Order board', 'Every order, worst first. The counts at the top are filters. Under each order is the working behind its colour. Only the red row is tinted; every status also has an icon and a word.')
+  await snap(page, 3, 'board-desktop', 'desktop', 'Order board', 'Every order, worst first. The status tiles at the top count each colour and filter the list. Under each order is the working behind its colour and a progress bar in pieces. Every status is a stamp: an icon, a word and a colour, with no coloured fill.')
 
   await page.click('.statustile--red, .chip--red')
   await snap(page, 4, 'board-filtered-red', 'desktop', 'Order board: filtered to late risk', 'The filter is kept in the web address, so a reload or a shared link keeps it.')
   await page.click('.statustile--red, .chip--red')
 
   await page.click('button[aria-haspopup=menu]')
-  await snap(page, 5, 'board-menu-open', 'desktop', 'App menu', 'Language and sign out live in one menu. Esc closes it and returns focus to the button.')
+  await snap(page, 5, 'board-menu-open', 'desktop', 'App menu', "The three-shape top bar: the app's name on the left, the views in the centre, one menu on the right. The menu holds the theme choice, what's new and sign out; the arrow keys move through it and wrap, and Esc closes it and returns focus to the button.")
   await page.keyboard.press('Escape')
 
   await page.addStyleTag({ content: 'html{filter:grayscale(1)}' })
   await snap(page, 6, 'board-greyscale', 'desktop', 'Order board in greyscale', 'The check that status never depends on colour alone: the late-risk row still reads from its triangle and its words.')
   await page.addStyleTag({ content: 'html{filter:none}' })
 
+  // Merchandiser screens are English only (the menu has no language item), so this slot shows the other choice a person can make there: the dark theme.
   await page.click('button[aria-haspopup=menu]')
-  await page.click('[role=menuitem]:first-child')
-  await snap(page, 7, 'board-tamil', 'desktop', 'Order board in Tamil', 'The four status words in Tamil (taken from the design notes; not yet checked with supervisors). Anything not yet translated stays in English rather than guessing.')
+  await page.click('[role=menuitem]:has-text("Dark theme")')
+  await snap(page, 7, 'board-dark-desktop', 'desktop', 'Order board in the dark theme', 'Dark is a choice made from the menu; light stays the default, because the floor reads these screens in daylight. Status keeps its icon, word and colour, and the contrast of every colour pair is checked in both themes.')
   await page.click('button[aria-haspopup=menu]')
-  await page.click('[role=menuitem]:first-child')
+  await page.click('[role=menuitem]:has-text("Light theme")')
 
   await page.goto(`${WEB}/status`)
   await page.waitForSelector('.checks')
@@ -139,17 +140,17 @@ async function chooseLanguage(ctx: BrowserContext, lang: 'en' | 'ta'): Promise<v
   await page.fill('input[type=password]', SUP.pin)
   await page.click('button:has-text("Sign in") >> nth=-1')
   await page.waitForSelector('.stage')
-  await snap(page, 11, 'today-list-phone', 'phone', 'My orders today', "Only this supervisor's own unit. Large buttons, numbers first, soonest due first. The chip at the top says All sent.", true)
+  await snap(page, 11, 'today-list-phone', 'phone', 'My orders today', "Only this supervisor's own unit. A ring and 'N of M updated today', then one card per stage: the pieces made lead, today's contribution is one quiet line, what is left is secondary, and there is one big Update button. The chip at the top says All sent.", true)
 
   await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')
-  await snap(page, 12, 'today-list-tamil-phone', 'phone', 'My orders today in Tamil', 'Only the title and the sync chip are in Tamil so far; stage names, labels and buttons are still English. Untranslated text is left in English rather than guessed. The Tamil that is here is unreviewed and must be corrected by supervisors, and the rest still has to be written, before the pilot.', true)
+  await snap(page, 12, 'today-list-tamil-phone', 'phone', 'My orders today in Tamil', 'A supervisor who has not chosen a language sees Tamil straight away. The Tamil is a draft written by the front-end session and has not been reviewed by supervisors; it is listed in audit/TAMIL-REVIEW.md and must be corrected before the pilot. Order data such as the style and colour is shown as it was entered.', true)
   await page.click('button[aria-haspopup=menu]')
   await page.click('[role=menuitem]:first-child')
 
   await page.click('.stage >> nth=0 >> a:has-text("Update")')
   await page.waitForSelector('input.input--big')
-  await snap(page, 13, 'update-empty-phone', 'phone', 'Daily update', 'One number, one big button. "Today so far" and "Left" show the effect before anything is sent.')
+  await snap(page, 13, 'update-empty-phone', 'phone', 'Daily update', 'One number, one big button. The pieces made lead, with what was added today and what is left beside them, so the effect shows before anything is sent. Several reasons can be tapped (see the next pictures).')
 
   await page.fill('input.input--big', '99999')
   await page.click('form button.btn--big')
@@ -164,7 +165,7 @@ async function chooseLanguage(ctx: BrowserContext, lang: 'en' | 'ta'): Promise<v
 
   await page.click('a:has-text("My orders today")')
   await page.waitForSelector('.stage')
-  await snap(page, 16, 'today-offline-waiting-phone', 'phone', 'My orders today with an update waiting', 'Today so far already includes the waiting 120 pieces, so the supervisor sees the effect straight away.', true)
+  await snap(page, 16, 'today-offline-waiting-phone', 'phone', 'My orders today with an update waiting', 'The card already counts the waiting 120 pieces, so the supervisor sees the effect straight away.', true)
   await ctx.close()   // closed while offline on purpose: the waiting update is never sent, so the demo data is unchanged
 }
 
@@ -320,7 +321,46 @@ async function chooseLanguage(ctx: BrowserContext, lang: 'en' | 'ta'): Promise<v
   await page.click('.reason >> nth=2')
   await page.fill('textarea', 'இன்று மூன்று இயந்திரங்கள் வேலை செய்யவில்லை')
   await page.fill('input.input--big', '60')
-  await snap(page, 28, 'update-reason-note-tamil-phone', 'phone', 'Daily update: a reason and a note, in Tamil', 'Why is it slow? is a short list of big buttons, so the usual cause is one tap. The note is optional free text typed in Tamil or English. The reason words come from a list the factory controls; the Tamil here is unreviewed and must be corrected by supervisors. Nothing has been sent.', true)
+  await snap(page, 28, 'update-reason-note-tamil-phone', 'phone', 'Daily update: a reason and a note, in Tamil', 'Why is it slow? is a list of big buttons; the supervisor taps the one that applies (several can be tapped, see the next pictures). The note is optional free text typed in Tamil or English. The reason words come from a list the factory controls; the Tamil here is a draft and must be corrected by supervisors. Nothing has been sent.', true)
+  await ctx.close()
+}
+
+// ---------------------------------------------------------------- several reasons for a slow day (nothing is sent)
+// A taller window, not a full-page capture: the Send bar is sticky at the bottom of the screen, and a full-page picture would draw it in the middle of the form.
+{
+  const ctx = await newContext({ viewport: { width: 390, height: 1150 }, hasTouch: true, isMobile: true })
+  await chooseLanguage(ctx, 'en')
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.click('button:has-text("Supervisor")')
+  await page.fill('input[type=tel]', SUP.phone)
+  await page.fill('input[type=password]', SUP.pin)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('.stage')
+  await page.click('.stage >> nth=0 >> a:has-text("Update")')
+  await page.waitForSelector('input.input--big')
+  await page.fill('input.input--big', '120')
+  // tapped in this order: the sentence follows it
+  for (const name of ['Machine problem', 'Not enough workers', 'Material is late']) await page.locator('.reason', { hasText: name }).first().click()
+  await snap(page, 32, 'update-several-reasons-phone', 'phone', 'Daily update: several reasons, and a note that writes itself', "Tap every reason that applies; a quiet count says how many. The note below is written from the choices, in the supervisor's language, in the order they were tapped. It is editable, and a typed number is never lost.")
+  const written = await page.locator('textarea').first().inputValue()
+  await page.fill('textarea', `${written} The belt snapped twice.`)
+  await page.locator('.reason', { hasText: 'No power' }).first().click()
+  await snap(page, 33, 'update-note-edited-rewrite-phone', 'phone', "Daily update: an edited note stays the supervisor's own", 'After a hand edit the note is never overwritten when the choices change. A small link, "Rewrite from my choices", brings the written note back, on request only. Nothing has been sent.')
+  await ctx.close()
+}
+
+// ---------------------------------------------------------------- the top bar with its menu open (a laptop-sized window)
+{
+  const ctx = await newContext({ viewport: { width: 1366, height: 520 } })
+  const page = await ctx.newPage()
+  await page.goto(`${WEB}/login`)
+  await page.fill('input[type=email]', MERCH.email)
+  await page.fill('input[type=password]', MERCH.password)
+  await page.click('button:has-text("Sign in") >> nth=-1')
+  await page.waitForSelector('table.board')
+  await page.click('button[aria-haspopup=menu]')
+  await snap(page, 34, 'top-bar-menu-open-desktop', 'desktop', 'The top bar, menu open', "Three separate shapes on the page: the app's name on the left, the views in a tab hanging from the top edge and centred on the screen (Board, Review with its waiting count, Setup), and one menu on the right. It is the same on every page and role, and the entrance plays once when the app opens, not on every page.")
   await ctx.close()
 }
 
@@ -376,7 +416,8 @@ fs.rmSync(STAGE, { recursive: true, force: true })
 
 // ---------------------------------------------------------------- the index
 const groups: [string, Shot['device']][] = [['Desktop', 'desktop'], ['Phone', 'phone']]
-const when = new Date().toISOString().slice(0, 10)
+const when = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })   // the factory's day (IST), as in the app
+const buildNow = `Build ${(JSON.parse(fs.readFileSync(path.join(ROOT, 'build-info.json'), 'utf8')) as { latest: number }).latest}`   // the build the pictures show
 let md = `# Interface snapshots
 
 Pictures of every screen as it looks now, taken from the running app on the test fixture data (not real orders). Regenerate them any time the interface changes:
@@ -389,7 +430,7 @@ npm run snapshots                # terminal 3: writes this folder; the previous 
 
 This is the **2.0** set (the UI/UX 2.0 work, plan in \`audit/POA-UIUX.md\`). The frozen **1.0** set, from before that work, is in [../1.0/README.md](../1.0/README.md).
 
-Last taken: ${when}. ${shots.length} pictures.
+Last taken: ${when}, at ${buildNow}. ${shots.length} pictures.
 
 `
 for (const [heading, device] of groups) {
