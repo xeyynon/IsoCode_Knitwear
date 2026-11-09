@@ -1,6 +1,77 @@
-/* AppBar (ui/AppBar.tsx): the base rules are in styles.css; this is only the very narrow case (about 195 px: a 390 px phone at 200% zoom or the largest font, AUDIT-03 finding 1). */
-@media (max-width: 260px) {
-  .appbar { flex-wrap: wrap; gap: var(--space-2); padding-inline: var(--space-3); }
-  .appbar__brand { display: none; }   /* the page title stays; the brand line is decoration */
-  .appbar .appbar__title { min-width: 0; overflow-wrap: anywhere; font-size: 16px; }
+/* AppBar (ui/AppBar.tsx): the top bar as three shapes on the page, not one strip (the ORCA top bar guide, adapted). Tokens only, light and dark.
+   Heights: the bar is 56 px, the side capsules the tap size (44 px with a mouse, 48 px on a phone) and centred in it, the centre tab the full 56 px, so the brand, the views and the menu share one
+   centreline (a first version with a shorter tab put its labels 6 px higher than the logo). */
+.appbar {
+  position: sticky; top: 0; z-index: 12;
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-template-areas: "left center right";
+  align-items: start; gap: var(--space-4);
+  min-height: 56px;
+  background: var(--page); /* the page shows between the shapes, and scrolling content never shows through behind them */
 }
+.appbar__cell { display: flex; align-items: center; height: 56px; min-width: 0; }
+.appbar__cell--left { grid-area: left; justify-content: flex-start; }
+.appbar__cell--right { grid-area: right; justify-content: flex-end; }
+
+/* the three shapes share one surface and one hairline */
+.appbar__left, .appbar__right, .appbar__center {
+  display: flex; align-items: center; min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.appbar__left { /* flush left, rounded on the right */
+  gap: var(--space-2); height: var(--tap-min); padding: 0 var(--space-4) 0 var(--space-3);
+  border-left: 0; border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  color: var(--ink); text-decoration: none;
+}
+.appbar__right { /* flush right, rounded on the left */
+  gap: var(--space-1); height: var(--tap-min); padding: 0 var(--space-3) 0 var(--space-2);
+  border-right: 0; border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+}
+.appbar__center { /* hangs from the top edge, rounded at the bottom, centred on the screen */
+  grid-area: center; justify-content: center; gap: 2px;
+  height: 56px; padding: 0 var(--space-3);
+  border-top: 0; border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+.appbar__mark { flex: none; border-radius: var(--radius-s); }
+.appbar__brand { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.appbar__title { margin: 0; padding: 0 var(--space-2); font-size: 18px; font-weight: 700; line-height: 1.2; text-align: center; min-width: 0; overflow-wrap: anywhere; } /* an h1 on a supervisor's page, a p where the page has its own h1 */
+
+/* the entrance: the side capsules slide in from their edges and the tab drops in, once per visit (the first bar plays it, see AppBar.tsx) */
+.appbar--enter .appbar__left { animation: appbar-from-left 260ms cubic-bezier(0.3, 0, 0, 1) backwards; }
+.appbar--enter .appbar__right { animation: appbar-from-right 260ms cubic-bezier(0.3, 0, 0, 1) backwards; }
+.appbar--enter .appbar__center { animation: appbar-from-top 260ms cubic-bezier(0.3, 0, 0, 1) backwards; }
+@keyframes appbar-from-left { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes appbar-from-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes appbar-from-top { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .appbar--enter .appbar__left, .appbar--enter .appbar__right, .appbar--enter .appbar__center { animation: none; }
+}
+
+/* a phone's width and the brand: the mark stays, the name stays for a screen reader */
+@media (max-width: 480px) {
+  .appbar { gap: var(--space-2); }
+  .appbar__left { padding-right: var(--space-3); }
+  .appbar__brand { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* below 1100 px the merchandiser's views are a full-width band under the capsules that scrolls sideways */
+@media (max-width: 1100px) {
+  .appbar--views { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "left right" "center center"; gap: var(--space-2) var(--space-3); }
+  .appbar--views .appbar__center {
+    justify-content: flex-start; height: auto; padding: 2px var(--space-3) 6px;
+    border-left: 0; border-right: 0; border-radius: 0;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .appbar--views .appbar__center::-webkit-scrollbar { display: none; }
+}
+
+/* about 195 px (a 390 px phone at 200% zoom, or the largest font): a supervisor's title takes a band of its own, and may wrap (AUDIT-03 finding 1) */
+@media (max-width: 260px) {
+  .appbar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "left right" "center center"; gap: var(--space-1) var(--space-2); }
+  .appbar .appbar__center { height: auto; min-height: 44px; padding: var(--space-1) var(--space-2); border-left: 0; border-right: 0; border-radius: 0; }
+  .appbar .appbar__title { font-size: 16px; }
+}
+
+/* the menu button sits inside its capsule without an outline of its own (a box in a box read as clutter); hover is a neutral wash */
+.appbar__right .btn { border-color: transparent; background: transparent; }
+.appbar__right .btn:hover { background: var(--page); }

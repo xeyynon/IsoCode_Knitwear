@@ -31,6 +31,7 @@
      instead of one-off numbers; older rules move to them as they are touched. */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
   --radius-s: 6px; --radius-m: 8px; --radius-l: 10px;
+  --radius-xl: 22px; --radius-pill: 999px;   /* the top bar's hanging tab and its side capsules (ui/AppBar.css) */
   /* Elevation is for things that float: the menu, dialogs, and a bar pinned to the bottom of a screen. Cards use a border. */
   --shadow-menu: 0 6px 20px rgb(0 0 0 / .12);
   --shadow-dialog: 0 12px 32px rgb(31 35 40 / .25);

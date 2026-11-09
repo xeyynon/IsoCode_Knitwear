@@ -86,9 +86,9 @@ describe('an address that does not exist', () => {
     expect((c.querySelector('main a.btn') as HTMLAnchorElement).getAttribute('href')).toBe('/today')
     act(() => setLang('en'))
   })
-  it('someone not signed in gets a way to the sign-in, and no app bar', async () => {
+  it('someone not signed in gets a way to the sign-in, and no internal screen offered (the bar shows the brand only: no views, no menu)', async () => {
     const c = await page(null)
-    expect(c.querySelector('header.appbar')).toBeNull()
+    expect(c.querySelector('header.appbar nav, header.appbar .menu, header.appbar button')).toBeNull()
     expect((c.querySelector('main a.btn') as HTMLAnchorElement).getAttribute('href')).toBe('/login')
   })
 })

@@ -98,8 +98,9 @@ export default function OrderSetup() {
   const problemList = Object.values(errors)
 
   return (
-    <MerchandiserShell title="New order" form>
+    <MerchandiserShell title="New order" plainTitle form>
         <BackLink to="/board">Order board</BackLink>
+        <h1>New order</h1>
         {!opts && !loadError && <Loading label="Loading" />}
         {loadError && <LoadFailed unreachable={loadError.unreachable} message={loadError.message} onRetry={loadOptions} />}
 

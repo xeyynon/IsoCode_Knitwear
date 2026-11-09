@@ -26,10 +26,15 @@ describe('very narrow screens (260 px and less)', () => {
     expect(css).toMatch(/\.update \.reasons\s*\{[^}]*min-width:\s*0/)
     expect(css).toMatch(/\.update \.reason__pill\s*\{[^}]*white-space:\s*normal/)
   })
-  it('app bar: the brand line is dropped and the title wraps', () => {
-    const css = narrow(read('../src/ui/AppBar.css'))
-    expect(css).toMatch(/\.appbar__brand\s*\{[^}]*display:\s*none/)
-    expect(css).toMatch(/\.appbar__title\s*\{[^}]*overflow-wrap:\s*anywhere/)
+  it('app bar: the brand name is dropped from the screen (the mark stays, and the name stays for a screen reader), the title takes a band of its own and wraps', () => {
+    // (the same promise through the three-shape top bar: the brand NAME is visually hidden from 480 px down, never display:none, so the link keeps its name)
+    const whole = read('../src/ui/AppBar.css')
+    expect(whole).toMatch(/@media \(max-width: 480px\)\s*\{[\s\S]*?\.appbar__brand\s*\{[^}]*clip:\s*rect\(0 0 0 0\)/)
+    expect(whole).not.toMatch(/\.appbar__brand\s*\{[^}]*display:\s*none/)
+    const css = narrow(whole)
+    expect(css).toMatch(/grid-template-areas:\s*"left right" "center center"/)
+    expect(css).toMatch(/\.appbar \.appbar__center\s*\{[^}]*height:\s*auto/)
+    expect(whole).toMatch(/\.appbar__title\s*\{[^}]*overflow-wrap:\s*anywhere/)
   })
   it('sync chip: the words may wrap (a long Tamil "all sent" was wider than the screen)', () => {
     expect(narrow(read('../src/ui/SyncChip.css'))).toMatch(/\.sync\s*\{[^}]*white-space:\s*normal/)

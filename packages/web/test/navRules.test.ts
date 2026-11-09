@@ -88,12 +88,16 @@ describe('the tabs look', () => {
     expect(navCss).toMatch(/\.navtab\s*\{[^}]*min-height:\s*var\(--tap-min\)/)
   })
   it('mark the current place by weight and an underline as well as colour', () => {
+    // (through the three-shape top bar: a heavier label, and a 2 px underline that is drawn only for the current place)
     const current = /\.navtab\[aria-current='page'\]\s*\{([^}]*)\}/.exec(navCss)?.[1] ?? ''
     expect(current).toMatch(/font-weight/)
-    expect(current).toMatch(/border-bottom-color/)
+    expect(navCss).toMatch(/\.navtab::after\s*\{[^}]*height:\s*2px[^}]*transform:\s*scaleX\(0\)/)
+    expect(navCss).toMatch(/\.navtab\[aria-current='page'\]::after\s*\{[^}]*scaleX\(1\)/)
   })
-  it('on a narrow screen take a row of their own under the title', () => {
-    expect(navCss).toMatch(/@media \(max-width: 720px\)[\s\S]*\.navtabs\s*\{[^}]*flex:\s*1 0 100%/)
+  it('on a narrow screen take a band of their own under the capsules, which scrolls sideways', () => {
+    const bar = read('../src/ui/AppBar.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(bar).toMatch(/@media \(max-width: 1100px\)\s*\{[\s\S]*?\.appbar--views\s*\{[^}]*grid-template-areas:\s*"left right" "center center"/)
+    expect(bar).toMatch(/\.appbar--views \.appbar__center\s*\{[^}]*overflow-x:\s*auto/)
   })
 })
 

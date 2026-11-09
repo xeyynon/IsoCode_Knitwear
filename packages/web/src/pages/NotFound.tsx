@@ -26,7 +26,8 @@ export default function NotFound() {
   }
   if (role === 'merchandiser') {
     return (
-      <MerchandiserShell title="Page not found" form>
+      <MerchandiserShell title="Page not found" plainTitle form>
+        <h1>Page not found</h1>
         <p>That page does not exist.</p>
         <p><ButtonLink to="/board">Back to the board</ButtonLink></p>
       </MerchandiserShell>

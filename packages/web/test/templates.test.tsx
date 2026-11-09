@@ -51,8 +51,15 @@ describe('AuthShell and PublicShell', () => {
     expect(c.querySelector('a.skiplink')).not.toBeNull()
     expect(c.querySelector('main')!.outerHTML).toBe('<main id="main" tabindex="-1" class="login">x</main>')
   })
-  it('the public frame: no app bar, narrow or form width, with a page class beside it', () => {
-    const mainOf = (el: ReactElement) => { const c = mount(el); expect(c.querySelector('header')).toBeNull(); return c.querySelector('main')!.outerHTML }
+  it('the public frame: the top bar\'s brand capsule ALONE (no views, no menu, no control), narrow or form width, with a page class beside it', () => {
+    // (through the three-shape top bar: a visitor gets the same look as everyone, but no internal screen and nothing to press: topBar.test.tsx)
+    const mainOf = (el: ReactElement) => {
+      const c = mount(el)
+      const h = c.querySelector('header.appbar')!
+      expect(h.querySelector('a.appbar__left')).not.toBeNull()
+      expect(h.querySelector('nav, .menu, button, .appbar__center')).toBeNull()
+      return c.querySelector('main')!.outerHTML
+    }
     expect(mainOf(<PublicShell narrow>x</PublicShell>)).toBe('<main id="main" tabindex="-1" class="page page--narrow">x</main>')
     expect(mainOf(<PublicShell className="buyer">x</PublicShell>)).toBe('<main id="main" tabindex="-1" class="page page--form buyer">x</main>')
   })

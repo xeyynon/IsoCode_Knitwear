@@ -24,7 +24,7 @@
     "e2e": "tsx scripts/e2e_offline.ts",
     "snapshots": "tsx scripts/snapshots.ts",
     "a11y": "tsx scripts/a11y.ts",
-    "ux": "tsx scripts/ux_metrics.ts",
+    "ux": "tsx scripts/ux_metrics.ts && tsx scripts/topbar_metrics.ts",
     "load": "tsx scripts/load_metrics.ts",
     "phone": "tsx scripts/phone_keyboard.ts",
     "diff": "tsx scripts/snapshot_diff.ts"

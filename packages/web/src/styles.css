@@ -60,10 +60,6 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .seg__btn[aria-pressed='true'], .seg__btn[aria-current='true'] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 
 /* ---- app bar and menu */
-.appbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
-.appbar__brand { font-weight: 600; color: var(--muted); font-size: 14px; }
-.appbar__title { font-size: 18px; font-weight: 700; margin: 0; flex: 1; }   /* an h1 on most pages, a p where the page has its own h1: the same look */
-.appbar--nav { flex-wrap: wrap; }   /* the merchandiser's bar: on a phone the tabs take a second row (ui/molecules/NavTabs.css) */
 .menu { position: relative; }
 .menu__popover { position: absolute; right: 0; top: calc(100% + 6px); min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: var(--shadow-menu); z-index: 20; }
 .menu__item { display: block; width: 100%; min-height: var(--tap-min); text-align: left; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; cursor: pointer; white-space: nowrap; }   /* a Tamil label (the theme item) stays on one line; the menu grows to fit it */

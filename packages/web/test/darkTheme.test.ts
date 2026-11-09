@@ -120,7 +120,9 @@ describe('the menu offers the choice', () => {
   const appBar = read('../src/ui/AppBar.tsx')
   it('AppBar draws the theme item, and the arrow keys reach it', () => {
     expect(appBar).toContain('<ThemeMenuItem')
-    expect(appBar).toMatch(/\[role="menuitem"\]/)
+    // (the arrow keys are the one shared menu's: PopoverMenu moves focus over every [role="menuitem"] row, and popoverMenu.test.tsx drives it)
+    expect(appBar).toContain('<PopoverMenu')
+    expect(read('../src/ui/molecules/PopoverMenu.tsx')).toMatch(/\[role="menuitem"\]/)
   })
 })
 

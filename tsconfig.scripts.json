@@ -26,6 +26,7 @@
     "scripts/pngDiff.ts",
     "scripts/snapshot_diff.ts",
     "scripts/snapshots.ts",
+    "scripts/topbar_metrics.ts",
     "scripts/ux_metrics.ts"
   ]
 }
