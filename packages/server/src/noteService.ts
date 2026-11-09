@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { composeReasonNote } from '@isocode/engine'
 import { AppError, badRequest, forbidden, notFound } from './errors.js'
 import { isStaff, type Ctx, type Tx } from './db.js'
 import { stripBidi } from './textRules.js'
@@ -21,14 +22,30 @@ export const detectLanguage = (text: string): 'ta' | 'en' => (/[஀-௿]/.test(t
 /** Strip control characters and tidy spaces, so pasted text cannot carry anything odd into a report or a page. */
 export const cleanNote = (raw: string): string => stripBidi(raw).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/[ \t]+/g, ' ').trim()
 
-export interface NoteInput { text?: unknown; category?: unknown }
-export interface ParsedNote { text: string | null; category: string | null; language: 'ta' | 'en' | null }
+export interface NoteInput { text?: unknown; category?: unknown; categories?: unknown }
+export interface ParsedNote {
+  text: string | null
+  /** The main reason: the first of `categories` when there is a list. */
+  category: string | null
+  /** All the reasons, in the order they were tapped (empty when none, or when an older phone sent one `category`: then it holds just that). */
+  categories: string[]
+  language: 'ta' | 'en' | null
+  /** The text is exactly the sentence written from `categories` in its own language. Decided here, never taken from the phone. */
+  generated: boolean
+}
+
+/** The most reasons one note can carry: the seeded list has seven. */
+export const MAX_REASONS = 7
 
 /**
  * Check a note that came with an update. Both parts are optional, but an empty note is no note at all.
  * The reason must be one on the fixed list: free-typed reasons cannot be counted or compared.
- * A reason that has since left the list (a phone holding an old copy) is filed as 'other' for the reviewer,
+ * A single `category` that has since left the list (a phone holding an old copy) is filed as 'other' for the reviewer,
  * or dropped if the list has no 'other': the count must never be refused because of a note.
+ *
+ * `categories` (the several reasons the form now lets a supervisor tap) is stricter, because it comes from the current form: it must be a
+ * list of distinct ids on the list, at most seven, and a `category` sent with it must be the first of it. Anything else is a 400 and
+ * nothing is written. `generated` is never read from the input.
  */
 export function parseNote(input: NoteInput | undefined, reasons: Reason[]): ParsedNote | null {
   if (input === undefined || input === null) return null
@@ -37,25 +54,55 @@ export function parseNote(input: NoteInput | undefined, reasons: Reason[]): Pars
   if (input.text !== undefined && input.text !== null && typeof input.text !== 'string') throw badRequest('The note text is not valid')
   if (text.length > MAX_NOTE_CHARS) throw badRequest(`Keep the note to ${MAX_NOTE_CHARS} characters or fewer`)
   let category: string | null = null
+  let categories: string[] = []
+  if (input.categories !== undefined && input.categories !== null) {
+    if (!Array.isArray(input.categories)) throw badRequest('Choose the reasons from the list')
+    if (input.categories.length > MAX_REASONS) throw badRequest(`Choose at most ${MAX_REASONS} reasons`)
+    for (const id of input.categories) {
+      if (typeof id !== 'string' || !reasons.some((r) => r.id === id)) throw badRequest('Choose the reasons from the list')
+      if (categories.includes(id)) throw badRequest('Each reason can be chosen once')
+      categories.push(id)
+    }
+  }
   if (input.category !== undefined && input.category !== null && input.category !== '') {
     if (typeof input.category !== 'string') throw badRequest('Choose a reason from the list')
-    if (reasons.some((r) => r.id === input.category)) category = input.category
+    if (categories.length > 0) {
+      if (input.category !== categories[0]) throw badRequest('The main reason must be the first of the reasons')
+    } else if (reasons.some((r) => r.id === input.category)) category = input.category
     else if (reasons.some((r) => r.id === 'other')) category = 'other'
   }
+  if (categories.length > 0) category = categories[0]!
+  else if (category) categories = [category]
   if (!text && !category) return null
-  return { text: text || null, category, language: text ? detectLanguage(text) : null }
+  const language = text ? detectLanguage(text) : null
+  // "Generated" = the text IS the sentence for these reasons (more than one tap or a single reason, in the text's own language).
+  const generated = !!text && !!language && categories.length > 0 && text === composeReasonNote(language, categories) && input.categories !== undefined && input.categories !== null
+  return { text: text || null, category, categories, language, generated }
 }
 
 export interface NoteContext { orderId: string; buyerId: string; unitId: string; stage: string; date: string }
 
-/** Insert a note and return its id. The original text goes in its own language's column; the other waits for a person. */
+/** What a generated note says in the suggestion columns: the supervisor's own choice, not a guess (see migration 021). */
+export const SUPERVISOR_CHOICE_MODEL = 'supervisor-choice'
+
+/**
+ * Insert a note and return its id. The original text goes in its own language's column; the other waits for a person.
+ * A GENERATED note (its text is exactly the sentence for its reasons) also gets its English meaning at once, and the suggestion columns
+ * record the supervisor's own choice (main reason, confidence 1): it is never claimed for the AI, so no call is made and none is paid for.
+ */
 export async function insertNote(tx: Tx, n: ParsedNote, c: NoteContext, by: 'supervisor' | 'merchandiser' = 'supervisor'): Promise<string> {
   const id = randomUUID()
+  const english = n.generated ? composeReasonNote('en', n.categories) : null
   await tx.query(
-    `insert into note (id, order_id, buyer_id, stage, unit_id, taken_on, language, text_ta, text_en, category, category_by)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [id, c.orderId, c.buyerId, c.stage, c.unitId, c.date, n.language, n.language === 'ta' ? n.text : null, n.language === 'en' ? n.text : null,
-     n.category, n.category ? by : null])
+    `insert into note (id, order_id, buyer_id, stage, unit_id, taken_on, language, text_ta, text_en, category, category_by, categories, generated,
+                       ai_status, ai_text_en, ai_category, confidence, ai_why, ai_model, ai_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13::boolean,
+             $14, $15, $16, $17::numeric, $18, $19, case when $13::boolean then now() else null end)`,
+    [id, c.orderId, c.buyerId, c.stage, c.unitId, c.date, n.language, n.language === 'ta' ? n.text : null,
+     n.language === 'en' ? n.text : english,
+     n.category, n.category ? by : null, n.categories, n.generated,
+     n.generated ? 'suggested' : null, english, n.generated ? n.category : null, n.generated ? 1 : null,
+     n.generated ? 'Chosen by the person who wrote the update; the note was written from the reasons.' : null, n.generated ? SUPERVISOR_CHOICE_MODEL : null])
   return id
 }
 
@@ -66,8 +113,13 @@ export interface ReviewNote {
   original: string | null
   /** The English meaning: what the supervisor wrote if it was English, otherwise filled in by a merchandiser. */
   textEn: string | null
+  /** The main reason (the first of `categories`). */
   category: string | null
   categoryBy: 'supervisor' | 'merchandiser' | null
+  /** Every reason the supervisor tapped, in the order tapped (an older note: just its one reason; none: empty). */
+  categories: string[]
+  /** The note's text is exactly the sentence written from its reasons (decided by the server), so no AI was asked. */
+  generated: boolean
   /** The AI's suggestion, beside the original and never in place of it. null = not asked yet (or AI is off). */
   ai: NoteSuggestion | null
 }
@@ -86,17 +138,18 @@ export interface NoteSuggestion {
 }
 
 const NOTE_SELECT = `select n.id::text as id, n.order_id::text as order_id, o.po, b.name as buyer_name, n.stage, n.taken_on::text as taken_on,
-       n.language, n.text_ta, n.text_en, n.category, n.category_by,
+       n.language, n.text_ta, n.text_en, n.category, n.category_by, n.categories, n.generated,
        n.ai_status, n.ai_text_en, n.ai_category, n.confidence::float8 as ai_confidence, n.ai_why, n.ai_model, n.ai_error, n.ai_attempts, n.ai_at
   from note n join orders o on o.id = n.order_id join buyer b on b.id = n.buyer_id`
 
 type NoteRow = {
-  id: string; order_id: string; po: string; buyer_name: string; stage: string; taken_on: string; language: 'ta' | 'en' | null; text_ta: string | null; text_en: string | null; category: string | null; category_by: 'supervisor' | 'merchandiser' | null
+  id: string; order_id: string; po: string; buyer_name: string; stage: string; taken_on: string; language: 'ta' | 'en' | null; text_ta: string | null; text_en: string | null; category: string | null; category_by: 'supervisor' | 'merchandiser' | null; categories: string[] | null; generated: boolean
   ai_status: NoteSuggestion['status'] | null; ai_text_en: string | null; ai_category: string | null; ai_confidence: number | null; ai_why: string | null; ai_model: string | null; ai_error: string | null; ai_attempts: number; ai_at: Date | string | null
 }
 const toReviewNote = (r: NoteRow): ReviewNote => ({
   id: r.id, orderId: r.order_id, po: r.po, buyerName: r.buyer_name, stage: r.stage, takenOn: r.taken_on, language: r.language,
   original: r.language === 'ta' ? r.text_ta : r.text_en, textEn: r.text_en, category: r.category, categoryBy: r.category_by,
+  categories: r.categories && r.categories.length ? r.categories : r.category ? [r.category] : [], generated: r.generated,
   ai: r.ai_status ? {
     status: r.ai_status, textEn: r.ai_text_en, category: r.ai_category, confidence: r.ai_confidence, why: r.ai_why, model: r.ai_model,
     error: r.ai_error, attempts: r.ai_attempts, at: r.ai_at === null ? null : new Date(r.ai_at).toISOString(),
@@ -132,10 +185,18 @@ export async function confirmNote(tx: Tx, ctx: Ctx, userId: string, id: string, 
     if (typeof input.category !== 'string' || !reasons.some((r) => r.id === input.category)) throw badRequest('Choose a reason from the list')
     category = input.category
   }
+  // The reason a merchandiser settles becomes the MAIN reason (the first of the list). If it is one the supervisor also tapped it moves to
+  // the front and the others stay; if it is a different one the list becomes just that reason, because it is now the merchandiser's own
+  // decision. Settling the reason it already is changes nothing. A note whose reasons were changed is no longer "generated": its text
+  // was written for the reasons the supervisor tapped.
   const done = await tx.query(
     `update note set confirmed_by = $2, confirmed_at = now(),
             text_en = case when language = 'ta' then coalesce($3, text_en) else text_en end,   -- the English meaning is only ever added to a Tamil note: an English original is never overwritten
             category_by = case when $4::text is not null and $4::text is distinct from category then 'merchandiser' else category_by end,
+            categories = case when $4::text is null or $4::text is not distinct from category then categories
+                              when $4::text = any(categories) then array[$4::text] || array_remove(categories, $4::text)
+                              else array[$4::text] end,
+            generated = generated and ($4::text is null or $4::text is not distinct from category),
             category = coalesce($4::text, category)
       where id = $1 and confirmed_by is null returning id`, [id, userId, textEn || null, category])
   if (!done.length) {

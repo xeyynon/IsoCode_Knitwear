@@ -11,7 +11,7 @@ import { Card } from '../ui/atoms/Card'
 import { DateWords } from '../ui/atoms/DateWords'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input, Select } from '../ui/atoms/Input'
-import { TextLink } from '../ui/atoms/TextLink'
+import { BackLink } from '../ui/molecules/BackLink'
 import { Field } from '../ui/molecules/Field'
 import { exFactoryRule, isRealDate, MAX_SIZE_ROWS, parseSizes, SIZE_PRESETS, validateOrder, type FormErrors, type OrderForm } from '../orders/orderForm'
 import { MerchandiserShell } from '../ui/templates/MerchandiserShell'
@@ -99,7 +99,7 @@ export default function OrderSetup() {
 
   return (
     <MerchandiserShell title="New order" form>
-        <TextLink className="back" to="/board">← Order board</TextLink>
+        <BackLink to="/board">Order board</BackLink>
         {!opts && !loadError && <Loading label="Loading" />}
         {loadError && <LoadFailed unreachable={loadError.unreachable} message={loadError.message} onRetry={loadOptions} />}
 

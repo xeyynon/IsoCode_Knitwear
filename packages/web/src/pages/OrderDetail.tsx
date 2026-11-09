@@ -10,11 +10,11 @@ import { LOW_CONFIDENCE } from '../orders/visitEntry'
 import { istDate } from '../dates'
 import { pieces } from '../numberFormat'
 import { Button, ButtonLink } from '../ui/atoms/Button'
+import { BackLink } from '../ui/molecules/BackLink'
 import { Card } from '../ui/atoms/Card'
 import { DateWords } from '../ui/atoms/DateWords'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input } from '../ui/atoms/Input'
-import { TextLink } from '../ui/atoms/TextLink'
 import { Field } from '../ui/molecules/Field'
 import { KeyFacts } from '../ui/organisms/KeyFacts'
 import { BentoCell, OrderBento } from '../ui/organisms/OrderBento'
@@ -113,7 +113,7 @@ export default function OrderDetail() {
 
   return (
     <MerchandiserShell title={d ? d.order.po : 'Order'} plainTitle={!!d} form bento>
-        <TextLink className="back" to={boardPath}>← Order board</TextLink>
+        <BackLink to={boardPath}>Order board</BackLink>
         {!d && !error && <Loading label="Loading order" />}
         {error && <LoadFailed unreachable={error.unreachable} message={error.message} onRetry={() => void load()} />}
         {missing && (

@@ -316,3 +316,5 @@ export function formatMaths(r: StageResult, milestone: IsoDate): string {
 export { backSchedule, type Schedule, type ScheduledMilestone, type TemplateStep } from './tna.js'
 
 export { addDays, compareDates, isWorking, isSunday, isDateInWindow, MIN_DATE, MAX_DATE, workingDaysBetween, nthWorkingDayAfter } from './dates.js'
+
+export { composeReasonNote, cleanReasonIds, REASON_IDS, MAX_REASONS, type NoteLang, type ReasonId } from './reasonNote.js'

@@ -266,7 +266,8 @@ export async function topUpDemo(tx: Tx): Promise<void> {
   const resetAi = aiColumns.map((c) => `, "${c}" = default`).join('')
   for (const n of demoNotes()) {
     await tx.query(
-      `update note set text_ta = $2, text_en = $3, category = null, category_by = null, confidence = null, confirmed_by = null, confirmed_at = null${resetAi}
+      // categories and generated go back with the main reason: the table refuses a list that does not start with it (migration 021)
+      `update note set text_ta = $2, text_en = $3, category = null, categories = '{}', generated = false, category_by = null, confidence = null, confirmed_by = null, confirmed_at = null${resetAi}
         where id = $1 and (confirmed_by is not null or ai_status = 'failed')`,
       [n.id, n.language === 'ta' ? n.text : null, n.language === 'en' ? n.text : null])
   }

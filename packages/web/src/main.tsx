@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { getClaims } from './api/session'
 import { applySignInLanguage } from './i18n'
+import { startTheme } from './ui/theme'
 import './fonts'
 import './styles.css'
 
@@ -29,6 +30,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 // A supervisor already signed in on this phone (before language defaults existed, or after a reload) gets the same default.
 applySignInLanguage(getClaims()?.role)
+
+// The saved theme (light unless the person chose dark): theme-init.js applied it before the first paint; this keeps the page and the menu in step.
+startTheme()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

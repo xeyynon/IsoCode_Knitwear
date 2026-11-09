@@ -14,6 +14,8 @@ import { LoadFailed } from '../ui/LoadFailed'
 import { notifyReviewChanged } from '../ui/useReviewCount'
 import { Loading } from '../ui/Loading'
 import { reasonById, type Reason } from '../notes/reasons'
+import { GENERATED_CAPTION, hasSeveral, isGenerated, reasonFieldLabel, reasonsShown, showsReasonList } from '../review/noteReasons'
+import { ReasonList } from '../ui/molecules/ReasonList'
 import { AI_REST_MS, aiLine, defaultMeaning, defaultReason, disagreement, MAX_AI_ROUNDS, reasonSource, showAiTag, waitingForAi, type NoteSuggestion } from '../review/noteAiLogic'
 import { AuthImage } from '../ui/AuthImage'
 import { StatusBadge } from '../ui/StatusBadge'
@@ -27,7 +29,7 @@ import { InlineUndo } from '../ui/molecules/InlineUndo'
 import { afterHide, afterUndo, offersUndo, undoOutcome, type HiddenFrom, type HiddenItem } from '../review/undoLogic'
 
 interface Item { id: string; orderId: string; po: string; buyerName: string; stage: string; status: 'amber' | 'red'; buyerText: string; maths: string; state: string }
-interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null; ai: NoteSuggestion | null }
+interface PendingNote { id: string; po: string; buyerName: string; stage: string; takenOn: string; language: 'ta' | 'en' | null; original: string | null; textEn: string | null; category: string | null; categoryBy: string | null; ai: NoteSuggestion | null; categories?: string[]; generated?: boolean }
 interface VisiblePhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string }
 interface PendingPhoto { id: string; po: string; buyerName: string; stage: string; takenOn: string; bytes: number }
 interface LinkRow { id: string; buyerId: string; buyerName: string; label: string | null; expiresAt: string; revoked: boolean; expired: boolean }
@@ -350,6 +352,8 @@ export default function Review() {
                         <li key={n.id} className="stagecard">
                           <div className="stagecard__top"><b className="mono">{n.po}</b><span className="sub">{n.buyerName} · {cap(n.stage)} · {shortDateIn(n.takenOn, today)}</span></div>
                           {n.original ? <p className="orig" lang={n.language === 'ta' ? 'ta' : 'en'}><span className="lang-tag">{n.language === 'ta' ? 'Tamil' : 'English'}</span> {n.original}</p> : <p className="sub">No words, only a reason.</p>}
+                          {showsReasonList(n) && <ReasonList ids={reasonsShown(n, noteReason[n.id])} reasons={data.reasons} />}
+                          {isGenerated(n) && <p className="sub">{GENERATED_CAPTION}</p>}
                           {line && (
                             <div className={`ai-box ai-box--${line.kind}`} role="status" aria-live="polite">
                               {showAiTag(line.text) && <><span className="lang-tag">AI</span>{' '}</>}
@@ -363,15 +367,16 @@ export default function Review() {
                             </div>
                           )}
                           {n.language === 'ta' && (
-                            <Field label={<>What it means, in English{n.ai?.textEn && meaning[n.id] === undefined ? ' (AI draft, check it against the Tamil)' : ''}</>}>
+                            <Field label={<>What it means, in English{!isGenerated(n) && n.ai?.textEn && meaning[n.id] === undefined ? ' (AI draft, check it against the Tamil)' : ''}</>}>
                               <Textarea rows={2} maxLength={500} value={defaultMeaning(n, meaning[n.id])} onChange={(e) => setMeaning({ ...meaning, [n.id]: e.target.value })} /></Field>
                           )}
-                          <Field label={<>Reason{reasonSource(n, noteReason[n.id])}</>}>
+                          <Field label={<>{reasonFieldLabel(n)}{reasonSource(n, noteReason[n.id])}</>}>
                             <Select value={chosen} onChange={(e) => setNoteReason({ ...noteReason, [n.id]: e.target.value })}>
                               {offersNoReason(n.category) && <option value="">No reason chosen</option>}
                               {data.reasons.map((r) => <option key={r.id} value={r.id}>{r.en}</option>)}
                               {n.category && !data.reasons.some((r) => r.id === n.category) && <option value={n.category}>{reasonById(data.reasons, n.category)?.en}</option>}
                             </Select></Field>
+                          {hasSeveral(n) && <p className="sub">This changes only the main reason. The other reasons stay as the supervisor chose them.</p>}
                           <div className="actions"><Button variant="primary" disabled={busy === n.id} onClick={() => void reviewNote(n, notesHeading)}>Mark as reviewed</Button></div>
                         </li>
                       )

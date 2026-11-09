@@ -251,12 +251,13 @@ describe('the small rules', () => {
   it('parses a note: nothing for empty, an error for a malformed reason', () => {
     expect(parseNote(undefined, reasons)).toBeNull()
     expect(parseNote({ text: ' ' }, reasons)).toBeNull()
-    expect(parseNote({ category: 'power' }, reasons)).toEqual({ text: null, category: 'power', language: null })
+    // a single reason from an older phone is a list of one (migration 021), never a generated note
+    expect(parseNote({ category: 'power' }, reasons)).toEqual({ text: null, category: 'power', categories: ['power'], generated: false, language: null })
     expect(() => parseNote({ category: 5 }, reasons)).toThrow(/Choose a reason/)
   })
   it('a reason that has left the list becomes "other" if the list has it, else is dropped; the count is never refused for it', () => {
-    expect(parseNote({ category: 'nope' }, [...reasons, { id: 'other', en: 'Something else' }])).toEqual({ text: null, category: 'other', language: null })
+    expect(parseNote({ category: 'nope' }, [...reasons, { id: 'other', en: 'Something else' }])).toEqual({ text: null, category: 'other', categories: ['other'], generated: false, language: null })
     expect(parseNote({ category: 'nope' }, reasons)).toBeNull()
-    expect(parseNote({ text: 'late', category: 'nope' }, reasons)).toEqual({ text: 'late', category: null, language: 'en' })
+    expect(parseNote({ text: 'late', category: 'nope' }, reasons)).toEqual({ text: 'late', category: null, categories: [], generated: false, language: 'en' })
   })
 })

@@ -115,7 +115,7 @@ export default function Today() {
             return (
               <StageCard key={`${s.orderId}/${s.stage}`} po={s.po} meta={`${s.style} · ${s.colour}`} stageName={stageLabel(lang, s.stage)}
                 done={n.total} qty={s.qty} today={n.today} dueText={dayMonth(lang, s.plannedEnd)} href={stageHref(s.orderId, s.stage)}
-                labels={{ today: t('today.today'), done: t('today.done'), due: t('today.due'), update: t('today.update') }} />
+                labels={{ done: t('today.done'), due: t('today.due'), update: t('today.update'), addedToday: (n) => t('update.addedToday', { n }), nothingToday: t('update.nothingToday'), toGo: (n) => t('update.toGo', { n }), complete: t('update.stageComplete') }} />
             )
           })}
         </ul>

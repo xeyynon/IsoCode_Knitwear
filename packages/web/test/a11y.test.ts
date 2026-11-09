@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { toggleReason } from '../src/notes/reasons'
+import { toggleReasons } from '../src/notes/reasons'
 
-// The reason picker is a real radio group. A radio that is already on does not fire "change" when it is
-// tapped again, so the tap handler decides: the same reason clears it, another reason replaces it.
+// The reason picker takes one reason or several (the form review, 10 Nov 2026). Each chip is a checkbox: a tap switches only that reason,
+// and the reasons are kept in the order they were tapped. (More cases: reasonsMulti.test.ts and reasonChips.test.tsx.)
 describe('the reason picker toggles in one tap', () => {
-  it('picks a reason when none is chosen', () => expect(toggleReason(null, 'power')).toBe('power'))
-  it('clears the reason when the same one is tapped again', () => expect(toggleReason('power', 'power')).toBeNull())
-  it('replaces the reason when another is tapped', () => expect(toggleReason('power', 'labour')).toBe('labour'))
+  it('picks a reason when none is chosen', () => expect(toggleReasons([], 'power')).toEqual(['power']))
+  it('clears the reason when the same one is tapped again', () => expect(toggleReasons(['power'], 'power')).toEqual([]))
+  it('adds another reason beside the first instead of replacing it', () => expect(toggleReasons(['power'], 'labour')).toEqual(['power', 'labour']))
 })

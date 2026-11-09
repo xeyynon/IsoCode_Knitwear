@@ -2,6 +2,7 @@
 // The rule from the brief: the original sits beside the translation, the merchandiser can change the reason, and nothing is
 // pre-chosen for them when the AI is unsure, failed or is switched off.
 import { reasonById, type Reason } from '../notes/reasons'
+import { generatedMeaning, isGenerated, reasonsOf } from './noteReasons'
 
 export interface NoteSuggestion {
   status: 'suggested' | 'unsure' | 'failed'
@@ -21,6 +22,10 @@ export interface NoteForAi {
   category: string | null
   categoryBy: string | null
   ai: NoteSuggestion | null
+  /** The form review: every reason the supervisor tapped, in order, and whether the note was written from them (no AI needed). */
+  categories?: string[]
+  generated?: boolean
+  textEn?: string | null
 }
 
 export const MAX_AI_ATTEMPTS = 3
@@ -31,7 +36,7 @@ export const AI_REST_MS = 60_000
 
 /** Notes the page should still ask the server about: words to read and no answer yet (or a failure that may be tried again). */
 export const waitingForAi = (n: NoteForAi): boolean =>
-  !!n.original && (n.ai === null || (n.ai.status === 'failed' && n.ai.attempts < MAX_AI_ATTEMPTS))
+  !isGenerated(n) && !!n.original && (n.ai === null || (n.ai.status === 'failed' && n.ai.attempts < MAX_AI_ATTEMPTS))
 
 const pct = (c: number | null): string => `${Math.round((c ?? 0) * 100)}%`
 
@@ -55,6 +60,7 @@ export type AiLine =
  */
 export function aiLine(n: NoteForAi, reasons: Reason[], aiEnabled: boolean, state: { gaveUp?: boolean; message?: string | null } = {}): AiLine | null {
   if (!n.original) return null
+  if (isGenerated(n)) return null   // written from the supervisor's choices: nothing to ask, nothing to be unsure about
   if (!n.ai) {
     if (!aiEnabled) return { kind: 'off', text: 'AI suggestions are off on this server. Read the note and choose the reason yourself.' }
     if (state.message) return { kind: 'failed', text: state.message, detail: null }
@@ -96,12 +102,15 @@ export function defaultReason(n: NoteForAi, picked: string | undefined): string 
 /** The English meaning box starts with the AI's translation of a Tamil note (sure or unsure: it is a draft the person edits). */
 export function defaultMeaning(n: NoteForAi, typed: string | undefined): string {
   if (typed !== undefined) return typed
+  if (isGenerated(n)) return n.language === 'ta' ? generatedMeaning(n) : ''   // the composed English sentence, not an AI draft
   return n.language === 'ta' && n.ai && n.ai.status !== 'failed' ? n.ai.textEn ?? '' : ''
 }
 
 /** When the supervisor's tap and a sure AI suggestion differ, say so: one of them is wrong and a person should look. */
 export function disagreement(n: NoteForAi, reasons: Reason[]): string | null {
+  if (isGenerated(n)) return null
   if (!n.category || n.categoryBy !== 'supervisor' || !n.ai?.category || n.ai.status === 'failed' || n.ai.category === n.category) return null
+  if (reasonsOf(n).includes(n.ai.category)) return null   // the AI picked one of the reasons the supervisor tapped: no clash
   const s = reasonById(reasons, n.category)?.en ?? n.category
   const a = reasonById(reasons, n.ai.category)?.en ?? n.ai.category
   return `The supervisor chose "${s}", but the AI reads the note as "${a}".`

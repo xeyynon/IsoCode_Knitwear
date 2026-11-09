@@ -37,7 +37,7 @@ describe('no status tint on a card, a tile or a row', () => {
   })
   it('the guard reads the stylesheets it should (a broken path would make it pass for nothing)', () => {
     const files = new Set(rules.map((r) => r.file))
-    for (const f of ['styles.css', 'pages/Board.css', 'ui/organisms/StatusTiles.css', 'ui/organisms/StageCard.css', 'ui/molecules/ActionBar.css']) expect(files.has(f), f).toBe(true)
+    for (const f of ['styles.css', 'pages/Board.css', 'ui/organisms/StatusTiles.css', 'ui/organisms/StageCard.css', 'ui/organisms/UpdateHero.css', 'ui/molecules/ActionBar.css']) expect(files.has(f), f).toBe(true)
   })
 })
 

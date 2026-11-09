@@ -1,0 +1,9 @@
+/* ReasonChips (ui/molecules/ReasonChips.tsx). The chip look itself (.reason, .reason__pill) stays in styles.css, where the narrow-screen rules
+   of the Update screen already refer to it. Tokens only. */
+.reasons__count { margin: var(--space-2) 0 0; }
+.reasons__count:empty { margin: 0; }   /* nothing to say: no space taken (the line stays in the page so a screen reader hears it appear) */
+
+/* The quiet help under the note on Update: where the text came from, what to add, and "Rewrite from my choices". */
+.notehelp { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-3); }
+.notehelp:empty { margin: 0; }
+.notehelp .sub { margin: 0; }

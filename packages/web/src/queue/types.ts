@@ -25,7 +25,7 @@ export interface QueuedEvent {
   /** Who wrote it (the signed-in account). An update is only ever sent under its own author's sign-in. */
   owner?: string
   /** A reason and/or a few words about why the stage is slow. Sent with the update in the same request. */
-  note?: { text?: string; category?: string }
+  note?: { text?: string; category?: string; categories?: string[] }
 }
 
 export type NewEvent = Pick<QueuedEvent, 'orderId' | 'stage' | 'date' | 'qty' | 'note'> & { photo?: Blob }

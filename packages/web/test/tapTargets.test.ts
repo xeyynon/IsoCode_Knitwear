@@ -56,12 +56,12 @@ describe('the full-width primary button keeps its 56 px on a phone', () => {
 })
 
 describe('touch targets on a coarse pointer', () => {
-  for (const sel of ['.btn', '.chip', '.btn--small', '.link', '.back', '.po-link', 'summary']) {
+  for (const sel of ['.btn', '.chip', '.btn--small', '.link', '.po-link', 'summary']) {
     it(`raises ${sel} to the tap minimum`, () => {
       expect(effective(sel, 'min-height')).toBe('var(--tap-min)')
     })
   }
-  for (const sel of ['.link', '.back', '.po-link']) {
+  for (const sel of ['.link', '.po-link']) {
     it(`centres the text of ${sel} in its taller box`, () => {
       expect(effective(sel, 'display')).toBe('inline-flex')
     })

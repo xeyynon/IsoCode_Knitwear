@@ -10,10 +10,20 @@
 .stagetile__prog { display: grid; gap: var(--space-2); margin-top: var(--space-1); }
 .stagetile__nums { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-2); }
 .stagetile__label { color: var(--muted); font-size: 0.9375rem; font-family: inherit; }
-.stagetile__big { font-size: 1.75rem; line-height: 1.1; }
+.stagetile__big { font-size: 2rem; line-height: 1.1; }
 .stagetile__of { color: var(--muted); font-size: 1.0625rem; }
 .stagetile__pct { margin-left: auto; font-weight: 700; font-size: 1.0625rem; }
-.stagetile__today { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--muted); font-size: 1.0625rem; }
-.stagetile__today b { color: var(--ink); font-size: 1.25rem; }
-/* something was entered today: a tick and the action colour, so it is not colour alone */
+/* one line under the bar: what today added (left) and what is still to go (right, quieter) */
+.stagetile__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+.stagetile__today { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--muted); font-size: 1rem; }
+/* something was added today: a check and the action colour, so it is not colour alone */
 .stagetile__today--done { color: var(--accent); font-weight: 600; }
+.stagetile__today svg { flex: none; }
+.stagetile__togo { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+
+/* At 200% zoom or the largest phone font (195 px wide) a Tamil card was 9 px wider than its list: the single grid column could not shrink
+   below the Update button's label plus padding, and a long Tamil word sat on one line. The column may shrink, the label may wrap, and a
+   long word may break (final bug cycle: npm run ux, "content past its own box at 195 px"). */
+.stage.stagetile { grid-template-columns: minmax(0, 1fr); }
+.stagetile .stage__go { white-space: normal; padding-inline: var(--space-2); }
+.stagetile__today, .stagetile__togo { min-width: 0; overflow-wrap: anywhere; }

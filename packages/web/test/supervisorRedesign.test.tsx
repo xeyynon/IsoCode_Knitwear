@@ -55,7 +55,10 @@ describe('PieceBar', () => {
   })
 })
 
-const labels = { today: 'Today', done: 'Done', due: 'Due', update: 'Update' }
+const labels = {
+  done: 'Done', due: 'Due', update: 'Update',
+  addedToday: (n: string) => `${n} added today`, nothingToday: 'Nothing sent yet today', toGo: (n: string) => `${n} to go`, complete: 'Stage complete',
+}
 describe('StageCard', () => {
   const card = () => render(
     <MemoryRouter>
@@ -79,11 +82,11 @@ describe('StageCard', () => {
     expect(t).toContain('38%')
     expect(t).toContain('11 Nov')
   })
-  it('marks a stage that has an update today with a tick, and one without as 0', () => {
+  it('marks a stage that has an update today with a tick, and one without in neutral words', () => {
     expect(card().querySelector('.stagetile__today--done')).not.toBeNull()
     const none = render(<MemoryRouter><StageCard po="P" meta="m" stageName="Sewing" done={0} qty={10} today={0} dueText="1 Nov" href="/u" labels={labels} /></MemoryRouter>).container
     expect(none.querySelector('.stagetile__today--done')).toBeNull()
-    expect(none.textContent).toContain('Today')
+    expect(none.textContent).toContain('Nothing sent yet today')   // the full set of states is in finishedArea.test.tsx
   })
 })
 
@@ -99,12 +102,14 @@ describe('TodayHero', () => {
 })
 
 describe('UpdateHero', () => {
-  it('names the order and the stage, and shows today so far and what is left in big plain numbers', () => {
-    const { container } = render(<UpdateHero po="B-PO-88240" meta="tee · navy · due 11 Nov" done={1750} qty={4550} todaySoFar={0} left={2800} labels={{ todaySoFar: 'Today so far', left: 'Left' }} />)
+  it('names the order and the stage, and leads with what is done in big plain numbers, then what is to go', () => {
+    const { container } = render(<UpdateHero po="B-PO-88240" meta="tee · navy · due 11 Nov" done={1750} qty={4550} todaySoFar={0} left={2800}
+      labels={{ done: 'Done', addedToday: (n) => `${n} added today`, nothingToday: 'Nothing sent yet today', toGo: (n) => `${n} to go`, complete: 'Stage complete', share: (p) => `${p} done` }} />)
     expect(container.querySelector('h1')?.textContent).toBe('B-PO-88240')
-    expect(container.textContent).toContain('Today so far')
-    expect(container.textContent).toContain('2,800')
-    expect(container.textContent).toContain('38%')
+    expect(container.textContent).toContain('Done')
+    expect(container.textContent).toContain('1,750')
+    expect(container.textContent).toContain('2,800 to go')
+    expect(container.textContent).toContain('38%')   // every state: finishedArea.test.tsx
   })
 })
 
@@ -121,7 +126,8 @@ describe('the two pages use them', () => {
     expect(today).toMatch(/<TodayHero[\s\S]*?<SyncChip/)
   })
   it('Update: the way back and the sync chip share one row (a second row pushed the number field behind the bar with the keyboard up)', () => {
-    expect(update).toMatch(/<div className="update__bar">\s*<TextLink className="back back--arrow"[\s\S]*?<\/TextLink>\s*\{queue && state && <SyncChip/)
+    // (through the shared BackLink, compact: only the box on a narrow screen; backLink.test.tsx)
+    expect(update).toMatch(/<div className="update__bar">\s*<BackLink to="\/today" compact>[\s\S]*?<\/BackLink>\s*\{queue && state && <SyncChip/)
     expect(read('../src/styles.css')).toMatch(/\.update__bar\s*\{[^}]*flex-wrap:\s*wrap/)
   })
   it('Update: the bottom bar stays inside the card (it takes its padding and edges from the card\'s --card-pad; outside a card it lost both and Send touched the screen edge)', () => {

@@ -45,21 +45,21 @@ describe('the built-in reason list', () => {
 
 describe('what is sent for a note', () => {
   it('sends nothing for an empty note, which is the common case', () => {
-    expect(noteToSend('', null)).toBeUndefined()
-    expect(noteToSend('   \t ', null)).toBeUndefined()
+    expect(noteToSend('', [])).toBeUndefined()
+    expect(noteToSend('   \t ', [])).toBeUndefined()
   })
-  it('sends a reason alone, words alone, or both', () => {
-    expect(noteToSend('', 'power')).toEqual({ category: 'power' })
-    expect(noteToSend('late fabric', null)).toEqual({ text: 'late fabric' })
-    expect(noteToSend('late fabric', 'material')).toEqual({ text: 'late fabric', category: 'material' })
+  it('sends a reason alone, words alone, or both (the reasons travel as a list, the first being the main one)', () => {
+    expect(noteToSend('', ['power'])).toEqual({ category: 'power', categories: ['power'] })
+    expect(noteToSend('late fabric', [])).toEqual({ text: 'late fabric' })
+    expect(noteToSend('late fabric', ['material'])).toEqual({ text: 'late fabric', category: 'material', categories: ['material'] })
   })
   it('tidies spaces and never sends more than the server allows', () => {
-    expect(noteToSend('  a   b\t\tc ', null)).toEqual({ text: 'a b c' })
-    expect(noteToSend('x'.repeat(900), null)!.text).toHaveLength(MAX_NOTE)
+    expect(noteToSend('  a   b\t\tc ', [])).toEqual({ text: 'a b c' })
+    expect(noteToSend('x'.repeat(900), [])!.text).toHaveLength(MAX_NOTE)
   })
   it('keeps Tamil text exactly as typed', () => {
     const t = 'இன்று மூன்று இயந்திரங்கள் வேலை செய்யவில்லை'
-    expect(noteToSend(t, 'machine')).toEqual({ text: t, category: 'machine' })
+    expect(noteToSend(t, ['machine'])).toEqual({ text: t, category: 'machine', categories: ['machine'] })
   })
 })
 
@@ -103,6 +103,26 @@ describe('a note travels with its update through the offline queue', () => {
     expect(store.items[0]!.note).toEqual({ category: 'labour' })
     await syncQueue(store, s.send)
     expect(s.seen[0].note).toEqual({ category: 'labour' })
+  })
+
+  it('carries every reason, in the order tapped, to the server; an older queued update with one reason alone still sends exactly as before', async () => {
+    const store = memoryStore(); const s = server()
+    await store.add(item({ clientUuid: 'many', note: { category: 'machine', categories: ['machine', 'labour', 'material'] } }))
+    await store.add(item({ clientUuid: 'old', note: { text: 'power cut', category: 'power' } }))   // queued by a build that knew one reason
+    await syncQueue(store, s.send)
+    expect(s.seen.find((e) => e.clientUuid === 'many').note).toEqual({ category: 'machine', categories: ['machine', 'labour', 'material'] })
+    expect(s.seen.find((e) => e.clientUuid === 'old').note).toEqual({ text: 'power cut', category: 'power' })
+    expect('categories' in s.seen.find((e) => e.clientUuid === 'old').note).toBe(false)
+  })
+
+  it('FORM: the reasons survive being kept offline (the queue stores the whole note)', async () => {
+    const store = memoryStore(true); const s = server(); let online = false
+    const ctl = createQueueController({ store, isOnline: () => online, send: s.send, uuid: (() => { let n = 0; return () => `m${++n}` })() })
+    await ctl.enqueue({ orderId: 'o1', stage: 'sewing', date: '2026-11-04', qty: 60, note: { text: 'x', category: 'power', categories: ['power', 'absence'] } })
+    expect(store.items[0]!.note?.categories).toEqual(['power', 'absence'])
+    online = true
+    await ctl.syncNow(); await ctl.syncNow()
+    expect(s.seen[0].note.categories).toEqual(['power', 'absence'])
   })
 
   it('travels alongside a photo', async () => {

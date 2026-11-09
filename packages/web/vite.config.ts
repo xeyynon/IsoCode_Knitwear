@@ -28,10 +28,10 @@ export default defineConfig(({ mode, command }) => {
           // Fonts too (woff2 only: the .woff files the font CSS also names are for browsers that
           // cannot read woff2, which no browser able to run the app is), so Tamil has a font offline.
           const files = Object.keys(bundle).filter((f) => /\.(js|css|woff2)$/.test(f))
-          // The manifest and the home-screen icons (public/) are copied to the output after the bundle is made, so they are not in it: listed here from the folder.
+          // The manifest, the theme script and the home-screen icons (public/) are copied to the output after the bundle is made, so they are not in it: listed here from the folder.
           // They are part of the build's fingerprint, so a changed icon ships a new worker.
           const pub = fileURLToPath(new URL('./public/', import.meta.url))
-          files.push('manifest.webmanifest', ...readdirSync(pub + 'icons').filter((f) => f.endsWith('.png')).sort().map((f) => `icons/${f}`))
+          files.push('manifest.webmanifest', 'theme-init.js', ...readdirSync(pub + 'icons').filter((f) => f.endsWith('.png')).sort().map((f) => `icons/${f}`))
           this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify(files) })
           const version = createHash('sha256').update(JSON.stringify(files)).digest('hex').slice(0, 12)
           const sw = readFileSync(fileURLToPath(new URL('./public/sw.js', import.meta.url)), 'utf8')
@@ -39,7 +39,8 @@ export default defineConfig(({ mode, command }) => {
         },
       },
     ],
-    server: { port: 5173, proxy: { '/api': 'http://localhost:8787' } },
+    // API_TARGET lets a second session run its own demo API on another port (two sessions on one machine fight over 8787).
+    server: { port: 5173, proxy: { '/api': process.env.API_TARGET ?? 'http://localhost:8787' } },
     // The preview server (the browser tests, npm run e2e) sends the policy the hosted build sends, so a violation shows up before a deploy.
     preview: { port: 4173, headers: { 'Content-Security-Policy': csp({ localApi: true }) } },
   }

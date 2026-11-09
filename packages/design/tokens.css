@@ -1,6 +1,7 @@
-/* Design tokens. One light theme (floor screens are
-   read in bright light). Indigo is the only action colour; red, amber and green
-   are reserved for status. Contrast pairs are checked by scripts/check_contrast.mjs. */
+/* Design tokens. LIGHT is the default (floor screens are read in bright light). DARK is a choice a person makes in the menu and the
+   device keeps: it is the second block, under :root[data-theme='dark'], and nothing reads the device's own dark setting.
+   The violet is the only action colour; red, amber and green are reserved for status. Contrast pairs of BOTH themes are checked by
+   scripts/check_contrast.mjs, and every light colour token must have a dark value (packages/web/test/darkTheme.test.ts). */
 :root {
   --ink: #1F2328;
   --muted: #5A5670;
@@ -48,10 +49,50 @@
   --scrim: rgb(31 35 40 / .5);             /* behind a dialog */
   --scrim-strong: rgb(31 35 40 / .6);      /* behind the full-size photo */
 
-  /* The product is light only (floor screens are read in bright light). Saying so stops a phone browser's "dark mode for
-     websites" from recolouring red, amber and green, which must mean the same thing on every phone. */
+  /* Light is the default (floor screens are read in bright light). Saying so stops a phone browser's "dark mode for
+     websites" from recolouring red, amber and green, which must mean the same thing on every phone. Dark is only ever
+     chosen by the person (the block below), never taken from the device. */
   color-scheme: light;
 }
 @media (pointer: coarse) {
   :root { --tap-min: 48px; }
+}
+
+/* The dark theme: chosen in the menu, kept on the device (localStorage orders.theme), applied by an attribute on <html> (public/theme-init.js
+   before the first paint, src/ui/theme.ts after). Same violet identity, lighter where it sits on dark. Status stays an icon, a word and a
+   colour: each status colour is a lighter variant that keeps 4.5:1 for text and 3:1 for marks on the dark page and cards (measured by
+   scripts/check_contrast.mjs). Grey stays a blue-grey and is never green. No tinted fills: the -tint tokens exist for parity and for the
+   contrast check only. */
+:root[data-theme='dark'] {
+  --ink: #EDEBF5;
+  --muted: #B2AEC6;
+  --border: #8C88A6;
+  --page: #15141B;
+  --grid-line: rgb(140 136 166 / .08);
+  --surface: #1E1C27;
+  --accent: #A99AE6;        /* the violet, lightened to stand on dark */
+  --accent-soft: #2B2742;
+  --status-red: #F28B57;
+  --status-red-tint: #3B2218;
+  --status-red-text: #FFA177;
+  --status-amber: #E3A83F;
+  --status-amber-tint: #37290F;
+  --status-amber-text: #F0C260;
+  --status-green: #5CC797;
+  --status-grey: #A8AEBA;
+
+  --shadow-menu: 0 6px 20px rgb(0 0 0 / .5);
+  --shadow-dialog: 0 12px 32px rgb(0 0 0 / .6);
+  --shadow-bar: 0 -4px 12px rgb(0 0 0 / .4);
+
+  --disabled-bg: #2B2A35;
+  --disabled-ink: #A9A5BD;
+
+  --on-accent: #15141B;                    /* dark text on the lightened violet */
+  --on-ink: #15141B;                       /* dark text on the (now light) ink */
+  --border-soft: rgb(140 136 166 / .30);
+  --scrim: rgb(0 0 0 / .62);
+  --scrim-strong: rgb(0 0 0 / .78);
+
+  color-scheme: dark;                      /* native controls (inputs, selects, the date picker, scrollbars) draw dark */
 }

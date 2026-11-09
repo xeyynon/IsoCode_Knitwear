@@ -20,6 +20,8 @@ const WEB = process.env.WEB ?? 'http://localhost:5173'
 // Optional: a different API than the one the web app proxies to (API=http://127.0.0.1:8788). The demo API's sign-in
 // lockout runs on its fixed clock and never lifts, so a spare API is the way out of a locked one.
 const API = process.env.API
+// THEME=dark walks every screen with the dark theme chosen (light is the default and the other way to run it).
+const THEME = process.env.THEME === 'dark' ? 'dark' : 'light'
 const MERCH = { email: 'm@example.test', password: 'correct horse battery' }
 const SUP = { phone: '98765 43210', pin: '4321' }
 const AXE = fs.readFileSync(path.join(ROOT, 'node_modules', 'axe-core', 'axe.min.js'), 'utf8')
@@ -38,7 +40,8 @@ const cspViolations: string[] = []
 let screens = 0
 
 async function up(): Promise<void> {
-  try { if ((await fetch(`${WEB}/api/health`)).ok) return } catch { /* handled below */ }
+  // With API set, the walk reaches the API there (the web app's /api calls are rerouted to it), so that is the address to ask.
+  try { if ((await fetch(`${API ?? WEB}/api/health`)).ok && (await fetch(WEB)).ok) return } catch { /* handled below */ }
   console.error(`The app is not running at ${WEB}. Start it first:\n  DEMO_DATA=fixture npm run dev:api\n  npm run dev -w @isocode/web`)
   process.exit(2)
 }
@@ -46,6 +49,9 @@ async function up(): Promise<void> {
 /** Run axe on what is on screen now. WCAG 2.0 to 2.2 A and AA plus axe's best-practice rules; nothing is switched off. */
 async function check(page: Page, screen: string, only?: string): Promise<void> {
   await page.waitForTimeout(400)   // transitions and fonts settle, so contrast is measured on the final colours
+  // A THEME=dark walk that is secretly light proves nothing: say so loudly if the page is not in the theme asked for.
+  const onPage = await page.evaluate(() => (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'))
+  if (onPage !== THEME) { console.error(`${screen}: the page is ${onPage}, the walk asked for ${THEME}`); process.exit(1) }
   // Evaluated through the debugging channel, not as an inline <script>: the app's Content-Security-Policy (when WEB is a preview server) rightly blocks an inline script.
   if (!(await page.evaluate(() => 'axe' in window))) await page.evaluate(AXE)
   const result = await page.evaluate(async (only) => {
@@ -79,6 +85,9 @@ async function newPage(browser: Browser, device: Device, lang: 'en' | 'ta' = 'en
   if (API) await ctx.route(`${WEB}/api/**`, async (route) => route.fulfill({ response: await route.fetch({ url: route.request().url().replace(WEB, API) }) }))
   await ctx.clock.setFixedTime(await apiNow())
   await ctx.addInitScript((l) => { try { window.localStorage.setItem('orders.lang', l) } catch { /* private window */ } }, lang)
+  // THEME=dark: every screen is walked as a person who chose the dark theme (the saved choice, exactly as the menu keeps it), so the
+  // contrast of the dark set is measured on real screens, not only on token pairs.
+  if (THEME === 'dark') await ctx.addInitScript(() => { try { window.localStorage.setItem('orders.theme', 'dark') } catch { /* private window */ } })
   await ctx.addInitScript(() => { document.addEventListener('securitypolicyviolation', (e) => console.error('Content Security Policy: ' + e.violatedDirective + ' blocked ' + e.blockedURI)) })
   const page = await ctx.newPage()
   page.on('console', (m) => { if (m.type() === 'error' && /Content Security Policy|violates the following/i.test(m.text())) cspViolations.push(m.text().slice(0, 200)) })

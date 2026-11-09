@@ -66,7 +66,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .appbar--nav { flex-wrap: wrap; }   /* the merchandiser's bar: on a phone the tabs take a second row (ui/molecules/NavTabs.css) */
 .menu { position: relative; }
 .menu__popover { position: absolute; right: 0; top: calc(100% + 6px); min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: var(--shadow-menu); z-index: 20; }
-.menu__item { display: block; width: 100%; min-height: var(--tap-min); text-align: left; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.menu__item { display: block; width: 100%; min-height: var(--tap-min); text-align: left; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; cursor: pointer; white-space: nowrap; }   /* a Tamil label (the theme item) stays on one line; the menu grows to fit it */
 .menu__item:hover, .menu__item:focus-visible { background: var(--page); }
 .menu__sep { height: 1px; background: var(--border); opacity: .4; margin: 4px 0; }
 
@@ -194,16 +194,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .stage--skeleton { display: grid; gap: var(--space-3); border-color: var(--border-soft); }
 .stage__go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .finished { margin-top: 16px; color: var(--muted); }
-.back { display: inline-block; margin-bottom: 12px; }
 .update__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; margin-bottom: var(--space-2); }
-.update__bar .back, .update__bar .syncbar { margin-bottom: 0; }
-/* On a phone the way back is a round arrow (48 px); its words stay for a screen reader and for scripts, and the sync chip fits beside it in Tamil. */
-@media (max-width: 479px) {
-  .back--arrow { flex: none; width: var(--tap-min); min-height: var(--tap-min); padding: 0; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-m); text-decoration: none; color: var(--ink); background: var(--surface); }   /* the same shape as the menu button beside it */
-  .back--arrow .back__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-}
+.update__bar .backlink, .update__bar .syncbar { margin-bottom: 0; }
 
-.back__arrow { vertical-align: -4px; }
 .input--big { min-height: var(--tap-primary); font-size: 36px; font-weight: 700; line-height: 1.2; text-align: center; border-width: 2px; }   /* the figure typed is the point of the screen (phase 8A) */
 /* The supervisor's sign-in fields are the first thing used each day: 56 px. Two classes so no later rule can lower it. */
 .input.input--tall { min-height: var(--tap-primary); }
@@ -498,7 +491,7 @@ summary { cursor: pointer; min-height: 32px; display: flex; align-items: center;
 .kbd { display: inline-block; min-width: 1.8em; padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--page); color: var(--ink); font: inherit; font-weight: 600; text-align: center; }
 /* ---- touch: text links and summaries are targets too; last, so .back and summary above don't win */
 @media (pointer: coarse) {
-  .link, .back, .po-link { min-height: var(--tap-min); display: inline-flex; align-items: center; }
+  .link, .po-link { min-height: var(--tap-min); display: inline-flex; align-items: center; }
   summary { min-height: var(--tap-min); }
 }
 /* ---- touch: a note box has no resize grip on a phone (a corner a thumb cannot use) */

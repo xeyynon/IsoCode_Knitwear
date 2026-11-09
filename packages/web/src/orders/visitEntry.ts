@@ -58,7 +58,7 @@ export function checkVisitEntry(
   if (ctx.left !== undefined && qty > ctx.left && !ctx.confirmed) {
     return { ok: false, field: 'pieces', confirm: true, error: `That is more than the ${pieces(ctx.left)} pieces left on ${stage}. Press Add anyway if the number is right.` }
   }
-  const note = noteToSend(f.note, null)
+  const note = noteToSend(f.note, [])
   return { ok: true, body: { clientUuid: ctx.clientUuid, orderId: ctx.orderId, stage: f.stage, date: f.date, qty, ...(note ? { note } : {}) } }
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Measures WCAG contrast for the colour pairs in packages/design/tokens.css.
+// Measures WCAG contrast for the colour pairs in packages/design/tokens.css, for the light theme (the default) AND the dark theme
+// (the opt-in set under :root[data-theme='dark']): every pair is checked in both.
 // Text pairs need 4.5:1; marks (icons, borders, status shapes) need 3:1.
 // Fails if a pair is under its threshold. Also reports how close red/amber/green
 // are to each other, because status must never rely on colour alone.
@@ -8,7 +9,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const css = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'design', 'tokens.css'), 'utf8')
-const vars = Object.fromEntries([...css.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\b/gi)].map((m) => [m[1], m[2]]))
+const parse = (text) => Object.fromEntries([...text.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\b/gi)].map((m) => [m[1], m[2]]))
+// The dark block is cut out first: it must never overwrite the light values. The dark theme is the light tokens overridden by it.
+const DARK = /:root\[data-theme='dark'\]\s*\{([^}]*)\}/
+const darkBlock = DARK.exec(css)
+const lightVars = parse(css.replace(DARK, ''))
+const darkVars = darkBlock ? { ...lightVars, ...parse(darkBlock[1]) } : null
 
 const lum = (hex) => {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
@@ -46,20 +52,34 @@ const PAIRS = [
   ['on-accent', 'accent', 4.5, 'text on a primary button and the selected tab'],
   ['on-ink', 'ink', 4.5, 'text on a selected chip, a selected reason and a count'],
   ['on-accent', 'status-red', 3, 'the ! inside the red triangle (a mark)'],
+  // The same colours as they are really used: on the page behind the cards, and the status stamp's text on a card.
+  ['accent', 'page', 4.5, 'links and the action colour as text on the page'],
+  ['border', 'page', 3, 'borders on the page'],
+  ['status-red-text', 'surface', 4.5, 'red stamp text on a card'],
+  ['status-red-text', 'page', 4.5, 'red stamp text on the page'],
+  ['status-amber-text', 'surface', 4.5, 'amber stamp text on a card'],
+  ['status-amber-text', 'page', 4.5, 'amber stamp text on the page'],
+  ['status-green', 'page', 4.5, 'green stamp text on the page'],
+  ['status-grey', 'page', 4.5, 'grey stamp text on the page'],
 ]
 
 let bad = 0
-for (const [fg, bg, min, what] of PAIRS) {
-  if (!vars[fg] || !vars[bg]) { console.error(`FAIL missing token ${!vars[fg] ? fg : bg}`); bad++; continue }
-  const r = ratio(vars[fg], vars[bg])
-  const ok = r >= min
-  if (!ok) bad++
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${r.toFixed(2).padStart(5)}:1 (min ${min})  ${fg} on ${bg}  ${what}`)
+if (!darkVars) { console.error("FAIL no dark token block (:root[data-theme='dark'])"); bad++ }
+const themes = [['light', lightVars], ...(darkVars ? [['dark', darkVars]] : [])]
+for (const [theme, vars] of themes) {
+  const tag = theme === 'dark' ? ' [dark]' : ''
+  for (const [fg, bg, min, what] of PAIRS) {
+    if (!vars[fg] || !vars[bg]) { console.error(`FAIL missing token ${!vars[fg] ? fg : bg}${tag}`); bad++; continue }
+    const r = ratio(vars[fg], vars[bg])
+    const ok = r >= min
+    if (!ok) bad++
+    console.log(`${ok ? 'ok  ' : 'FAIL'} ${r.toFixed(2).padStart(5)}:1 (min ${min})  ${fg} on ${bg}  ${what}${tag}`)
+  }
 }
 
 const sep = [['status-red', 'status-amber'], ['status-amber', 'status-green'], ['status-red', 'status-green']]
 console.log('\nSeparation between status marks (near 1:1 means they merge in greyscale; icon + word are required):')
-for (const [a, b] of sep) console.log(`     ${ratio(vars[a], vars[b]).toFixed(2).padStart(5)}:1  ${a} vs ${b}`)
+for (const [theme, vars] of themes) for (const [a, b] of sep) console.log(`     ${ratio(vars[a], vars[b]).toFixed(2).padStart(5)}:1  ${a} vs ${b}${theme === 'dark' ? ' [dark]' : ''}`)
 
 if (bad) { console.error(`\ncheck_contrast: ${bad} pair(s) failed`); process.exit(1) }
 console.log('\ncheck_contrast: ok')

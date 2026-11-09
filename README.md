@@ -84,6 +84,13 @@ The order's colour is its worst stage. Thresholds live in a settings table. Ever
 
 *A deliberate departure from the first written spec:* slipping past a stage milestone is not red by itself, because otherwise the amber band could never be reached. Red needs the order to be projected past ex-factory. This is recorded as a decision and should be confirmed with the business.
 
+## Themes: light by default, dark by choice
+The app is **light by default**: the floor reads these screens in bright daylight, and red, amber and green must look the same on every phone. **Dark is a choice a person makes** in the app menu ("Dark theme" / "Light theme"); the device keeps it (`localStorage` `orders.theme`) and it applies as `data-theme="dark"` on `<html>`. The device's own dark setting is deliberately never read, so a phone's "dark mode for websites" cannot recolour the status colours.
+
+- **One token file, two sets:** `packages/design/tokens.css` holds the light set and, under `:root[data-theme='dark']`, a dark value for every colour token (a test enforces the parity). The dark violet is lightened to stand on dark; each status colour has a lighter variant that keeps 4.5:1 for text and 3:1 for marks on the dark page and cards. Grey stays a blue-grey and is never green, and status is still an icon, a word and a colour.
+- **No flash:** the Content-Security-Policy allows no inline script, so `public/theme-init.js` (a small classic script, kept by the service worker) applies the saved theme before the first paint, and `src/ui/theme.ts` keeps the page and the menu in step afterwards.
+- **Checked in both:** `npm run check` measures every contrast pair in both sets, and `THEME=dark npm run a11y` walks all 48 screens with the dark theme chosen. Numbers and pictures: [`audit/dark/`](audit/dark/README.md).
+
 ## Status
 
 **Live on free plans and working end to end, but not yet piloted on a real factory floor.** The calculation engine, database, API, the merchandiser's board, order setup and detail, the review gate, the buyer's read-only view, photos, notes, pilot setup, and the supervisor's offline daily update all work and are covered by automated tests (2,693 passing in `npm test`, plus a real Postgres 16 run in CI). AI suggestions for notes from the floor (an English meaning and a reason, and what happens when the AI is unsure or wrong) are built and tested; voice notes are **not built**. A demo runs at **https://isocode-knitwear.vercel.app** (free plans; how it is deployed and the demo logins: [deployment.md](deployment.md)).

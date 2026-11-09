@@ -95,13 +95,18 @@ describe('status words', () => {
 
 describe('saved message', () => {
   it('says "1 piece", never "1 pieces"', () => {
-    expect(savedText('en', 1, false, false)).toBe('Saved 1 piece.')
-    expect(savedText('en', 350, true, true)).toBe('Saved 350 pieces with a photo and a note.')
-    expect(savedText('en', 0, false, false)).toBe('Saved 0 pieces.')
+    // The form review: the saved line says what the supervisor contributed to today, plainly and without fuss.
+    expect(savedText('en', 1, false, false)).toBe('Saved: 1 piece added to today.')
+    expect(savedText('en', 350, true, true)).toBe('Saved: 350 pieces added to today, with a photo and a note.')
+  })
+  it('a day with no output is saved as exactly that, not as "0 pieces added"', () => {
+    expect(savedText('en', 0, false, false)).toBe('Saved: no output reported today.')
+    expect(savedText('en', 0, false, true)).toBe('Saved: no output reported today, with a note.')
   })
   it('a Tamil supervisor reads it in Tamil', () => {
-    expect(savedText('ta', 1, false, false)).not.toMatch(/Saved|piece/)
+    expect(savedText('ta', 1, false, false)).not.toMatch(/Saved|piece|added/)
     expect(savedText('ta', 5, true, false)).toContain('5')
+    expect(savedText('ta', 0, false, false)).not.toMatch(/[A-Za-z]/)
   })
 })
 

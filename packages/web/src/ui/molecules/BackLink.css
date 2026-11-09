@@ -1,0 +1,9 @@
+/* BackLink (ui/molecules/BackLink.tsx): the one way back, on every page. Tokens only. */
+.backlink { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--tap-min); margin-bottom: var(--space-3); color: var(--ink); font-weight: 600; text-decoration: none; }
+.backlink__box { display: inline-grid; place-items: center; flex: none; width: var(--tap-min); height: var(--tap-min); box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); }
+.backlink:hover .backlink__box { background: var(--page); }
+.backlink:hover .backlink__text { text-decoration: underline; text-underline-offset: 3px; }
+/* a narrow screen, compact: the box alone; the name stays for a screen reader */
+@media (max-width: 479px) {
+  .backlink--compact .backlink__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}

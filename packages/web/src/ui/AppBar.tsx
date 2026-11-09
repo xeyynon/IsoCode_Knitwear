@@ -6,6 +6,7 @@ import { Button } from './atoms/Button'
 import './AppBar.css'
 import { WhatsNewDialog } from './WhatsNewDialog'
 import { NavTabs } from './molecules/NavTabs'
+import { ThemeMenuItem } from './ThemeMenuItem'
 import { useDocumentTitle } from './useDocumentTitle'
 import { useReviewCount } from './useReviewCount'
 import { useConfirm } from './ConfirmDialog'
@@ -83,6 +84,7 @@ export function AppBar({ title, plainTitle = false }: { title: string; plainTitl
                 {t(lang === 'en' ? 'nav.toTamil' : 'nav.toEnglish')}
               </button>
             )}
+            <ThemeMenuItem onChosen={close} />
             {merchandiser && (
               <button role="menuitem" className="menu__item" onClick={() => { setOpen(false); setNews(true) }}>{t('release.whatsNew')}</button>
             )}

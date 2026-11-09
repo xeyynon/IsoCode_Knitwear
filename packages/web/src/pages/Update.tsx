@@ -10,7 +10,8 @@ import { saveFailedKey } from '../queue/storageStatus'
 import { nextStage } from '../stages/dayProgress'
 import { stageFromParam, stageHref } from '../stages/stageLink'
 import { stagesErrorText, useReasons, useStages } from '../stages/useStages'
-import { MAX_NOTE, noteToSend, reasonLabel, toggleReason } from '../notes/reasons'
+import { MAX_NOTE, noteToSend, toggleReasons } from '../notes/reasons'
+import { canRewrite, initialDraft, isGenerated, needsDetail, onEdit, onSelect, rewrite, type NoteDraft } from '../notes/noteDraft'
 import { SupervisorShell } from '../ui/templates/SupervisorShell'
 import { LoadFailed } from '../ui/LoadFailed'
 import { Loading } from '../ui/Loading'
@@ -19,9 +20,11 @@ import { Button, ButtonLink } from '../ui/atoms/Button'
 import { Card } from '../ui/atoms/Card'
 import { ErrorText } from '../ui/atoms/ErrorText'
 import { Input, Textarea } from '../ui/atoms/Input'
-import { LinkButton, TextLink } from '../ui/atoms/TextLink'
+import { LinkButton } from '../ui/atoms/TextLink'
 import { ActionBar } from '../ui/molecules/ActionBar'
+import { BackLink } from '../ui/molecules/BackLink'
 import { Field } from '../ui/molecules/Field'
+import { ReasonChips } from '../ui/molecules/ReasonChips'
 import { UpdateHero } from '../ui/organisms/UpdateHero'
 import { SyncChip } from '../ui/SyncChip'
 import { setUnsentInput } from '../ui/unsentInput'
@@ -52,8 +55,9 @@ function UpdateStage() {
   const [photoError, setPhotoError] = useState<Key | null>(null)
   const [preparing, setPreparing] = useState(false)
   const [saveError, setSaveError] = useState<Key | null>(null)
-  const [reason, setReason] = useState<string | null>(null)
-  const [noteText, setNoteText] = useState('')
+  // The reasons, in the order tapped (one or several), and the note, which writes itself from them until the person types in it (notes/noteDraft.ts).
+  const [selected, setSelected] = useState<string[]>([])
+  const [draft, setDraft] = useState<NoteDraft>(initialDraft)
   // A save still running: a second tap on Send must not queue the same count again.
   const saving = useRef(false)
   const [busy, setBusy] = useState(false)
@@ -76,9 +80,16 @@ function UpdateStage() {
 
   // The "new version is ready" banner waits while anything here is typed but not yet saved; it
   // shows once the update is saved (the fields are cleared) or this screen is left.
-  const unsent = raw !== '' || noteText !== '' || reason !== null || photo !== null || preparing
+  const unsent = raw !== '' || draft.text !== '' || selected.length > 0 || photo !== null || preparing
   useEffect(() => { setUnsentInput('update', unsent) }, [unsent])
   useEffect(() => () => setUnsentInput('update', false), [])
+  // A switch of language rewrites a note nobody has typed in; a typed note is left alone (onSelect keeps it).
+  useEffect(() => { setDraft((d) => onSelect(d, selected, lang)) }, [lang]) // eslint-disable-line react-hooks/exhaustive-deps
+  function onToggleReason(id: string) {
+    const next = toggleReasons(selected, id)
+    setSelected(next)
+    setDraft((d) => onSelect(d, next, lang))
+  }
 
   const stage = st.stages?.find((s) => s.orderId === orderId && s.stage === stageName)
   // The number field only exists once the stage has loaded, so that is when it takes the cursor (it used to wait for the queue, which
@@ -106,14 +117,14 @@ function UpdateStage() {
   async function send() {
     if (qty === null || !queue || !stage) return
     if (overLeft && !confirming) { setConfirming(true); return }
-    const note = noteToSend(noteText, reason)
+    const note = noteToSend(draft.text, selected)
     setBusy(true)
     setSaveError(null)
     await oneAtATime(saving, async () => {
       try {
         const item = await queue.ctl.enqueue({ orderId, stage: stageName, date, qty, ...(photo ? { photo: photo.blob } : {}), ...(note ? { note } : {}) })
         setSaved({ id: item.clientUuid, qty, at: Date.now(), photo: photo !== null, note: note !== undefined })
-        setRaw(''); setConfirming(false); setPhoto(null); setReason(null); setNoteText('')
+        setRaw(''); setConfirming(false); setPhoto(null); setSelected([]); setDraft(initialDraft())
       } catch (err) {
         // The phone could not keep it (storage full): the old "Saved … Sent." line must not stand for this update.
         setSaved(null); setConfirming(false); setSaveError(saveFailedKey(err))
@@ -136,7 +147,7 @@ function UpdateStage() {
     <SupervisorShell title={stageName ? stageLabel(lang, stageName).replace(/^./, (c) => c.toUpperCase()) : t('sup.title')} plainTitle={!!stage}>
         {/* One row: the way back and the sync chip. Two rows pushed the number field behind the bar when the keyboard is up (phase 8A). */}
         <div className="update__bar">
-          <TextLink className="back back--arrow" to="/today"><svg className="back__arrow" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16 10H4M9.5 4.5 4 10l5.5 5.5" /></svg> <span className="back__text">{t('sup.title')}</span></TextLink>
+          <BackLink to="/today" compact>{t('sup.title')}</BackLink>
           {queue && state && <SyncChip state={state} ctl={queue.ctl} />}
         </div>
 
@@ -147,7 +158,8 @@ function UpdateStage() {
         {stage && (
           <form className="update" onSubmit={(e) => { e.preventDefault(); void send() }}>
             <UpdateHero po={stage.po} meta={`${stage.style} · ${stage.colour} · ${t('update.due', { date: dayMonth(lang, stage.plannedEnd) })}`}
-              done={done} qty={stage.qty} todaySoFar={todayTotal} left={left} labels={{ todaySoFar: t('update.todaySoFar'), left: t('update.left') }} />
+              done={done} qty={stage.qty} todaySoFar={todayTotal} left={left}
+              labels={{ done: t('today.done'), addedToday: (n) => t('update.addedToday', { n }), nothingToday: t('update.nothingToday'), toGo: (n) => t('update.toGo', { n }), complete: t('update.stageComplete'), share: (pct) => t('update.shareDone', { pct }) }} />
 
             <Card as="div" className="update__body">
             <Field label={t('sup.pieces')}>
@@ -157,21 +169,16 @@ function UpdateStage() {
             <p id="hint" className="sub">{t('update.hint')}</p>
             {notWholeNumber(raw, 0) && <ErrorText>{t('sup.wholeNumber')}</ErrorText>}
 
-            <fieldset className="reasons">
-              <legend>{t('sup.reason')}</legend>
-              {/* Real radios (arrow keys and the group come from the browser); the click, not "change", decides so a second tap clears. */}
-              <div className="reasons__list">
-                {reasons.map((r) => (
-                  <label key={r.id} className="reason">
-                    <input type="radio" name="reason" className="visually-hidden" value={r.id} checked={reason === r.id}
-                      onChange={() => undefined} onClick={() => setReason(toggleReason(reason, r.id))} />
-                    <span className="reason__pill">{reasonLabel(r, lang)}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <ReasonChips legend={t('sup.reason')} reasons={reasons} lang={lang} selected={selected} onToggle={onToggleReason} countText={(n) => t('sup.reasonCount', { n })} />
             <Field label={t('sup.note')}>
-              <Textarea rows={2} maxLength={MAX_NOTE} value={noteText} onChange={(e) => setNoteText(e.target.value)} /></Field>
+              <Textarea rows={2} maxLength={MAX_NOTE} value={draft.text} aria-describedby="notehelp"
+                onChange={(e) => setDraft((d) => onEdit(d, e.target.value, selected, lang))} /></Field>
+            {/* Quiet help under the note: where it came from, what to add, and (once it is the person's own) a way to write it again. */}
+            <div id="notehelp" className="notehelp">
+              {isGenerated(draft, selected, lang) && <p className="sub">{t('sup.noteGenerated')}</p>}
+              {needsDetail(selected, draft, lang) && <p className="sub" role="status">{t('sup.noteOtherHint')}</p>}
+              {canRewrite(draft, selected, lang) && <LinkButton type="button" onClick={() => setDraft((d) => rewrite(d, selected, lang))}>{t('sup.noteRewrite')}</LinkButton>}
+            </div>
 
             <div className="photobox">
               <input ref={fileInput} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={pick} aria-label={t('photo.input')} tabIndex={-1} />

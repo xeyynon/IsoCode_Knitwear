@@ -5,11 +5,13 @@
     <!-- Pinch-zoom stays allowed (no user-scalable=no). interactive-widget=resizes-content makes Android Chrome (108+) shrink the page
          when the keyboard opens, so a bar pinned to the bottom of the screen (ui/molecules/ActionBar) sits above the keyboard. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
-    <!-- Light only: floor screens are read in bright light, and a phone browser's "dark mode for websites" must not recolour the status colours. -->
+    <!-- Light by default: floor screens are read in bright light, and a phone browser's "dark mode for websites" must not recolour the status colours.
+         Dark is only what a person chooses in the menu (public/theme-init.js applies it before the first paint); the device setting is never read. -->
     <meta name="color-scheme" content="light" />
     <!-- The app has its own language switch. Without this a phone whose language is English offers to translate the Tamil page, and a machine translation of our status words is not something anyone has checked. -->
     <meta name="google" content="notranslate" />
     <meta name="theme-color" content="#F6F5F9" />
+    <script src="/theme-init.js"></script>
     <meta name="description" content="Daily production updates, order status and delay warnings for a knitwear exporter: for floor supervisors, merchandisers and buyers." />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -21,8 +23,10 @@
          (test/bootShell.test.ts keeps them equal). The app clears #boot when it mounts. -->
     <style>
       html { background: #F6F5F9; }
+      html[data-theme='dark'] { background: #15141B; color-scheme: dark; }
       .boot { display: grid; place-items: center; min-height: 100vh; }
       .boot__ring { width: 32px; height: 32px; border-radius: 50%; border: 4px solid #8A85A0; border-top-color: #6E5BB1; animation: boot-spin 900ms linear infinite; }
+      html[data-theme='dark'] .boot__ring { border-color: #8C88A6; border-top-color: #A99AE6; }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) { .boot__ring { animation: none; } }
     </style>

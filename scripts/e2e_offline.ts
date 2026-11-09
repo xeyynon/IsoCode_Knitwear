@@ -58,7 +58,7 @@ async function sendPieces(page: Page, qty: number) {
   await page.fill('input.input--big', String(qty))
   await page.click('form button.btn--big')
   try {
-    await page.waitForFunction((q) => document.querySelector('.saved')?.textContent?.includes('Saved ' + q + ' pieces'), qty, { timeout: 8000 })
+    await page.waitForFunction((q) => document.querySelector('.saved')?.textContent?.includes('Saved: ' + q + ' pieces'), qty, { timeout: 8000 })
     await page.waitForFunction(() => !/Sending/.test(document.querySelector('.sync')?.textContent ?? ''), null, { timeout: 8000 })
   } catch (e) {
     console.log('  sendPieces stuck at', qty, '| chip:', await chipText(page), '| saved:', await page.locator('.saved').textContent().catch(() => null), '| input:', await page.inputValue('input.input--big').catch(() => null), '| button disabled:', await page.locator('button:has-text("Send")').first().isDisabled().catch(() => null))

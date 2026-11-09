@@ -19,8 +19,12 @@ export const MAX_NOTE = 500
 /** The label in the reader's language, falling back to English rather than showing a blank. */
 export const reasonLabel = (r: Reason, lang: 'en' | 'ta'): string => (lang === 'ta' && r.ta ? r.ta : r.en)
 
-/** One tap picks a reason; tapping the chosen one again clears it (a radio cannot un-check itself, so the tap decides). */
-export const toggleReason = (current: string | null, tapped: string): string | null => (current === tapped ? null : tapped)
+/**
+ * One tap switches one reason on or off, and nothing else changes (the form review: a slow day often has several causes at once). The reasons
+ * are kept in the order they were tapped, because the note the phone writes from them follows that order, and the first one tapped is the main reason.
+ */
+export const toggleReasons = (current: readonly string[], tapped: string): string[] =>
+  current.includes(tapped) ? current.filter((id) => id !== tapped) : [...current, tapped]
 
 /** The words for an id. An id the list does not know (an old note, a changed list) shows as itself, never as nothing. */
 export function reasonById(reasons: Reason[], id: string | null | undefined): Reason | null {
@@ -35,9 +39,13 @@ export function usableReasons(list: unknown): Reason[] {
   return ok.length ? ok : DEFAULT_REASONS
 }
 
-/** What the supervisor typed, ready to send: tidied, capped, and nothing at all if it is empty. */
-export function noteToSend(text: string, category: string | null): { text?: string; category?: string } | undefined {
-  const t = text.replace(/[ \t]+/g, ' ').trim().slice(0, MAX_NOTE)
-  if (!t && !category) return undefined
-  return { ...(t ? { text: t } : {}), ...(category ? { category } : {}) }
+/**
+ * What the supervisor wrote and chose, ready to send: tidied, capped, and nothing at all if there is neither. The reasons go as a list in the order
+ * tapped, and `category` (the one the server, the Review screen and the AI have always read) is the first of them. An older phone sends `category` alone.
+ */
+export function noteToSend(text: string, categories: readonly string[]): { text?: string; category?: string; categories?: string[] } | undefined {
+  const t = text.replace(/[ 	]+/g, ' ').trim().slice(0, MAX_NOTE)
+  const ids = [...new Set(categories)]
+  if (!t && ids.length === 0) return undefined
+  return { ...(t ? { text: t } : {}), ...(ids.length ? { category: ids[0]!, categories: ids } : {}) }
 }

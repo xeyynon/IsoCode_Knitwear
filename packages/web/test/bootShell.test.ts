@@ -6,7 +6,10 @@ import { readFileSync } from 'node:fs'
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const html = read('../index.html').replace(/<!--[\s\S]*?-->/g, '')
 const tokens = read('../../design/tokens.css')
-const token = (name: string) => new RegExp(`${name}:[ ]*(#[0-9A-Fa-f]{6})`).exec(tokens)?.[1]?.toLowerCase()
+// Two token sets: the default light one, and the dark one a person may choose (public/theme-init.js sets data-theme before the first paint).
+const darkAt = tokens.indexOf(":root[data-theme='dark'] {")
+const token = (name: string, set: 'light' | 'dark' = 'light') =>
+  new RegExp(`${name}:[ ]*(#[0-9A-Fa-f]{6})`).exec(set === 'dark' ? tokens.slice(darkAt) : tokens.slice(0, darkAt))?.[1]?.toLowerCase()
 
 describe('first-paint shell (index.html)', () => {
   const root = /<div id="root">([\s\S]*?)<\/div>\s*<script/.exec(html)?.[1] ?? ''
@@ -26,8 +29,9 @@ describe('first-paint shell (index.html)', () => {
     const style = /<style>([\s\S]*?)<\/style>/.exec(html)?.[1] ?? ''
     const used = (style.match(/#[0-9A-Fa-f]{6}/g) ?? []).map((c) => c.toLowerCase())
     expect(used.length).toBeGreaterThan(0)
-    const allowed = [token('--page'), token('--border'), token('--accent')]
+    const allowed = ['--page', '--border', '--accent'].flatMap((n) => [token(n), token(n, 'dark')])
     for (const c of used) expect(allowed, c).toContain(c)
     expect(used).toContain(token('--page'))
+    expect(used).toContain(token('--page', 'dark'))   // dark has its own page colour, so a person who chose dark sees no white flash
   })
 })

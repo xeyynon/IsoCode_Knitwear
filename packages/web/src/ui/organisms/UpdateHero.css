@@ -1,24 +1,36 @@
-/* UpdateHero (ui/organisms/UpdateHero.tsx): a white card with a border, ink text, tokens only. Kept short so the number field stays high on the screen
-   when the keyboard is open. */
+/* UpdateHero (ui/organisms/UpdateHero.tsx): a soft card with a border, ink text, tokens only. What is DONE is the largest type; today's line and "to go"
+   are one size smaller and quieter. Kept short so the number field stays high on the screen when the keyboard is open. */
 .updatehero { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-l); background: var(--accent-soft); border: 1px solid var(--border-soft); color: var(--ink); margin-bottom: var(--space-2); }
 .updatehero__top { display: flex; align-items: center; gap: var(--space-4); }
 .updatehero .ring { color: var(--accent); }
 .updatehero .ring__track { stroke: var(--border-soft); }
-.updatehero__pct { font-size: 1rem; font-weight: 700; }
+.updatehero__pct { font-size: 0.9375rem; font-weight: 700; }
 .updatehero__who { min-width: 0; }
 .updatehero .updatehero__who h1 { margin: 0; font-size: 1.75rem; line-height: 1.15; overflow-wrap: anywhere; }
 .updatehero__meta { margin: var(--space-1) 0 0; font-size: 0.9375rem; }
-.updatehero__nums { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: 0; }
-.updatehero__nums > div { padding-top: var(--space-2); border-top: 1px solid var(--border-soft); }
-.updatehero__nums dt { font-size: 0.9375rem; }
-.updatehero__nums dd { margin: 0; font-size: 1.875rem; font-weight: 700; line-height: 1.1; }
 
-/* Very narrow (about 195 px: a 390 px phone at 200% zoom or the largest font, AUDIT-03 finding 1): the ring sits above the order number, the two figures stack, the order number shrinks to fit, and a button label wraps. The 56 px number field is not touched. */
+/* done on the left, big; today and "to go" beside it, small */
+.updatehero__nums { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--space-3); align-items: end; padding-top: var(--space-2); border-top: 1px solid var(--border-soft); }
+.updatehero__made { margin: 0; min-width: 0; }
+.updatehero__made dt { font-size: 0.9375rem; color: var(--muted); }
+.updatehero__made dd { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-2); }
+.updatehero__made b { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+.updatehero__of { color: var(--muted); font-size: 1rem; }
+.updatehero__side { display: grid; gap: var(--space-1); min-width: 0; }
+.updatehero__today { display: flex; align-items: center; gap: var(--space-1); margin: 0; font-size: 1rem; line-height: 1.3; color: var(--muted); }
+/* something was added today: a check and the action colour, so it is not colour alone */
+.updatehero__today--added { color: var(--accent); font-weight: 600; }
+.updatehero__today svg { flex: none; }
+.updatehero__togo { margin: 0; font-size: 0.9375rem; line-height: 1.3; color: var(--muted); }
+
+/* Very narrow (about 195 px: a 390 px phone at 200% zoom or the largest font, AUDIT-03 finding 1): the ring sits above the order number, the figures stack, the order number shrinks to fit, and a button label wraps. The 56 px number field is not touched. */
 @media (max-width: 260px) {
   .updatehero__top { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
   .updatehero .updatehero__who h1 { font-size: clamp(1.125rem, 9vw, 1.75rem); }
   .updatehero__meta { overflow-wrap: anywhere; }
   .updatehero__nums { grid-template-columns: 1fr; gap: var(--space-2); }
+  .updatehero__made b { font-size: clamp(1.5rem, 11vw, 2rem); }
+  .updatehero__today, .updatehero__togo { overflow-wrap: anywhere; }
   .update .btn { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
   .update .reasons { min-width: 0; }   /* a fieldset is as wide as its widest content unless told otherwise */
   .update .reason__pill { white-space: normal; overflow-wrap: anywhere; }

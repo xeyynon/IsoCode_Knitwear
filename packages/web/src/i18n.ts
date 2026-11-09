@@ -23,6 +23,8 @@ const en = {
   'nav.signOutWaitingTitle': 'Updates are still waiting',
   'nav.signOutWaiting': 'Updates waiting to send from this phone: {n}. They stay saved here and send when you sign in again.',
   'nav.signOutStay': 'Stay here',
+  'nav.darkTheme': 'Dark theme',
+  'nav.lightTheme': 'Light theme',
   'login.waiting': 'Updates waiting to send from this phone: {n}. They send after you sign in.',
   'nav.toTamil': 'தமிழ்',
   'nav.toEnglish': 'English',
@@ -98,10 +100,16 @@ const en = {
   'sup.wholeNumber': 'Only whole numbers, like 350. Check the number.',
   'sup.reason': 'Why is it slow? (optional)',
   'sup.note': 'Note (optional)',
-  'sup.savedOne': 'Saved {qty} piece',
-  'sup.savedOther': 'Saved {qty} pieces',
-  'sup.savedPhoto': ' with a photo',
-  'sup.savedNote': ' and a note',
+  'sup.savedOne': 'Saved: {qty} piece added to today',
+  'sup.savedOther': 'Saved: {qty} pieces added to today',
+  'sup.savedZero': 'Saved: no output reported today',
+  'sup.savedPhoto': ', with a photo',
+  'sup.savedNote': ', with a note',
+  'sup.savedPhotoNote': ', with a photo and a note',
+  'sup.reasonCount': '{n} selected',
+  'sup.noteGenerated': 'Written from your choices. Edit if you like.',
+  'sup.noteRewrite': 'Rewrite from my choices',
+  'sup.noteOtherHint': 'Add a few words about it.',
   // Supervisor: My orders today
   'today.attention': 'Updates that need attention',
   'today.refusedLine': 'pieces on {date}: {reason}',
@@ -129,6 +137,12 @@ const en = {
   'update.sendAnyway': 'Send {qty} anyway',
   'update.saveFailed': 'Not saved. This update could not be stored on the phone. Tap Send to try again.',
   'update.saveFailedFull': 'Not saved. The phone is full. Free some space or remove the photo, then tap Send again.',
+  // The finished area of the Update screen and Today's cards (form review): what today added and what is still to go
+  'update.addedToday': '{n} added today',
+  'update.nothingToday': 'Nothing sent yet today',
+  'update.toGo': '{n} to go',
+  'update.stageComplete': 'Stage complete',
+  'update.shareDone': '{pct} done',
   'photo.add': 'Add a photo',
   'photo.preparing': 'Preparing…',
   'photo.input': 'Take or choose a photo',
@@ -213,6 +227,8 @@ const ta: Partial<Record<Key, string>> = {
   'nav.signOutWaitingTitle': 'பதிவுகள் இன்னும் காத்திருக்கின்றன', // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'nav.signOutWaiting': 'இந்த ஃபோனிலிருந்து அனுப்பக் காத்திருக்கும் பதிவுகள்: {n}. அவை இங்கேயே சேமிக்கப்பட்டிருக்கும்; மீண்டும் உள்நுழைந்ததும் அனுப்பப்படும்.', // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'nav.signOutStay': 'இங்கேயே இருக்கவும்', // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'nav.darkTheme': 'இருண்ட தோற்றம்', // DRAFT, unreviewed (TAMIL-REVIEW.md)
+  'nav.lightTheme': 'வெளிர் தோற்றம்', // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'login.waiting': 'இந்த ஃபோனிலிருந்து அனுப்பக் காத்திருக்கும் பதிவுகள்: {n}. உள்நுழைந்ததும் அனுப்பப்படும்.', // DRAFT, unreviewed (TAMIL-REVIEW.md)
   'common.loading': 'ஏற்றுகிறது',
   'common.tryAgain': 'மீண்டும் முயற்சி',
@@ -249,10 +265,16 @@ const ta: Partial<Record<Key, string>> = {
   'sup.wholeNumber': 'முழு எண் மட்டும், உதாரணம் 350. எண்ணைச் சரிபார்க்கவும்.',
   'sup.reason': 'ஏன் தாமதம்? (விருப்பம்)',
   'sup.note': 'குறிப்பு (விருப்பம்)',
-  'sup.savedOne': '{qty} துண்டு சேமிக்கப்பட்டது',
-  'sup.savedOther': '{qty} துண்டுகள் சேமிக்கப்பட்டன',
+  'sup.savedOne': 'சேமிக்கப்பட்டது: இன்றைய எண்ணிக்கையில் {qty} துண்டு சேர்க்கப்பட்டது',   // DRAFT, unreviewed
+  'sup.savedOther': 'சேமிக்கப்பட்டது: இன்றைய எண்ணிக்கையில் {qty} துண்டுகள் சேர்க்கப்பட்டன',   // DRAFT, unreviewed
+  'sup.savedZero': 'சேமிக்கப்பட்டது: இன்று உற்பத்தி இல்லை என்று பதிவானது',   // DRAFT, unreviewed
   'sup.savedPhoto': ', புகைப்படத்துடன்',
   'sup.savedNote': ', குறிப்புடன்',
+  'sup.savedPhotoNote': ', புகைப்படம் மற்றும் குறிப்புடன்',   // DRAFT, unreviewed
+  'sup.reasonCount': '{n} தேர்ந்தெடுக்கப்பட்டவை',   // DRAFT, unreviewed
+  'sup.noteGenerated': 'உங்கள் தேர்வுகளிலிருந்து எழுதப்பட்டது. தேவைப்பட்டால் மாற்றலாம்.',   // DRAFT, unreviewed
+  'sup.noteRewrite': 'என் தேர்வுகளிலிருந்து மீண்டும் எழுது',   // DRAFT, unreviewed
+  'sup.noteOtherHint': 'இது பற்றி சில வார்த்தைகள் சேர்க்கவும்.',   // DRAFT, unreviewed
   'today.attention': 'கவனிக்க வேண்டிய பதிவுகள்',
   'today.refusedLine': 'துண்டுகள், {date}: {reason}',
   'today.droppedLine': 'துண்டுகள், {stage}, {date}: {note}',
@@ -278,6 +300,11 @@ const ta: Partial<Record<Key, string>> = {
   'update.sendAnyway': 'இருந்தாலும் {qty} அனுப்பு',
   'update.saveFailed': 'சேமிக்கப்படவில்லை. இந்தப் பதிவை போனில் சேமிக்க முடியவில்லை. மீண்டும் முயல அனுப்பு அழுத்தவும்.',
   'update.saveFailedFull': 'சேமிக்கப்படவில்லை. போன் நிரம்பியுள்ளது. இடத்தை விடுவிக்கவும் அல்லது புகைப்படத்தை நீக்கவும், பிறகு மீண்டும் அனுப்பு அழுத்தவும்.',
+  'update.addedToday': 'இன்று {n} சேர்க்கப்பட்டது',   // DRAFT, unreviewed (audit/TAMIL-REVIEW.md)
+  'update.nothingToday': 'இன்று இன்னும் அனுப்பவில்லை',   // DRAFT, unreviewed
+  'update.toGo': 'மீதம் {n}',   // DRAFT, unreviewed
+  'update.stageComplete': 'நிலை முடிந்தது',   // DRAFT, unreviewed
+  'update.shareDone': '{pct} முடிந்தது',   // DRAFT, unreviewed
   'photo.add': 'புகைப்படம் சேர்',
   'photo.preparing': 'தயாராகிறது…',
   'photo.input': 'புகைப்படம் எடு அல்லது தேர்வு செய்',
@@ -355,10 +382,11 @@ export function plural(lang: Lang, n: number, one: Key, other: Key, vars: Vars =
   return translate(lang, new Intl.PluralRules(lang).select(n) === 'one' ? one : other, vars)
 }
 
-/** "Saved 1 piece" / "Saved 350 pieces", plus what went with it, in the chosen language. */
+/** "Saved: 350 pieces added to today", plus what went with it, in the chosen language (a day with no output says exactly that). */
 export function savedText(lang: Lang, qty: number, photo: boolean, note: boolean): string {
-  return plural(lang, qty, 'sup.savedOne', 'sup.savedOther', { qty })
-    + (photo ? translate(lang, 'sup.savedPhoto') : '') + (note ? translate(lang, 'sup.savedNote') : '') + '.'
+  const base = qty === 0 ? translate(lang, 'sup.savedZero') : plural(lang, qty, 'sup.savedOne', 'sup.savedOther', { qty })
+  const extra = photo && note ? 'sup.savedPhotoNote' : photo ? 'sup.savedPhoto' : note ? 'sup.savedNote' : null
+  return base + (extra ? translate(lang, extra) : '') + '.'
 }
 
 /** A stage name for the reader: Tamil for the usual ones, otherwise (and always in English) the name as the template wrote it. */
