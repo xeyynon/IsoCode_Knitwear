@@ -33,14 +33,14 @@
     "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.16",
+    "@electric-sql/pglite": "^0.5.17",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^20.14.0",
-    "axe-core": "^4.14.0",
+    "axe-core": "^4.14.1",
     "esbuild": "^0.28.2",
     "jsdom": "^25.0.1",
-    "playwright-core": "^1.65.0",
+    "playwright-core": "^1.65.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
